@@ -204,8 +204,7 @@ docs/
     ├── content/
     └── static/
 
-config/
-└── config.go                   # Empty — to be populated
+config/                            # Root config/ is legacy scaffolding — remove; all config code lives in internal/config/
 
 Upstreams/                      # Mirror push scripts (existing)
 ```
@@ -214,6 +213,26 @@ Upstreams/                      # Mirror push scripts (existing)
 layout. The CLI (`cmd/cli/`) and web server (`cmd/server/`) share all
 `internal/` packages. Tests are organized by type under `tests/` with mocks
 in `tests/mocks/`. Documentation and website sources live under `docs/`.
+Root `config/` directory is legacy scaffolding and should be removed; all
+configuration code lives in `internal/config/`.
+
+## Analysis Fixes Applied (2026-04-09)
+
+The following issues were identified during pipeline analysis and fixed in tasks.md:
+
+- **C1 FIXED**: Token budget tracker (T046a) moved to Phase 2 Foundational — all content
+  generation now checks budget before proceeding (Constitution Principle IV).
+- **C2 FIXED**: Git token failover (T046b) added to Phase 2 — each provider uses
+  TokenManager with primary/secondary pairs (Constitution Principle VII).
+- **H1-H2 FIXED**: `robfig/cron/v3` and `golang.org/x/time` added to T002 dependency list.
+- **H3 FIXED**: Tier mapping strategies (T046c) added to Phase 2 — linear/modular/exclusive
+  patterns for FR-019.
+- **M1 FIXED**: Root `config/` directory marked for removal; all config code in `internal/config/`.
+- **M2 FIXED**: Publication modes (draft/scheduled/immediate) added to T069 Patreon client for FR-020.
+- **M3 FIXED**: Five edge case resolution tasks (T168-T172) added to Phase 13 covering renamed repos,
+  DB corruption, manual edit conflicts, disk space, and invalid .repoignore patterns.
+
+Task count updated from 167 to 172.
 
 ## Complexity Tracking
 
