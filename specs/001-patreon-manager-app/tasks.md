@@ -148,9 +148,9 @@
 
 ### Implementation for User Story 2
 
-- [ ] T081 [US2] Add dry-run mode to sync orchestrator in internal/services/sync/orchestrator.go: when --dry-run flag set, collect planned operations without executing Patreon writes, build DryRunReport struct with repo names, change reasons, planned content types, estimated API calls, would-delete flags with grace period status
-- [ ] T082 [US2] Implement dry-run report formatter in internal/services/sync/report.go: FormatDryRunReport(report, json bool) outputting human-readable table or JSON, include resource estimates (API calls, LLM tokens, execution time)
-- [ ] T083 [US2] Add --dry-run flag handling to CLI in cmd/cli/main.go: pass dry-run flag through to orchestrator, display formatted report
+- [X] T081 [US2] Add dry-run mode to sync orchestrator in internal/services/sync/orchestrator.go: when --dry-run flag set, collect planned operations without executing Patreon writes, build DryRunReport struct with repo names, change reasons, planned content types, estimated API calls, would-delete flags with grace period status
+- [X] T082 [US2] Implement dry-run report formatter in internal/services/sync/report.go: FormatDryRunReport(report, json bool) outputting human-readable table or JSON, include resource estimates (API calls, LLM tokens, execution time)
+- [X] T083 [US2] Add --dry-run flag handling to CLI in cmd/cli/main.go: pass dry-run flag through to orchestrator, display formatted report
 
 **Checkpoint**: Dry-run accurately previews all changes
 
@@ -168,9 +168,9 @@
 
 ### Implementation for User Story 3
 
-- [ ] T085 [US3] Implement filter options in internal/services/sync/filter.go: SyncFilter struct with Org, RepoURL, Pattern, Since, ChangedOnly fields, ApplyFilter(repos, filter, stateStore) returning filtered list, URL matching for --repo, glob matching for --pattern, timestamp comparison for --since, state comparison for --changed-only
-- [ ] T086 [US3] Add filter flags to CLI in cmd/cli/main.go: parse --org, --repo, --pattern, --since, --changed-only flags, construct SyncFilter, pass to orchestrator
-- [ ] T087 [US3] Integrate filter into orchestrator in internal/services/sync/orchestrator.go: apply SyncFilter after .repoignore filtering, log filtered vs total counts
+- [X] T085 [US3] Implement filter options in internal/services/sync/filter.go: SyncFilter struct with Org, RepoURL, Pattern, Since, ChangedOnly fields, ApplyFilter(repos, filter, stateStore) returning filtered list, URL matching for --repo, glob matching for --pattern, timestamp comparison for --since, state comparison for --changed-only
+- [X] T086 [US3] Add filter flags to CLI in cmd/cli/main.go: parse --org, --repo, --pattern, --since, --changed-only flags, construct SyncFilter, pass to orchestrator
+- [X] T087 [US3] Integrate filter into orchestrator in internal/services/sync/orchestrator.go: apply SyncFilter after .repoignore filtering, log filtered vs total counts
 
 **Checkpoint**: Selective processing works independently
 
@@ -189,9 +189,9 @@
 
 ### Implementation for User Story 4
 
-- [ ] T090 [US4] Enhance token budget integration in internal/services/content/budget.go: add usage reporting, per-repository cost breakdown, budget reset scheduling (daily), integration with metrics collector (emits budget_utilization_percent gauge)
-- [ ] T091 [US4] Implement review queue in internal/services/content/review.go: ReviewQueue backed by GeneratedContentStore, AddToReview(content) setting passed_quality_gate=false, ListPending(), Approve(contentID), Reject(contentID) with reason, review queue entries excluded from sync pipeline
-- [ ] T092 [US4] Integrate budget and review into content generator in internal/services/content/generator.go: verify budget tracker integration from T046a, evaluate quality after generation, add to review queue if all fallbacks fail, log budget utilization
+- [X] T090 [US4] Enhance token budget integration in internal/services/content/budget.go: add usage reporting, per-repository cost breakdown, budget reset scheduling (daily), integration with metrics collector (emits budget_utilization_percent gauge)
+- [X] T091 [US4] Implement review queue in internal/services/content/review.go: ReviewQueue backed by GeneratedContentStore, AddToReview(content) setting passed_quality_gate=false, ListPending(), Approve(contentID), Reject(contentID) with reason, review queue entries excluded from sync pipeline
+- [X] T092 [US4] Integrate budget and review into content generator in internal/services/content/generator.go: verify budget tracker integration from T046a, evaluate quality after generation, add to review queue if all fallbacks fail, log budget utilization
 
 **Checkpoint**: Quality control pipeline works independently
 
@@ -209,9 +209,9 @@
 
 ### Implementation for User Story 5
 
-- [ ] T094 [US5] Implement cron scheduler in internal/services/sync/scheduler.go: Parse cron expressions using robfig/cron, execute sync on trigger, capture result, call alert handler on failure, support graceful shutdown via context
-- [ ] T095 [US5] Implement alert handler in internal/services/sync/alert.go: Alert interface with Send(subject, body) method, LogAlert (writes to structured log), future extensibility for email/webhook alerts, alert content includes error details and next scheduled run
-- [ ] T096 [US5] Add schedule subcommand to CLI in cmd/cli/main.go: `patreon-manager sync --schedule "0 */6 * * *"` starts long-running process with cron scheduler, SIGTERM graceful shutdown
+- [X] T094 [US5] Implement cron scheduler in internal/services/sync/scheduler.go: Parse cron expressions using robfig/cron, execute sync on trigger, capture result, call alert handler on failure, support graceful shutdown via context
+- [X] T095 [US5] Implement alert handler in internal/services/sync/alert.go: Alert interface with Send(subject, body) method, LogAlert (writes to structured log), future extensibility for email/webhook alerts, alert content includes error details and next scheduled run
+- [X] T096 [US5] Add schedule subcommand to CLI in cmd/cli/main.go: `patreon-manager sync --schedule "0 */6 * * *"` starts long-running process with cron scheduler, SIGTERM graceful shutdown
 
 **Checkpoint**: Scheduled execution works independently
 
@@ -231,10 +231,10 @@
 
 ### Implementation for User Story 6
 
-- [ ] T100 [P] [US6] Implement webhook signature validator in internal/middleware/webhook_auth.go: ValidateGitHubSignature(body, signature, secret) using HMAC-SHA256, ValidateGitLabToken(token, expected), ValidateGenericToken(token, expected)
-- [ ] T101 [P] [US6] Implement webhook deduplication in internal/services/sync/dedup.go: EventDeduplicator with 5-minute sliding window, TrackEvent(eventID), IsDuplicate(eventID) bool, cleanup goroutine for expired entries
-- [ ] T102 [US6] Implement webhook handlers in internal/handlers/webhook.go: GitHubWebhook, GitLabWebhook, GenericWebhook handlers parsing push/release/repository events, validating signatures, deduplicating, queuing repository for incremental sync via orchestrator
-- [ ] T103 [US6] Add webhook routes to server in cmd/server/main.go: POST /webhook/github, POST /webhook/gitlab, POST /webhook/{service} with auth middleware
+- [X] T100 [P] [US6] Implement webhook signature validator in internal/middleware/webhook_auth.go: ValidateGitHubSignature(body, signature, secret) using HMAC-SHA256, ValidateGitLabToken(token, expected), ValidateGenericToken(token, expected)
+- [X] T101 [P] [US6] Implement webhook deduplication in internal/services/sync/dedup.go: EventDeduplicator with 5-minute sliding window, TrackEvent(eventID), IsDuplicate(eventID) bool, cleanup goroutine for expired entries
+- [X] T102 [US6] Implement webhook handlers in internal/handlers/webhook.go: GitHubWebhook, GitLabWebhook, GenericWebhook handlers parsing push/release/repository events, validating signatures, deduplicating, queuing repository for incremental sync via orchestrator
+- [X] T103 [US6] Add webhook routes to server in cmd/server/main.go: POST /webhook/github, POST /webhook/gitlab, POST /webhook/{service} with auth middleware
 
 **Checkpoint**: Webhooks trigger real-time updates
 
@@ -253,9 +253,9 @@
 
 ### Implementation for User Story 7
 
-- [ ] T106 [US7] Implement mirror detection engine in internal/providers/git/mirror.go: DetectMirrors(repos []Repository) returning []MirrorMap, using exact owner/name match, README content SHA-256 hash, commit SHA comparison (where available), TF-IDF cosine similarity for descriptions, canonical selection (prefer GitHub, else oldest by creation date)
-- [ ] T107 [US7] Integrate mirror detection into orchestrator in internal/services/sync/orchestrator.go: after metadata extraction, run mirror detection, store results in MirrorMapStore, pass mirror info to content generator for cross-platform link generation
-- [ ] T108 [US7] Update Markdown renderer for mirror content in internal/providers/renderer/markdown.go: add MirrorURLs template section with primary/mirror links and platform labels (GitHub: "star and follow", GitFlic: "for Russian-speaking contributors", etc.)
+- [X] T106 [US7] Implement mirror detection engine in internal/providers/git/mirror.go: DetectMirrors(repos []Repository) returning []MirrorMap, using exact owner/name match, README content SHA-256 hash, commit SHA comparison (where available), TF-IDF cosine similarity for descriptions, canonical selection (prefer GitHub, else oldest by creation date)
+- [X] T107 [US7] Integrate mirror detection into orchestrator in internal/services/sync/orchestrator.go: after metadata extraction, run mirror detection, store results in MirrorMapStore, pass mirror info to content generator for cross-platform link generation
+- [X] T108 [US7] Update Markdown renderer for mirror content in internal/providers/renderer/markdown.go: add MirrorURLs template section with primary/mirror links and platform labels (GitHub: "star and follow", GitFlic: "for Russian-speaking contributors", etc.)
 
 **Checkpoint**: Mirror detection enriches content with cross-platform links
 
@@ -275,11 +275,11 @@
 
 ### Implementation for User Story 8
 
-- [ ] T112 [P] [US8] Implement tier access gating in internal/services/access/gating.go: VerifyAccess(ctx, patronID, contentID, tierID) checking Patreon membership, 5-minute cache with webhook invalidation, default-deny on failure, generate upgrade prompt URL for denied access
-- [ ] T113 [P] [US8] Implement signed URL generator in internal/services/access/signedurl.go: GenerateSignedURL(contentID, subscriberID, ttl) creating HMAC-SHA256 token with content ID + subscriber ID + expiration, VerifySignedURL parsing and validating token, default TTL from config
-- [ ] T114 [US8] Implement download handler in internal/handlers/access.go: GET /download/{content_id}?token=*** handler validating signed URL, checking tier access, streaming file content with Content-Disposition header, logging access event to audit
-- [ ] T115 [US8] Implement access verification handler in internal/handlers/access.go: GET /access/{content_id} returning JSON with access boolean, required tier, current tier, upgrade URL
-- [ ] T116 [US8] Add access routes to server in cmd/server/main.go: GET /download/{content_id}, GET /access/{content_id} with rate limiting middleware
+- [X] T112 [P] [US8] Implement tier access gating in internal/services/access/gating.go: VerifyAccess(ctx, patronID, contentID, tierID) checking Patreon membership, 5-minute cache with webhook invalidation, default-deny on failure, generate upgrade prompt URL for denied access
+- [X] T113 [P] [US8] Implement signed URL generator in internal/services/access/signedurl.go: GenerateSignedURL(contentID, subscriberID, ttl) creating HMAC-SHA256 token with content ID + subscriber ID + expiration, VerifySignedURL parsing and validating token, default TTL from config
+- [X] T114 [US8] Implement download handler in internal/handlers/access.go: GET /download/{content_id}?token=*** handler validating signed URL, checking tier access, streaming file content with Content-Disposition header, logging access event to audit
+- [X] T115 [US8] Implement access verification handler in internal/handlers/access.go: GET /access/{content_id} returning JSON with access boolean, required tier, current tier, upgrade URL
+- [X] T116 [US8] Add access routes to server in cmd/server/main.go: GET /download/{content_id}, GET /access/{content_id} with rate limiting middleware
 
 **Checkpoint**: Premium content is fully access-controlled
 
@@ -295,7 +295,7 @@
 
 - [ ] T117 [P] [US9] Create OpenAPI specification in docs/api/openapi.yaml: document all HTTP endpoints from contracts/http-endpoints.md with request/response schemas, authentication methods, error codes
 - [ ] T118 [P] [US9] Create CLI reference in docs/api/cli-reference.md: document all commands and flags from contracts/cli-commands.md with examples for each command
-- [ ] T119 [P] [US9] Create quickstart guide in docs/guides/quickstart.md: expand from specs/001-patreon-manager-app/quickstart.md with troubleshooting section, common workflows
+- [X] T119 [P] [US9] Create quickstart guide in docs/guides/quickstart.md: expand from specs/001-patreon-manager-app/quickstart.md with troubleshooting section, common workflows
 - [ ] T120 [P] [US9] Create configuration reference in docs/guides/configuration.md: document all .env variables from .env.example with types, defaults, validation rules, examples
 - [ ] T121 [P] [US9] Create Git providers guide in docs/guides/git-providers.md: setup instructions for each service (GitHub PAT, GitLab token, GitFlic API key, GitVerse token), permissions required
 - [ ] T122 [P] [US9] Create content generation guide in docs/guides/content-generation.md: template system, quality tuning, fallback configuration, token budget management, custom templates
@@ -345,10 +345,10 @@
 
 ### Implementation for User Story 10
 
-- [ ] T153 [P] [US10] Implement rate limiting middleware in internal/middleware/ratelimit.go: per-IP and global rate limiters using golang.org/x/time/rate, configurable requests/second, 429 response with Retry-After header
-- [ ] T154 [P] [US10] Implement panic recovery middleware in internal/middleware/recovery.go: recover panics in handlers, log stack trace, return 500 JSON response, emit metrics
-- [ ] T155 [P] [US10] Implement auth middleware in internal/middleware/auth.go: API key validation for admin endpoints, webhook secret validation, Bearer token parsing for access endpoints
-- [ ] T156 [US10] Add middleware chain to server in cmd/server/main.go: Logger → Recovery → RateLimit → Auth → route handlers
+- [X] T153 [P] [US10] Implement rate limiting middleware in internal/middleware/ratelimit.go: per-IP and global rate limiters using golang.org/x/time/rate, configurable requests/second, 429 response with Retry-After header
+- [X] T154 [P] [US10] Implement panic recovery middleware in internal/middleware/recovery.go: recover panics in handlers, log stack trace, return 500 JSON response, emit metrics
+- [X] T155 [P] [US10] Implement auth middleware in internal/middleware/auth.go: API key validation for admin endpoints, webhook secret validation, Bearer token parsing for access endpoints
+- [X] T156 [US10] Add middleware chain to server in cmd/server/main.go: Logger → Recovery → RateLimit → Auth → route handlers
 
 **Checkpoint**: Full test suite passes with 100% coverage
 
@@ -358,21 +358,21 @@
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T157 [P] Implement PDF renderer in internal/providers/renderer/pdf.go: Markdown → HTML (with print CSS) → chromedp headless rendering → optimized PDF, A4 with 2cm margins, table of contents, page numbering, 30s timeout, temporary file cleanup
-- [ ] T158 [P] Implement video script renderer in internal/providers/renderer/video.go: generate narration script from content, output FFmpeg-ready script format, gate behind VIDEO_GENERATION_ENABLED config
-- [ ] T159 [P] Implement video pipeline in internal/providers/renderer/video_pipeline.go: script → TTS audio (placeholder for integration) → visual capture → FFmpeg assembly via os/exec → MKV output at 1080p, queue-based processing, 300s timeout
-- [ ] T160 [P] Implement admin handlers in internal/handlers/admin.go: POST /admin/reload for config reload, GET /admin/sync/status for active sync info, X-Admin-Key auth required
-- [ ] T161 [P] Implement metrics handler in internal/handlers/metrics.go: GET /metrics serving Prometheus exposition format via prometheus/client_golang handler
+- [X] T157 [P] Implement PDF renderer in internal/providers/renderer/pdf.go: Markdown → HTML (with print CSS) → chromedp headless rendering → optimized PDF, A4 with 2cm margins, table of contents, page numbering, 30s timeout, temporary file cleanup
+- [X] T158 [P] Implement video script renderer in internal/providers/renderer/video.go: generate narration script from content, output FFmpeg-ready script format, gate behind VIDEO_GENERATION_ENABLED config
+- [X] T159 [P] Implement video pipeline in internal/providers/renderer/video_pipeline.go: script → TTS audio (placeholder for integration) → visual capture → FFmpeg assembly via os/exec → MKV output at 1080p, queue-based processing, 300s timeout
+- [X] T160 [P] Implement admin handlers in internal/handlers/admin.go: POST /admin/reload for config reload, GET /admin/sync/status for active sync info, X-Admin-Key auth required
+- [X] T161 [P] Implement metrics handler in internal/handlers/metrics.go: GET /metrics serving Prometheus exposition format via prometheus/client_golang handler
 - [ ] T162 [P] Implement .repoignore dynamic reload in internal/services/filter/repoignore.go: add SIGHUP signal handler to re-read file, atomic swap of pattern list, validate reloaded patterns before applying
-- [ ] T163 [P] Update .gitignore for generated artifacts: add docs/website/public/, generated/, *.db, *.prof patterns
-- [ ] T164 [P] Create Dockerfile in Dockerfile: multi-stage build (builder + runtime), Go 1.26.1 base, copy binary, expose 8080, health check
-- [ ] T165 [P] Create docker-compose.yml in docker-compose.yml: app service with env_file, volume for .env and state db, PostgreSQL service for production testing
-- [ ] T166 Run final validation: go build ./... && go vet ./... && bash scripts/coverage.sh, fix any issues
+- [X] T163 [P] Update .gitignore for generated artifacts: add docs/website/public/, generated/, *.db, *.prof patterns
+- [X] T164 [P] Create Dockerfile in Dockerfile: multi-stage build (builder + runtime), Go 1.26.1 base, copy binary, expose 8080, health check
+- [X] T165 [P] Create docker-compose.yml in docker-compose.yml: app service with env_file, volume for .env and state db, PostgreSQL service for production testing
+- [X] T166 Run final validation: go build ./... && go vet ./... && bash scripts/coverage.sh, fix any issues
 - [ ] T167 Run quickstart.md validation: follow quickstart guide end-to-end against a fresh clone, verify all steps work as documented
 - [ ] T168 [P] Implement repository rename detection in internal/services/sync/orchestrator.go: when a repo URL returns 404, search by name across all services to detect renames, update local state with new URL, emit rename audit event
-- [ ] T169 [P] Implement database corruption recovery in internal/database/recovery.go: detect corrupted SQLite via integrity_check, auto-backup corrupted file, re-initialize from migrations, log data loss warning, emit recovery metric
-- [ ] T170 [P] Implement manual edit conflict detection in internal/services/sync/conflict.go: compare local content hash with Patreon post hash before update, if diverged (manually edited), skip automated update and add to review queue with CONFLICT flag, emit conflict audit event
-- [ ] T171 [P] Implement disk space pre-check in internal/providers/renderer/video_pipeline.go: check available disk space before video generation, reject with descriptive error if insufficient, emit disk_usage metric
+- [X] T169 [P] Implement database corruption recovery in internal/database/recovery.go: detect corrupted SQLite via integrity_check, auto-backup corrupted file, re-initialize from migrations, log data loss warning, emit recovery metric
+- [X] T170 [P] Implement manual edit conflict detection in internal/services/sync/conflict.go: compare local content hash with Patreon post hash before update, if diverged (manually edited), skip automated update and add to review queue with CONFLICT flag, emit conflict audit event
+- [X] T171 [P] Implement disk space pre-check in internal/providers/renderer/video_pipeline.go: check available disk space before video generation, reject with descriptive error if insufficient, emit disk_usage metric
 - [ ] T172 [P] Implement .repoignore validation in internal/services/filter/repoignore.go: validate patterns at load time, log warnings for potentially invalid patterns (unclosed brackets, trailing spaces), continue with valid patterns only
 
 ---
