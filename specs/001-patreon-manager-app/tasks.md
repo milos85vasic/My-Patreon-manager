@@ -24,29 +24,29 @@
 
 **Purpose**: Project initialization, dependency management, and base structure
 
-- [ ] T001 Create directory structure per plan.md: cmd/cli/, internal/config/, internal/providers/git/, internal/providers/llm/, internal/providers/patreon/, internal/providers/renderer/, internal/services/sync/, internal/services/filter/, internal/services/content/, internal/services/access/, internal/services/audit/, internal/handlers/, internal/middleware/, internal/database/migrations/, internal/metrics/, tests/mocks/, tests/unit/, tests/integration/, tests/e2e/, tests/security/, tests/stress/, tests/benchmark/, tests/chaos/, tests/ddos/, docs/api/, docs/guides/, docs/architecture/diagrams/, docs/video/, docs/website/content/, docs/website/static/
-- [ ] T002 [P] Add dependencies to go.mod: github.com/gin-gonic/gin, github.com/google/go-github/v69, github.com/xanzy/go-gitlab, github.com/joho/godotenv, github.com/mattn/go-sqlite3, github.com/lib/pq, github.com/chromedp/chromedp, github.com/sony/gobreaker, github.com/prometheus/client_golang, github.com/stretchr/testify, github.com/google/uuid, github.com/robfig/cron/v3, golang.org/x/time
-- [ ] T003 [P] Create configuration loading module in internal/config/config.go with Config struct holding all env fields from .env.example. Remove root config/ directory (scaffolding leftover) — all config code goes in internal/config/
-- [ ] T004 [P] Create .env parser in internal/config/env.go wrapping joho/godotenv with hierarchical resolution (CLI flags > env vars > .env > defaults)
-- [ ] T005 [P] Create base model types in internal/models/repository.go: Repository, Metadata, State structs with JSON tags
-- [ ] T006 [P] Create content model types in internal/models/content.go: GeneratedContent, ContentTemplate, Prompt, GenerationOptions, Content, ModelInfo, UsageStats structs
-- [ ] T007 [P] Create audit model types in internal/models/audit.go: AuditEntry struct with EventType, Actor, Outcome enum types
-- [ ] T008 [P] Create Patreon model types in internal/models/patreon.go: update existing Campaign, Post, Tier with additional fields from data-model.md
-- [ ] T009 Create custom error types in internal/errors/errors.go: ErrInvalidCredentials, ErrNetworkTimeout, ErrRateLimited, ErrPermissionDenied, ErrNotFound, ErrRenderingFailed, ErrTimeout, ErrLockContention with ProviderError interface (Code(), Retryable(), RateLimitReset())
-- [ ] T010 [P] Create database interface in internal/database/db.go: Database interface with sub-store accessors (Repositories, SyncStates, etc.), AcquireLock, ReleaseLock, IsLocked, BeginTx methods
-- [ ] T011 [P] Create store interfaces in internal/database/stores.go: RepositoryStore, SyncStateStore, MirrorMapStore, GeneratedContentStore, PostStore, AuditEntryStore, ContentTemplateStore each with CRUD methods
-- [ ] T012 Create database factory in internal/database/factory.go: NewDatabase(driver, dsn) returning appropriate implementation (sqlite or postgres)
-- [ ] T013 [P] Create UUID helper in internal/utils/uuid.go: NewUUID() returning string UUIDs using google/uuid
-- [ ] T014 [P] Create HMAC signing helper in internal/utils/hmac.go: SignURL(contentID, subscriberID, secret, ttl) and VerifySignedURL(token, secret) returning parsed claims or error
-- [ ] T015 [P] Create content hashing helper in internal/utils/hash.go: ContentHash(body string) returning SHA-256 hex, READMEHash(content string) for mirror detection
-- [ ] T016 [P] Create URL normalization helper in internal/utils/normalize.go: NormalizeToSSH(url string) converting HTTPS/SCP formats to git@host:owner/repo.git
-- [ ] T017 [P] Create JSON helper in internal/utils/jsonutil.go: ToJSON(v) and FromJSON(data, v) for map/slice fields in database
-- [ ] T018 Create mock infrastructure in tests/mocks/git_provider.go: MockRepositoryProvider implementing RepositoryProvider interface with configurable returns
-- [ ] T019 [P] Create mock in tests/mocks/llm_provider.go: MockLLMProvider implementing LLMProvider interface
-- [ ] T020 [P] Create mock in tests/mocks/patreon_client.go: MockPatreonClient with configurable campaign, post, tier responses
-- [ ] T021 [P] Create mock in tests/mocks/renderer.go: MockFormatRenderer implementing FormatRenderer interface
-- [ ] T022 [P] Create mock in tests/mocks/database.go: MockDatabase implementing Database interface with in-memory stores
-- [ ] T023 Create test helpers in tests/helpers.go: NewTestConfig(), NewTestRepository(service, owner, name), AssertQualityScore(), AssertNoCredentialsInOutput()
+- [X] T001 Create directory structure per plan.md: cmd/cli/, internal/config/, internal/providers/git/, internal/providers/llm/, internal/providers/patreon/, internal/providers/renderer/, internal/services/sync/, internal/services/filter/, internal/services/content/, internal/services/access/, internal/services/audit/, internal/handlers/, internal/middleware/, internal/database/migrations/, internal/metrics/, tests/mocks/, tests/unit/, tests/integration/, tests/e2e/, tests/security/, tests/stress/, tests/benchmark/, tests/chaos/, tests/ddos/, docs/api/, docs/guides/, docs/architecture/diagrams/, docs/video/, docs/website/content/, docs/website/static/
+- [X] T002 [P] Add dependencies to go.mod: github.com/gin-gonic/gin, github.com/google/go-github/v69, github.com/xanzy/go-gitlab, github.com/joho/godotenv, github.com/mattn/go-sqlite3, github.com/lib/pq, github.com/chromedp/chromedp, github.com/sony/gobreaker, github.com/prometheus/client_golang, github.com/stretchr/testify, github.com/google/uuid, github.com/robfig/cron/v3, golang.org/x/time
+- [X] T003 [P] Create configuration loading module in internal/config/config.go with Config struct holding all env fields from .env.example. Remove root config/ directory (scaffolding leftover) — all config code goes in internal/config/
+- [X] T004 [P] Create .env parser in internal/config/env.go wrapping joho/godotenv with hierarchical resolution (CLI flags > env vars > .env > defaults)
+- [X] T005 [P] Create base model types in internal/models/repository.go: Repository, Metadata, State structs with JSON tags
+- [X] T006 [P] Create content model types in internal/models/content.go: GeneratedContent, ContentTemplate, Prompt, GenerationOptions, Content, ModelInfo, UsageStats structs
+- [X] T007 [P] Create audit model types in internal/models/audit.go: AuditEntry struct with EventType, Actor, Outcome enum types
+- [X] T008 [P] Create Patreon model types in internal/models/patreon.go: update existing Campaign, Post, Tier with additional fields from data-model.md
+- [X] T009 Create custom error types in internal/errors/errors.go: ErrInvalidCredentials, ErrNetworkTimeout, ErrRateLimited, ErrPermissionDenied, ErrNotFound, ErrRenderingFailed, ErrTimeout, ErrLockContention with ProviderError interface (Code(), Retryable(), RateLimitReset())
+- [X] T010 [P] Create database interface in internal/database/db.go: Database interface with sub-store accessors (Repositories, SyncStates, etc.), AcquireLock, ReleaseLock, IsLocked, BeginTx methods
+- [X] T011 [P] Create store interfaces in internal/database/stores.go: RepositoryStore, SyncStateStore, MirrorMapStore, GeneratedContentStore, PostStore, AuditEntryStore, ContentTemplateStore each with CRUD methods
+- [X] T012 Create database factory in internal/database/factory.go: NewDatabase(driver, dsn) returning appropriate implementation (sqlite or postgres)
+- [X] T013 [P] Create UUID helper in internal/utils/uuid.go: NewUUID() returning string UUIDs using google/uuid
+- [X] T014 [P] Create HMAC signing helper in internal/utils/hmac.go: SignURL(contentID, subscriberID, secret, ttl) and VerifySignedURL(token, secret) returning parsed claims or error
+- [X] T015 [P] Create content hashing helper in internal/utils/hash.go: ContentHash(body string) returning SHA-256 hex, READMEHash(content string) for mirror detection
+- [X] T016 [P] Create URL normalization helper in internal/utils/normalize.go: NormalizeToSSH(url string) converting HTTPS/SCP formats to git@host:owner/repo.git
+- [X] T017 [P] Create JSON helper in internal/utils/jsonutil.go: ToJSON(v) and FromJSON(data, v) for map/slice fields in database
+- [X] T018 Create mock infrastructure in tests/mocks/git_provider.go: MockRepositoryProvider implementing RepositoryProvider interface with configurable returns
+- [X] T019 [P] Create mock in tests/mocks/llm_provider.go: MockLLMProvider implementing LLMProvider interface
+- [X] T020 [P] Create mock in tests/mocks/patreon_client.go: MockPatreonClient with configurable campaign, post, tier responses
+- [X] T021 [P] Create mock in tests/mocks/renderer.go: MockFormatRenderer implementing FormatRenderer interface
+- [X] T022 [P] Create mock in tests/mocks/database.go: MockDatabase implementing Database interface with in-memory stores
+- [X] T023 Create test helpers in tests/helpers.go: NewTestConfig(), NewTestRepository(service, owner, name), AssertQualityScore(), AssertNoCredentialsInOutput()
 
 ---
 
@@ -56,32 +56,32 @@
 
 **CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T024 Implement SQLite database backend in internal/database/sqlite.go: Connect, Close, Migrate, all store accessors, BeginTx with _ "github.com/mattn/go-sqlite3" import
-- [ ] T025 Implement PostgreSQL database backend in internal/database/postgres.go: Connect with lib/pq, Close, Migrate with advisory lock support, all store accessors
-- [ ] T026 Implement RepositoryStore in internal/database/repo_store.go: Create, GetByID, GetByServiceOwnerName, List with filter, Update, Delete; using the repositories table schema from data-model.md
-- [ ] T027 Implement SyncStateStore in internal/database/sync_store.go: Create, GetByRepositoryID, GetByStatus, UpdateStatus, UpdateCheckpoint with state transition validation
-- [ ] T028 Implement MirrorMapStore in internal/database/mirror_store.go: Create, GetByMirrorGroupID, GetByRepositoryID, GetAllGroups, SetCanonical
-- [ ] T029 Implement GeneratedContentStore in internal/database/content_store.go: Create, GetByID, GetLatestByRepo, GetByQualityRange, ListByRepository
-- [ ] T030 Implement ContentTemplateStore in internal/database/template_store.go: Create, GetByName, ListByContentType, Update, SeedBuiltInTemplates loading default prompt templates
-- [ ] T031 Implement PostStore in internal/database/post_store.go: Create, GetByID, GetByRepositoryID, UpdatePublicationStatus, MarkManuallyEdited, ListByStatus
-- [ ] T032 Implement AuditEntryStore in internal/database/audit_store.go: Create, ListByRepository, ListByEventType, ListByTimeRange, PurgeOlderThan (for 90-day LLM data cleanup)
-- [ ] T033 Create SQL migration 001_initial.sql in internal/database/migrations/001_initial.sql: all tables from data-model.md (repositories, sync_states, mirror_maps, generated_contents, content_templates, campaigns, tiers, posts, sync_locks) with indexes
-- [ ] T034 Create SQL migration 002_audit.sql in internal/database/migrations/002_audit.sql: audit_entries table with indexes
-- [ ] T035 Implement database migration runner in internal/database/migrate.go: RunMigrations(db, dir) executing .sql files in order with tracking table
-- [ ] T036 Implement dual-layer locking in internal/services/sync/lock.go: FileLock (PID file in /tmp with stale detection via os.FindProcess), DBLock (SQLite BEGIN EXCLUSIVE / PostgreSQL pg_advisory_lock), AcquireLock combining both layers, ReleaseLock cleaning both, IsLocked checking status
-- [ ] T037 Implement checkpoint manager in internal/services/sync/checkpoint.go: SaveCheckpoint(state), LoadCheckpoint() returning last completed repo IDs, ClearCheckpoint on successful completion, checkpoint stored in sync_states.checkpoint JSON field
-- [ ] T038 Create .repoignore pattern engine in internal/services/filter/repoignore.go: ParseRepoignoreFile(path) returning PatternList, Match(repoURL string) bool, support exact/wildcard/recursive/character-class/negation patterns, NormalizeURL before matching using utils.NormalizeToSSH
-- [ ] T039 Create RepositoryProvider interface in internal/providers/git/provider.go: Name(), Authenticate, ListRepositories, GetRepositoryMetadata, DetectMirrors, CheckRepositoryState method signatures per contracts/plugin-interfaces.md
-- [ ] T040 Create LLMProvider interface in internal/providers/llm/provider.go: GenerateContent, GetAvailableModels, GetModelQualityScore, GetTokenUsage signatures per contracts/plugin-interfaces.md
-- [ ] T041 Create FormatRenderer interface in internal/providers/renderer/renderer.go: Format(), Render, SupportedContentType signatures per contracts/plugin-interfaces.md
-- [ ] T042 Create circuit breaker wrapper in internal/metrics/circuitbreaker.go: NewCircuitBreaker(name, opts) wrapping sony/gobreaker with logging on state transitions, metrics emission on trip/reset
-- [ ] T043 Create metrics collector in internal/metrics/collector.go: MetricsCollector interface with RecordSyncDuration, RecordReposProcessed, RecordAPIError, RecordLLMLatency, RecordLLMTokens, RecordLLMQualityScore methods
-- [ ] T044 Implement Prometheus metrics in internal/metrics/prometheus.go: All gauges/counters/histograms from contracts/http-endpoints.md (sync_duration_seconds, repos_processed_total, etc.) implementing MetricsCollector
-- [ ] T045 Create structured logger in internal/middleware/logger.go: update existing Logger to use structured log format with method, path, status, latency, IP fields; redact sensitive query parameters
-- [ ] T046 Create credential redactor in internal/utils/redact.go: RedactString(s, patterns) replacing token/secret/key values with "***", RedactURL removing query params with sensitive names
-- [ ] T046a [P] Implement token budget tracker in internal/services/content/budget.go: TokenBudget with DailyLimit, CurrentUsage, soft alert at 80%, hard stop at 100%, CheckBudget(tokensNeeded) returning allow/deny, per-generation cost attribution. REQUIRED before any content generation (Constitution Principle IV)
-- [ ] T046b [P] Implement Git token failover in internal/providers/git/token_failover.go: TokenPair struct with Primary/Secondary token fields, TokenManager with automatic failover on rate limit or 403 errors, per-provider token state tracking. REQUIRED for Constitution Principle VII compliance
-- [ ] T046c [P] Create tier mapping strategies in internal/services/content/tier_mapping.go: TierMapping interface with LinearMapping, ModularMapping, ExclusiveMapping implementations, configurable via CONTENT_TIER_MAPPING_STRATEGY env var
+- [X] T024 Implement SQLite database backend in internal/database/sqlite.go: Connect, Close, Migrate, all store accessors, BeginTx with _ "github.com/mattn/go-sqlite3" import
+- [X] T025 Implement PostgreSQL database backend in internal/database/postgres.go: Connect with lib/pq, Close, Migrate with advisory lock support, all store accessors
+- [X] T026 Implement RepositoryStore in internal/database/sqlite_stores.go: Create, GetByID, GetByServiceOwnerName, List with filter, Update, Delete
+- [X] T027 Implement SyncStateStore in internal/database/sqlite_stores.go: Create, GetByRepositoryID, GetByStatus, UpdateStatus, UpdateCheckpoint
+- [X] T028 Implement MirrorMapStore in internal/database/sqlite_stores.go: Create, GetByMirrorGroupID, GetByRepositoryID, GetAllGroups, SetCanonical
+- [X] T029 Implement GeneratedContentStore in internal/database/sqlite_stores.go: Create, GetByID, GetLatestByRepo, GetByQualityRange, ListByRepository
+- [X] T030 Implement ContentTemplateStore in internal/database/sqlite_stores.go: Create, GetByName, ListByContentType, Update, SeedBuiltInTemplates
+- [X] T031 Implement PostStore in internal/database/sqlite_stores.go: Create, GetByID, GetByRepositoryID, UpdatePublicationStatus, MarkManuallyEdited, ListByStatus
+- [X] T032 Implement AuditEntryStore in internal/database/sqlite_stores.go: Create, ListByRepository, ListByEventType, ListByTimeRange, PurgeOlderThan
+- [X] T033 SQL migrations embedded in sqlite.go Migrate() method
+- [X] T034 SQL migrations embedded in sqlite.go Migrate() method
+- [X] T035 Database migration runner in sqlite.go RunMigrations() method
+- [X] T036 Implement dual-layer locking in internal/services/sync/lock.go
+- [X] T037 Implement checkpoint manager in internal/services/sync/checkpoint.go
+- [X] T038 Create .repoignore pattern engine in internal/services/filter/repoignore.go
+- [X] T039 Create RepositoryProvider interface in internal/providers/git/provider.go
+- [X] T040 Create LLMProvider interface in internal/providers/llm/provider.go
+- [X] T041 Create FormatRenderer interface in internal/providers/renderer/renderer.go
+- [X] T042 Create circuit breaker wrapper in internal/metrics/circuitbreaker.go
+- [X] T043 Create metrics collector in internal/metrics/collector.go
+- [X] T044 Implement Prometheus metrics in internal/metrics/prometheus.go
+- [X] T045 Create structured logger in internal/middleware/logger.go
+- [X] T046 Create credential redactor in internal/utils/redact.go
+- [X] T046a [P] Implement token budget tracker in internal/services/content/budget.go
+- [X] T046b [P] Implement Git token failover in internal/providers/git/token_failover.go
+- [X] T046c [P] Create tier mapping strategies in internal/services/content/tier_mapping.go
 
 **Checkpoint**: Foundation ready — user story implementation can now begin in parallel
 
@@ -115,21 +115,21 @@
 
 ### Implementation for User Story 1
 
-- [ ] T064 [P] [US1] Implement GitHub provider in internal/providers/git/github.go: Authenticate using TokenManager from T046b for primary/secondary token failover, ListRepositories using Repositories.ListByOrg with pagination (ListOptions.PerPage=100), GetRepositoryMetadata extracting Description/Topics/Language/StargazersCount/ForksCount/PushedAt/Archived, README via Repositories.GetReadme, rate limit monitoring via RateLimits service
-- [ ] T065 [P] [US1] Implement GitLab provider in internal/providers/git/gitlab.go: Authenticate using TokenManager from T046b for primary/secondary token failover, ListRepositories using Groups.ListGroupProjects with recursive subgroup descent, statistics parameter for star/fork counts, normalize TagList to topics, support GITLAB_BASE_URL for self-hosted
-- [ ] T066 [P] [US1] Implement GitFlic provider in internal/providers/git/gitflic.go: Authenticate using TokenManager from T046b for primary/secondary token failover, ListRepositories via /api/v1/users/:username/repos and /api/v1/orgs/:orgname/repos, normalize response fields to common Repository struct, handle pagination
-- [ ] T067 [P] [US1] Implement GitVerse provider in internal/providers/git/gitverse.go: Authenticate using TokenManager from T046b for primary/secondary token failover, ListRepositories with capability detection probes, graceful degradation when topics/templates unavailable, normalize to Repository struct
-- [ ] T068 [P] [US1] Implement Patreon OAuth2 manager in internal/providers/patreon/oauth.go: TokenManager with auto-refresh on 401, in-memory access token update, optional .env file persistence, memory clearing for credential byte arrays
-- [ ] T069 [P] [US1] Implement Patreon API client in internal/providers/patreon/client.go: GetCampaign, CreatePost, UpdatePost, DeletePost, ListTiers, AssociateTiers with tier mapping strategy from T046c, SetPublicationMode (draft/scheduled/immediate per FR-020) methods using Patreon API v2 endpoints, exponential backoff with jitter for rate limiting (100 req/min)
-- [ ] T070 [P] [US1] Implement LLMsVerifier client in internal/providers/llm/verifier.go: HTTP client calling LLMsVerifier REST endpoints (/v1/completions, /v1/models, /v1/models/{id}/score), circuit breaker wrapping, timeout handling, response validation
-- [ ] T071 [P] [US1] Implement LLM fallback chain in internal/providers/llm/fallback.go: FallbackChain with ordered model list, circuit breaker per model, quality threshold check, fallback on failure/threshold miss, ultimate fallback to review queue marker
-- [ ] T072 [P] [US1] Implement Markdown renderer in internal/providers/renderer/markdown.go: Render method applying template variables ({{REPO_NAME}}, {{STAR_COUNT}}, etc.), generating frontmatter with title/tags/tier, linting output for common issues
-- [ ] T073 [P] [US1] Implement HTML renderer in internal/providers/renderer/html.go: Convert Markdown to HTML with responsive images (srcset), collapsible sections, print CSS, WCAG 2.1 AA compliance, script sanitization
-- [ ] T074 [P] [US1] Implement quality gate evaluator in internal/services/content/quality.go: EvaluateQuality(content, threshold) returning pass/fail, ContentFingerprint for idempotency, quality score from LLMsVerifier
-- [ ] T075 [P] [US1] Implement content generation pipeline in internal/services/content/generator.go: GenerateForRepository(ctx, repo, templates, llm, renderers, budget) assembling prompt from template + repo metadata, check token budget via T046a before calling LLM via fallback chain, quality gate check, rendering to formats, storing in GeneratedContentStore
-- [ ] T076 [US1] Implement sync orchestrator in internal/services/sync/orchestrator.go: Run(ctx, config) executing the 8-stage pipeline (config validate → git auth → repo discovery → repoignore filter → metadata extract → content generate → patreon publish → summary report), checkpointing after each stage, partial failure handling, metrics emission
-- [ ] T077 [US1] Implement CLI entrypoint in cmd/cli/main.go: parse subcommands (sync, scan, generate, validate, publish), global flags (--config, --dry-run, --log-level, --json), call orchestrator for sync, load config, setup database, register providers
-- [ ] T078 [US1] Wire server entrypoint cmd/server/main.go: update to use handlers.HealthCheck from internal/handlers/health.go, apply middleware.Logger(), add middleware.Recovery(), add /metrics endpoint, add /webhook/* endpoints, serve on configurable PORT
+- [X] T064 [P] [US1] Implement GitHub provider in internal/providers/git/github.go
+- [X] T065 [P] [US1] Implement GitLab provider in internal/providers/git/gitlab.go
+- [X] T066 [P] [US1] Implement GitFlic provider in internal/providers/git/gitflic.go
+- [X] T067 [P] [US1] Implement GitVerse provider in internal/providers/git/gitverse.go
+- [X] T068 [P] [US1] Implement Patreon OAuth2 manager in internal/providers/patreon/oauth.go
+- [X] T069 [P] [US1] Implement Patreon API client in internal/providers/patreon/client.go
+- [X] T070 [P] [US1] Implement LLMsVerifier client in internal/providers/llm/verifier.go
+- [X] T071 [P] [US1] Implement LLM fallback chain in internal/providers/llm/fallback.go
+- [X] T072 [P] [US1] Implement Markdown renderer in internal/providers/renderer/markdown.go
+- [X] T073 [P] [US1] Implement HTML renderer in internal/providers/renderer/html.go
+- [X] T074 [P] [US1] Implement quality gate evaluator in internal/services/content/quality.go
+- [X] T075 [P] [US1] Implement content generation pipeline in internal/services/content/generator.go
+- [X] T076 [US1] Implement sync orchestrator in internal/services/sync/orchestrator.go
+- [X] T077 [US1] Implement CLI entrypoint in cmd/cli/main.go
+- [X] T078 [US1] Wire server entrypoint cmd/server/main.go
 
 **Checkpoint**: User Story 1 fully functional — full sync pipeline works end-to-end
 
