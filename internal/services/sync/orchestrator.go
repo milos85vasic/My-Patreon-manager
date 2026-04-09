@@ -185,3 +185,18 @@ func (o *Orchestrator) applyFilter(repos []models.Repository, f SyncFilter) []mo
 	}
 	return filtered
 }
+
+func (o *Orchestrator) DetectRename(ctx context.Context, repo models.Repository, allRepos []models.Repository) (string, bool) {
+	for _, candidate := range allRepos {
+		if candidate.Service != repo.Service {
+			continue
+		}
+		if candidate.Owner == repo.Owner && candidate.Name != repo.Name {
+			if candidate.Name == repo.Name {
+				continue
+			}
+			return candidate.URL, true
+		}
+	}
+	return "", false
+}

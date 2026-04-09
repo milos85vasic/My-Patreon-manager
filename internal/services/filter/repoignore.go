@@ -2,9 +2,12 @@ package filter
 
 import (
 	"bufio"
+	"log/slog"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 	"unicode"
 )
 
@@ -142,7 +145,51 @@ func (r *Repoignore) matchCharClass(url, pattern string) bool {
 }
 
 func (r *Repoignore) Reload() error {
+	if r.path == "" {
+		return nil
+	}
+	newR, err := ParseRepoignoreFile(r.path)
+	if err != nil {
+		return err
+	}
+	issues := ValidatePatterns(newR.patterns)
+	for _, issue := range issues {
+		slog.Warn("repoignore validation", "issue", issue)
+	}
+	r.mu.Lock()
+	r.patterns = newR.patterns
+	r.mu.Unlock()
 	return nil
+}
+
+func (r *Repoignore) WatchSIGHUP() {
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGHUP)
+	go func() {
+		for range ch {
+			if err := r.Reload(); err != nil {
+				slog.Error("repoignore reload failed", "error", err)
+			}
+		}
+	}()
+}
+
+func ValidatePatterns(patterns []Pattern) []string {
+	var issues []string
+	for _, p := range patterns {
+		raw := p.Raw
+		if strings.Contains(raw, "[") && !strings.Contains(raw, "]") {
+			issues = append(issues, "unclosed bracket: "+raw)
+		}
+		if strings.Contains(raw, "]") && !strings.Contains(raw, "[") {
+			issues = append(issues, "unmatched closing bracket: "+raw)
+		}
+		trimmed := strings.TrimRight(raw, " \t")
+		if trimmed != raw {
+			issues = append(issues, "trailing whitespace: "+raw)
+		}
+	}
+	return issues
 }
 
 func normalizeForMatch(url string) string {

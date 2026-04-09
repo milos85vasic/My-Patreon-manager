@@ -30,6 +30,12 @@ func NewCheckpointManager(db database.Database) *CheckpointManager {
 	}
 }
 
+func NewCheckpointManagerWithFile(dir string) *CheckpointManager {
+	return &CheckpointManager{
+		checkpointFile: filepath.Join(dir, "patreon-manager-checkpoint.json"),
+	}
+}
+
 func (cm *CheckpointManager) SaveCheckpoint(state Checkpoint) error {
 	data, err := json.Marshal(state)
 	if err != nil {
