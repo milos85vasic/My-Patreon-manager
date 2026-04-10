@@ -46,6 +46,8 @@ func TestNormalizeToSSH(t *testing.T) {
 		{"malformed scp no slash", "git@github.com:owner", "git@github.com:owner"},
 		{"ssh protocol", "ssh://git@github.com/owner/repo", "git@github.com:owner/repo.git"},
 		{"scp with extra colon", "git@github.com:owner:repo", "git@github.com:owner:repo"},
+		{"ssh protocol with .git", "ssh://git@github.com/owner/repo.git", "git@github.com:owner/repo.git"},
+		{"invalid URL", "foobar", "foobar"},
 	}
 
 	for _, tt := range tests {

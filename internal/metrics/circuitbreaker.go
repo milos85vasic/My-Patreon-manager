@@ -7,8 +7,13 @@ import (
 	"github.com/sony/gobreaker"
 )
 
+type circuitBreaker interface {
+	State() gobreaker.State
+	Execute(func() (interface{}, error)) (interface{}, error)
+}
+
 type CircuitBreaker struct {
-	cb     *gobreaker.CircuitBreaker
+	cb     circuitBreaker
 	name   string
 	onTrip func(name string, reason error)
 }

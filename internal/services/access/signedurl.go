@@ -25,7 +25,7 @@ func (g *SignedURLGenerator) GenerateSignedURL(contentID, subscriberID string) s
 	mac := hmac.New(sha256.New, []byte(g.secret))
 	mac.Write([]byte(payload))
 	sig := hex.EncodeToString(mac.Sum(nil))
-	return fmt.Sprintf("/download/%s?token=***&sub=%s&exp=%d", contentID, sig, subscriberID, expires)
+	return fmt.Sprintf("/download/%s?token=%s&sub=%s&exp=%d", contentID, sig, subscriberID, expires)
 }
 
 func (g *SignedURLGenerator) VerifySignedURL(token, contentID, subscriberID string, expires int64) bool {

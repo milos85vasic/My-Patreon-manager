@@ -81,7 +81,7 @@ func (c *Config) Validate() error {
 func (c *Config) DSN() string {
 	switch c.DBDriver {
 	case "postgres":
-		return fmt.Sprintf("host=%s port=%d user=%s password=*** dbname=%s sslmode=disable",
+		return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 			c.DBHost, c.DBPort, c.DBUser, c.DBPassword, c.DBName)
 	case "sqlite":
 		return c.DBPath

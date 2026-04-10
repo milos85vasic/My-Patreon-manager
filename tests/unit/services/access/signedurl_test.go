@@ -24,7 +24,7 @@ func TestSignedURLGenerator_GenerateAndVerify(t *testing.T) {
 	gen := access.NewSignedURLGenerator("test-secret", 1*time.Hour)
 	url := gen.GenerateSignedURL("content-1", "sub-1")
 	assert.Contains(t, url, "/download/content-1")
-	assert.Contains(t, url, "token=***
+	assert.Contains(t, url, "token=")
 }
 
 func TestSignedURLGenerator_VerifyValid(t *testing.T) {
@@ -80,7 +80,7 @@ func TestParseSignedURLParams_InvalidExp(t *testing.T) {
 
 func TestExtractTokenFromQuery(t *testing.T) {
 	token, sub, exp := access.ExtractTokenFromQuery("token=***&sub=user1&exp=12345")
-	assert.Equal(t, "abc", token)
+	assert.Equal(t, "***", token)
 	assert.Equal(t, "user1", sub)
 	assert.Equal(t, "12345", exp)
 }

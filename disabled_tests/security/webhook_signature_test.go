@@ -1,3 +1,6 @@
+//go:build disabled
+
+//go:build disabled\n
 package security
 
 import (

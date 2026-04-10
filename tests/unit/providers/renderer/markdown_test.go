@@ -2,6 +2,8 @@ package renderer_test
 
 import (
 	"context"
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/milos85vasic/My-Patreon-Manager/internal/models"
@@ -79,9 +81,20 @@ func TestMarkdownRenderer_Render_TierMapping(t *testing.T) {
 
 	// Tiers may appear in any order; we need to check that both appear.
 	output := string(result)
-	assert.Contains(t, output, "tiers: \"Bronze,Silver\"")
 	assert.Contains(t, output, "title: \"Project X\"")
 	assert.Contains(t, output, "generated: true")
+	// Check that tiers line exists and contains both Bronze and Silver
+	assert.Contains(t, output, "tiers: \"")
+	assert.Contains(t, output, "Bronze")
+	assert.Contains(t, output, "Silver")
+	// Ensure the format is correct: tiers: "Bronze,Silver" or "Silver,Bronze"
+	re := regexp.MustCompile(`tiers: "([^"]+)"`)
+	matches := re.FindStringSubmatch(output)
+	require.NotNil(t, matches, "tiers line not found")
+	tiersStr := matches[1]
+	tiers := strings.Split(tiersStr, ",")
+	require.Len(t, tiers, 2)
+	assert.ElementsMatch(t, []string{"Bronze", "Silver"}, tiers)
 }
 
 func TestMarkdownRenderer_Render_LintingRemovesEmptyLink(t *testing.T) {
