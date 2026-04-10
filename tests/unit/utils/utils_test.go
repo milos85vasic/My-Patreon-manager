@@ -132,13 +132,13 @@ func TestToJSON_Error(t *testing.T) {
 }
 
 func TestRedactString(t *testing.T) {
-	input := "token=***
+	input := "token=ghp_***"
 	redacted := utils.RedactString(input)
 	assert.NotContains(t, redacted, "ghp_***")
 }
 
 func TestRedactURL(t *testing.T) {
-	redacted := utils.RedactURL("https://api.example.com/data?token=***
+	redacted := utils.RedactURL("https://api.example.com/data?token=***")
 	assert.Equal(t, "https://api.example.com/data?***", redacted)
 }
 
