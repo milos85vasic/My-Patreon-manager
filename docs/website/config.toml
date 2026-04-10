@@ -1,0 +1,74 @@
+baseURL = "https://milos85vasic.github.io/My-Patreon-Manager/"
+languageCode = "en-us"
+title = "My Patreon Manager"
+theme = "ananke"
+
+# Enable Emoji support
+enableEmoji = true
+
+# Configure menu
+[[menu.main]]
+  name = "Home"
+  url = "/"
+  weight = 1
+
+[[menu.main]]
+  name = "Docs"
+  url = "/docs/"
+  weight = 2
+
+[[menu.main]]
+  name = "Guides"
+  url = "/guides/"
+  weight = 3
+
+[[menu.main]]
+  name = "API"
+  url = "/api/"
+  weight = 4
+
+[[menu.main]]
+  name = "Architecture"
+  url = "/architecture/"
+  weight = 5
+
+[[menu.main]]
+  name = "GitHub"
+  url = "https://github.com/milos85vasic/My-Patreon-Manager"
+  weight = 6
+
+# Parameters
+[params]
+  description = "Automate promotion of Git repositories to Patreon with AI‑generated content."
+  author = "Milos Vasic"
+  github_repo = "milos85vasic/My-Patreon-Manager"
+  showVisitedLinks = true
+  # Optional: set a logo
+  # logo = "/images/logo.png"
+
+# Markup
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+  [markup.highlight]
+    style = "github"
+
+# Output formats
+[outputs]
+  home = ["HTML", "RSS", "JSON"]
+  section = ["HTML", "RSS"]
+  page = ["HTML"]
+
+# Enable search
+[outputFormats]
+  [outputFormats.JSON]
+    baseName = "index"
+    isPlainText = false
+
+# Disable taxonomies
+disableKinds = ["taxonomy", "taxonomyTerm"]
+
+# Build options
+[build]
+  writeStats = true

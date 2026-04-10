@@ -58,6 +58,7 @@ type SyncStateStore interface {
 	GetByStatus(ctx context.Context, status string) ([]*models.SyncState, error)
 	UpdateStatus(ctx context.Context, repoID, status, reason string) error
 	UpdateCheckpoint(ctx context.Context, repoID, checkpoint string) error
+	Update(ctx context.Context, state *models.SyncState) error
 	Delete(ctx context.Context, id string) error
 }
 
@@ -68,6 +69,7 @@ type MirrorMapStore interface {
 	GetAllGroups(ctx context.Context) ([]string, error)
 	SetCanonical(ctx context.Context, repoID string) error
 	Delete(ctx context.Context, id string) error
+	DeleteAll(ctx context.Context) error
 }
 
 type GeneratedContentStore interface {
@@ -76,6 +78,7 @@ type GeneratedContentStore interface {
 	GetLatestByRepo(ctx context.Context, repoID string) (*models.GeneratedContent, error)
 	GetByQualityRange(ctx context.Context, min, max float64) ([]*models.GeneratedContent, error)
 	ListByRepository(ctx context.Context, repoID string) ([]*models.GeneratedContent, error)
+	Update(ctx context.Context, c *models.GeneratedContent) error
 }
 
 type ContentTemplateStore interface {
@@ -90,6 +93,7 @@ type PostStore interface {
 	Create(ctx context.Context, p *models.Post) error
 	GetByID(ctx context.Context, id string) (*models.Post, error)
 	GetByRepositoryID(ctx context.Context, repoID string) (*models.Post, error)
+	Update(ctx context.Context, p *models.Post) error
 	UpdatePublicationStatus(ctx context.Context, id, status string) error
 	MarkManuallyEdited(ctx context.Context, id string) error
 	ListByStatus(ctx context.Context, status string) ([]*models.Post, error)

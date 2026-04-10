@@ -189,3 +189,107 @@ func TestConfig_LoadFromEnv_BoolVariants(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadEnv(t *testing.T) {
+	// Create a temporary .env file
+	tmpDir := t.TempDir()
+	envFile := tmpDir + "/.env"
+	err := os.WriteFile(envFile, []byte("TEST_KEY=test_value\nOTHER=123\n"), 0644)
+	assert.NoError(t, err)
+
+	// Change to temp directory to ensure LoadEnv finds the file
+	oldDir, err := os.Getwd()
+	assert.NoError(t, err)
+	defer os.Chdir(oldDir)
+	err = os.Chdir(tmpDir)
+	assert.NoError(t, err)
+
+	// Test loading from current directory
+	err = config.LoadEnv()
+	assert.NoError(t, err)
+	assert.Equal(t, "test_value", os.Getenv("TEST_KEY"))
+	assert.Equal(t, "123", os.Getenv("OTHER"))
+
+	// Clean up environment
+	os.Unsetenv("TEST_KEY")
+	os.Unsetenv("OTHER")
+}
+
+func TestLoadEnv_SpecificFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	envFile := tmpDir + "/custom.env"
+	err := os.WriteFile(envFile, []byte("CUSTOM_KEY=custom_value\n"), 0644)
+	assert.NoError(t, err)
+
+	err = config.LoadEnv(envFile)
+	assert.NoError(t, err)
+	assert.Equal(t, "custom_value", os.Getenv("CUSTOM_KEY"))
+	os.Unsetenv("CUSTOM_KEY")
+}
+
+func TestLoadEnv_MissingFileIgnored(t *testing.T) {
+	// Should not error if file doesn't exist
+	err := config.LoadEnv("/non/existent/file.env")
+	assert.NoError(t, err)
+}
+
+func TestLoadEnv_MultipleFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	env1 := tmpDir + "/first.env"
+	env2 := tmpDir + "/second.env"
+	err := os.WriteFile(env1, []byte("FIRST=1\n"), 0644)
+	assert.NoError(t, err)
+	err = os.WriteFile(env2, []byte("SECOND=2\n"), 0644)
+	assert.NoError(t, err)
+
+	err = config.LoadEnv(env1, env2)
+	assert.NoError(t, err)
+	assert.Equal(t, "1", os.Getenv("FIRST"))
+	assert.Equal(t, "2", os.Getenv("SECOND"))
+	os.Unsetenv("FIRST")
+	os.Unsetenv("SECOND")
+}
+
+func TestLoadEnvOverride(t *testing.T) {
+	tmpDir := t.TempDir()
+	envFile := tmpDir + "/.env"
+	err := os.WriteFile(envFile, []byte("OVERRIDE=from_file\n"), 0644)
+	assert.NoError(t, err)
+
+	// Set env var first
+	os.Setenv("OVERRIDE", "original")
+	defer os.Unsetenv("OVERRIDE")
+
+	// Overload should override existing values
+	err = config.LoadEnvOverride(envFile)
+	assert.NoError(t, err)
+	assert.Equal(t, "from_file", os.Getenv("OVERRIDE"))
+}
+
+func TestLoadEnv_ErrorNonPathError(t *testing.T) {
+	// Create a malformed .env file that causes parsing error
+	tmpDir := t.TempDir()
+	envFile := tmpDir + "/bad.env"
+	// Invalid line without equals sign
+	err := os.WriteFile(envFile, []byte("INVALID_LINE\n"), 0644)
+	assert.NoError(t, err)
+
+	// LoadEnv should return error (not a PathError)
+	err = config.LoadEnv(envFile)
+	assert.Error(t, err)
+	// Ensure it's not a PathError
+	_, isPathError := err.(*os.PathError)
+	assert.False(t, isPathError)
+}
+
+func TestLoadEnvOverride_ErrorNonPathError(t *testing.T) {
+	tmpDir := t.TempDir()
+	envFile := tmpDir + "/bad.env"
+	err := os.WriteFile(envFile, []byte("INVALID_LINE\n"), 0644)
+	assert.NoError(t, err)
+
+	err = config.LoadEnvOverride(envFile)
+	assert.Error(t, err)
+	_, isPathError := err.(*os.PathError)
+	assert.False(t, isPathError)
+}

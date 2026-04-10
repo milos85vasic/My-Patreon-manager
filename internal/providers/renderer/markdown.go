@@ -38,6 +38,14 @@ func (r *MarkdownRenderer) Render(ctx context.Context, content models.Content, o
 	body = applyTemplateVariables(body, content)
 	sb.WriteString(body)
 
+	// Add mirror URLs section if any
+	if len(opts.MirrorURLs) > 0 {
+		sb.WriteString("\n\n## Get the Code\n\n")
+		for _, mirror := range opts.MirrorURLs {
+			sb.WriteString(fmt.Sprintf("- [%s](%s) – %s\n", mirror.Service, mirror.URL, mirror.Label))
+		}
+	}
+
 	result := sb.String()
 	result = lintMarkdown(result)
 	return []byte(result), nil

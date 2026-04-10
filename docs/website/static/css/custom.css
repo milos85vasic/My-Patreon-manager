@@ -1,0 +1,137 @@
+/* Custom CSS overrides for My Patreon Manager website */
+:root {
+  --primary-color: #3B82F6;
+  --secondary-color: #8B5CF6;
+  --accent-color: #10B981;
+  --dark-color: #1F2937;
+  --light-color: #F9FAFB;
+}
+
+/* Header and navigation */
+.bg-white {
+  background-color: var(--light-color);
+}
+
+.nav a {
+  color: var(--dark-color);
+  font-weight: 600;
+}
+
+.nav a:hover {
+  color: var(--primary-color);
+}
+
+/* Buttons */
+.btn-primary {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.btn-primary:hover {
+  background-color: #2563EB;
+  border-color: #2563EB;
+}
+
+.btn-secondary {
+  background-color: var(--secondary-color);
+  border-color: var(--secondary-color);
+}
+
+.btn-secondary:hover {
+  background-color: #7C3AED;
+  border-color: #7C3AED;
+}
+
+/* Links */
+a {
+  color: var(--primary-color);
+}
+
+a:hover {
+  color: var(--secondary-color);
+}
+
+/* Code blocks */
+.highlight {
+  border-left: 4px solid var(--primary-color);
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+/* Homepage hero */
+.hero {
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  color: white;
+}
+
+/* Footer */
+footer {
+  background-color: var(--dark-color);
+  color: var(--light-color);
+}
+
+footer a {
+  color: var(--light-color);
+}
+
+footer a:hover {
+  color: var(--accent-color);
+}
+
+/* Cards */
+.card {
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  transition: box-shadow 0.3s ease;
+}
+
+.card:hover {
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  border-color: var(--primary-color);
+}
+
+/* Tables */
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+table th {
+  background-color: var(--primary-color);
+  color: white;
+  font-weight: 600;
+}
+
+table td, table th {
+  border: 1px solid #D1D5DB;
+  padding: 0.75rem;
+}
+
+/* Alert boxes */
+.alert-info {
+  background-color: #DBEAFE;
+  border-left: 4px solid var(--primary-color);
+  color: #1E40AF;
+}
+
+.alert-warning {
+  background-color: #FEF3C7;
+  border-left: 4px solid #F59E0B;
+  color: #92400E;
+}
+
+.alert-success {
+  background-color: #D1FAE5;
+  border-left: 4px solid var(--accent-color);
+  color: #065F46;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .nav {
+    flex-direction: column;
+  }
+  
+  .hero h1 {
+    font-size: 2rem;
+  }
+}

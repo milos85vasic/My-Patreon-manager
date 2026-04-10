@@ -1,0 +1,196 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta http-equiv=X-UA-Compatible content="IE=edge,chrome=1"><title>Configuration Reference | My Patreon Manager</title><meta name=viewport content="width=device-width,minimum-scale=1"><meta name=description content="Configuration Reference
+My Patreon Manager can be configured via environment variables (loaded from an .env file or system environment). This document describes each variable, its type, default value, validation rules, and usage.
+Loading Order
+Configuration is loaded in the following order (later values override earlier ones):
+
+Default values (hard‑coded defaults)
+.env file in the current working directory
+System environment variables
+Command‑line flags (where applicable)
+
+Variable Reference
+Server Configuration
+
+  
+      
+          Variable
+          Type
+          Default
+          Description
+      
+  
+  
+      
+          PORT
+          integer
+          8080
+          Port the HTTP server listens on.
+      
+      
+          GIN_MODE
+          string
+          debug
+          Gin framework mode: debug (development) or release (production).
+      
+      
+          LOG_LEVEL
+          string
+          info
+          Log verbosity: error, warn, info, debug, trace.
+      
+      
+          REDIRECT_URI
+          URL
+          http://localhost:8080/callback
+          OAuth redirect URI for Patreon authentication. Must match the redirect URI registered with Patreon.
+      
+  
+
+Patreon API
+
+  
+      
+          Variable
+          Type
+          Default
+          Description
+      
+  
+  
+      
+          PATREON_CLIENT_ID
+          string
+          none
+          Required. OAuth client ID from your Patreon application.
+      
+      
+          PATREON_CLIENT_SECRET
+          string
+          none
+          Required. OAuth client secret from your Patreon application.
+      
+      
+          PATREON_ACCESS_TOKEN
+          string
+          none
+          Required. Access token obtained via OAuth flow.
+      
+      
+          PATREON_REFRESH_TOKEN
+          string
+          none
+          Refresh token for obtaining new access tokens.
+      
+      
+          PATREON_CAMPAIGN_ID
+          string
+          none
+          Required. ID of the Patreon campaign to publish content to.
+      
+  
+
+Database
+
+  
+      
+          Variable
+          Type
+          Default
+          Description
+      
+  
+  
+      
+          DB_DRIVER
+          string
+          sqlite
+          Database driver: sqlite (default) or postgres.
+      
+      
+          DB_PATH
+          string
+          patreon_manager.db
+          Path to SQLite database file (used when DB_DRIVER=sqlite).
+      
+      
+          DB_HOST
+          string
+          localhost
+          PostgreSQL host (used when DB_DRIVER=postgres).
+      
+      
+          DB_PORT
+          integer
+          5432
+          PostgreSQL port.
+      
+      
+          DB_USER
+          string
+          postgres
+          PostgreSQL username.
+      
+      
+          DB_PASSWORD
+          string
+          none
+          PostgreSQL password.
+      
+      
+          DB_NAME
+          string
+          my_patreon_manager
+          PostgreSQL database name.
+      
+  
+
+Note: For PostgreSQL, the connection string is built as postgres://user:password@host:port/dbname. All variables must be set."><meta name=generator content="Hugo 0.160.1"><meta name=robots content="index, follow"><meta name=author content="Milos Vasic"><link rel=stylesheet href=/My-Patreon-Manager/ananke/css/main.min.efe4d852f731d5d1fbb87718387202a97aafd768cdcdaed0662bbe6982e91824.css><link rel=canonical href=https://milos85vasic.github.io/My-Patreon-Manager/docs/configuration/><meta property="og:url" content="https://milos85vasic.github.io/My-Patreon-Manager/docs/configuration/"><meta property="og:site_name" content="My Patreon Manager"><meta property="og:title" content="Configuration Reference"><meta property="og:description" content="Configuration Reference My Patreon Manager can be configured via environment variables (loaded from an .env file or system environment). This document describes each variable, its type, default value, validation rules, and usage.
+Loading Order Configuration is loaded in the following order (later values override earlier ones):
+Default values (hard‑coded defaults) .env file in the current working directory System environment variables Command‑line flags (where applicable) Variable Reference Server Configuration Variable Type Default Description PORT integer 8080 Port the HTTP server listens on. GIN_MODE string debug Gin framework mode: debug (development) or release (production). LOG_LEVEL string info Log verbosity: error, warn, info, debug, trace. REDIRECT_URI URL http://localhost:8080/callback OAuth redirect URI for Patreon authentication. Must match the redirect URI registered with Patreon. Patreon API Variable Type Default Description PATREON_CLIENT_ID string none Required. OAuth client ID from your Patreon application. PATREON_CLIENT_SECRET string none Required. OAuth client secret from your Patreon application. PATREON_ACCESS_TOKEN string none Required. Access token obtained via OAuth flow. PATREON_REFRESH_TOKEN string none Refresh token for obtaining new access tokens. PATREON_CAMPAIGN_ID string none Required. ID of the Patreon campaign to publish content to. Database Variable Type Default Description DB_DRIVER string sqlite Database driver: sqlite (default) or postgres. DB_PATH string patreon_manager.db Path to SQLite database file (used when DB_DRIVER=sqlite). DB_HOST string localhost PostgreSQL host (used when DB_DRIVER=postgres). DB_PORT integer 5432 PostgreSQL port. DB_USER string postgres PostgreSQL username. DB_PASSWORD string none PostgreSQL password. DB_NAME string my_patreon_manager PostgreSQL database name. Note: For PostgreSQL, the connection string is built as postgres://user:password@host:port/dbname. All variables must be set."><meta property="og:locale" content="en_us"><meta property="og:type" content="article"><meta property="article:section" content="docs"><meta property="article:published_time" content="2026-04-10T00:00:00+00:00"><meta property="article:modified_time" content="2026-04-10T00:00:00+00:00"><meta itemprop=name content="Configuration Reference"><meta itemprop=description content="Configuration Reference My Patreon Manager can be configured via environment variables (loaded from an .env file or system environment). This document describes each variable, its type, default value, validation rules, and usage.
+Loading Order Configuration is loaded in the following order (later values override earlier ones):
+Default values (hard‑coded defaults) .env file in the current working directory System environment variables Command‑line flags (where applicable) Variable Reference Server Configuration Variable Type Default Description PORT integer 8080 Port the HTTP server listens on. GIN_MODE string debug Gin framework mode: debug (development) or release (production). LOG_LEVEL string info Log verbosity: error, warn, info, debug, trace. REDIRECT_URI URL http://localhost:8080/callback OAuth redirect URI for Patreon authentication. Must match the redirect URI registered with Patreon. Patreon API Variable Type Default Description PATREON_CLIENT_ID string none Required. OAuth client ID from your Patreon application. PATREON_CLIENT_SECRET string none Required. OAuth client secret from your Patreon application. PATREON_ACCESS_TOKEN string none Required. Access token obtained via OAuth flow. PATREON_REFRESH_TOKEN string none Refresh token for obtaining new access tokens. PATREON_CAMPAIGN_ID string none Required. ID of the Patreon campaign to publish content to. Database Variable Type Default Description DB_DRIVER string sqlite Database driver: sqlite (default) or postgres. DB_PATH string patreon_manager.db Path to SQLite database file (used when DB_DRIVER=sqlite). DB_HOST string localhost PostgreSQL host (used when DB_DRIVER=postgres). DB_PORT integer 5432 PostgreSQL port. DB_USER string postgres PostgreSQL username. DB_PASSWORD string none PostgreSQL password. DB_NAME string my_patreon_manager PostgreSQL database name. Note: For PostgreSQL, the connection string is built as postgres://user:password@host:port/dbname. All variables must be set."><meta itemprop=datePublished content="2026-04-10T00:00:00+00:00"><meta itemprop=dateModified content="2026-04-10T00:00:00+00:00"><meta itemprop=wordCount content="729"><meta name=twitter:card content="summary"><meta name=twitter:title content="Configuration Reference"><meta name=twitter:description content="Configuration Reference My Patreon Manager can be configured via environment variables (loaded from an .env file or system environment). This document describes each variable, its type, default value, validation rules, and usage.
+Loading Order Configuration is loaded in the following order (later values override earlier ones):
+Default values (hard‑coded defaults) .env file in the current working directory System environment variables Command‑line flags (where applicable) Variable Reference Server Configuration Variable Type Default Description PORT integer 8080 Port the HTTP server listens on. GIN_MODE string debug Gin framework mode: debug (development) or release (production). LOG_LEVEL string info Log verbosity: error, warn, info, debug, trace. REDIRECT_URI URL http://localhost:8080/callback OAuth redirect URI for Patreon authentication. Must match the redirect URI registered with Patreon. Patreon API Variable Type Default Description PATREON_CLIENT_ID string none Required. OAuth client ID from your Patreon application. PATREON_CLIENT_SECRET string none Required. OAuth client secret from your Patreon application. PATREON_ACCESS_TOKEN string none Required. Access token obtained via OAuth flow. PATREON_REFRESH_TOKEN string none Refresh token for obtaining new access tokens. PATREON_CAMPAIGN_ID string none Required. ID of the Patreon campaign to publish content to. Database Variable Type Default Description DB_DRIVER string sqlite Database driver: sqlite (default) or postgres. DB_PATH string patreon_manager.db Path to SQLite database file (used when DB_DRIVER=sqlite). DB_HOST string localhost PostgreSQL host (used when DB_DRIVER=postgres). DB_PORT integer 5432 PostgreSQL port. DB_USER string postgres PostgreSQL username. DB_PASSWORD string none PostgreSQL password. DB_NAME string my_patreon_manager PostgreSQL database name. Note: For PostgreSQL, the connection string is built as postgres://user:password@host:port/dbname. All variables must be set."><link rel=stylesheet href=/My-Patreon-Manager/css/custom.css></head><body class="ma0 avenir bg-near-white production is-page is-page page-configuration"><header><div class=bg-black><nav class="pv3 ph3 ph4-ns" role=navigation><div class="flex-l center items-center justify-between"><a href=/My-Patreon-Manager/ class="f3 fw2 hover-white white-90 dib no-underline">My Patreon Manager</a><div class="flex-l items-center"><ul class="pl0 mr3"><li class="list f5 f4-ns fw4 dib pr3"><a class="hover-white white-90 no-underline" href=/My-Patreon-Manager/ title="Home page">Home</a></li><li class="list f5 f4-ns fw4 dib pr3"><a class="hover-white white-90 no-underline" href=/My-Patreon-Manager/docs/ title="Docs page">Docs</a></li><li class="list f5 f4-ns fw4 dib pr3"><a class="hover-white white-90 no-underline" href=/My-Patreon-Manager/guides/ title="Guides page">Guides</a></li><li class="list f5 f4-ns fw4 dib pr3"><a class="hover-white white-90 no-underline" href=/My-Patreon-Manager/api/ title="API page">API</a></li><li class="list f5 f4-ns fw4 dib pr3"><a class="hover-white white-90 no-underline" href=/My-Patreon-Manager/architecture/ title="Architecture page">Architecture</a></li><li class="list f5 f4-ns fw4 dib pr3"><a class="hover-white white-90 no-underline" href=https://github.com/milos85vasic/My-Patreon-Manager title="GitHub page">GitHub</a></li></ul><div class=ananke-socials></div></div></div></nav></div></header><main class=pb7 role=main><article class="page-configuration flex-l mw7 center ph3 flex-wrap justify-between"><header class="mt4 w-100"><aside class="instapaper_ignoref b helvetica tracked ttu">Documentation</aside><div id=sharing class="mt3 ananke-socials"></div><h1 class="f1 athelas mt3 mb1">Configuration Reference</h1><p class=tracked><strong>Milos Vasic</strong></p><time class="f6 mv4 dib tracked" datetime=2026-04-10T00:00:00Z>April 10, 2026</time></header><div class="nested-copy-line-height lh-copy serif f4 nested-links mid-gray pr4-l w-100-l"><h1 id=configuration-reference>Configuration Reference</h1><p>My Patreon Manager can be configured via environment variables (loaded from an <code>.env</code> file or system environment). This document describes each variable, its type, default value, validation rules, and usage.</p><h2 id=loading-order>Loading Order</h2><p>Configuration is loaded in the following order (later values override earlier ones):</p><ol><li><strong>Default values</strong> (hard‑coded defaults)</li><li><strong><code>.env</code> file</strong> in the current working directory</li><li><strong>System environment variables</strong></li><li><strong>Command‑line flags</strong> (where applicable)</li></ol><h2 id=variable-reference>Variable Reference</h2><h3 id=server-configuration>Server Configuration</h3><table><thead><tr><th>Variable</th><th>Type</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>PORT</code></td><td>integer</td><td><code>8080</code></td><td>Port the HTTP server listens on.</td></tr><tr><td><code>GIN_MODE</code></td><td>string</td><td><code>debug</code></td><td>Gin framework mode: <code>debug</code> (development) or <code>release</code> (production).</td></tr><tr><td><code>LOG_LEVEL</code></td><td>string</td><td><code>info</code></td><td>Log verbosity: <code>error</code>, <code>warn</code>, <code>info</code>, <code>debug</code>, <code>trace</code>.</td></tr><tr><td><code>REDIRECT_URI</code></td><td>URL</td><td><code>http://localhost:8080/callback</code></td><td>OAuth redirect URI for Patreon authentication. Must match the redirect URI registered with Patreon.</td></tr></tbody></table><h3 id=patreon-api>Patreon API</h3><table><thead><tr><th>Variable</th><th>Type</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>PATREON_CLIENT_ID</code></td><td>string</td><td><em>none</em></td><td><strong>Required.</strong> OAuth client ID from your Patreon application.</td></tr><tr><td><code>PATREON_CLIENT_SECRET</code></td><td>string</td><td><em>none</em></td><td><strong>Required.</strong> OAuth client secret from your Patreon application.</td></tr><tr><td><code>PATREON_ACCESS_TOKEN</code></td><td>string</td><td><em>none</em></td><td><strong>Required.</strong> Access token obtained via OAuth flow.</td></tr><tr><td><code>PATREON_REFRESH_TOKEN</code></td><td>string</td><td><em>none</em></td><td>Refresh token for obtaining new access tokens.</td></tr><tr><td><code>PATREON_CAMPAIGN_ID</code></td><td>string</td><td><em>none</em></td><td><strong>Required.</strong> ID of the Patreon campaign to publish content to.</td></tr></tbody></table><h3 id=database>Database</h3><table><thead><tr><th>Variable</th><th>Type</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>DB_DRIVER</code></td><td>string</td><td><code>sqlite</code></td><td>Database driver: <code>sqlite</code> (default) or <code>postgres</code>.</td></tr><tr><td><code>DB_PATH</code></td><td>string</td><td><code>patreon_manager.db</code></td><td>Path to SQLite database file (used when <code>DB_DRIVER=sqlite</code>).</td></tr><tr><td><code>DB_HOST</code></td><td>string</td><td><code>localhost</code></td><td>PostgreSQL host (used when <code>DB_DRIVER=postgres</code>).</td></tr><tr><td><code>DB_PORT</code></td><td>integer</td><td><code>5432</code></td><td>PostgreSQL port.</td></tr><tr><td><code>DB_USER</code></td><td>string</td><td><code>postgres</code></td><td>PostgreSQL username.</td></tr><tr><td><code>DB_PASSWORD</code></td><td>string</td><td><em>none</em></td><td>PostgreSQL password.</td></tr><tr><td><code>DB_NAME</code></td><td>string</td><td><code>my_patreon_manager</code></td><td>PostgreSQL database name.</td></tr></tbody></table><p><strong>Note:</strong> For PostgreSQL, the connection string is built as <code>postgres://user:password@host:port/dbname</code>. All variables must be set.</p><h3 id=content-generation>Content Generation</h3><table><thead><tr><th>Variable</th><th>Type</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>CONTENT_QUALITY_THRESHOLD</code></td><td>float</td><td><code>0.75</code></td><td>Minimum quality score (0.0–1.0) for content to be published. Content below this threshold is discarded or marked for review.</td></tr><tr><td><code>LLM_DAILY_TOKEN_BUDGET</code></td><td>integer</td><td><code>100000</code></td><td>Daily token budget for LLM API calls. If exceeded, generation pauses until the next day.</td></tr><tr><td><code>CONTENT_TIER_MAPPING_STRATEGY</code></td><td>string</td><td><code>linear</code></td><td>Strategy for mapping repositories to Patreon tiers: <code>linear</code> (each repo maps to a tier) or <code>weighted</code> (based on repository metrics).</td></tr><tr><td><code>VIDEO_GENERATION_ENABLED</code></td><td>boolean</td><td><code>false</code></td><td>Enable experimental video script generation. Requires additional video‑generation dependencies.</td></tr></tbody></table><h3 id=hmac-secret-signed-urls>HMAC Secret (Signed URLs)</h3><table><thead><tr><th>Variable</th><th>Type</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>HMAC_SECRET</code></td><td>string</td><td><em>none</em></td><td><strong>Required.</strong> Secret key used to sign and verify download URLs. Must be a long, random string. <strong>Change this in production!</strong></td></tr></tbody></table><h3 id=git-provider-tokens>Git Provider Tokens</h3><p>Each Git service requires a personal access token (PAT) with appropriate scopes.</p><table><thead><tr><th>Variable</th><th>Type</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>GITHUB_TOKEN</code></td><td>string</td><td><em>none</em></td><td><strong>Required.</strong> GitHub personal access token (classic) with <code>repo</code> scope.</td></tr><tr><td><code>GITHUB_TOKEN_SECONDARY</code></td><td>string</td><td><em>none</em></td><td>Secondary token for rate‑limit backup (optional).</td></tr><tr><td><code>GITLAB_TOKEN</code></td><td>string</td><td><em>none</em></td><td><strong>Required.</strong> GitLab personal access token with <code>read_api</code> and <code>read_repository</code> scopes.</td></tr><tr><td><code>GITLAB_TOKEN_SECONDARY</code></td><td>string</td><td><em>none</em></td><td>Secondary token (optional).</td></tr><tr><td><code>GITLAB_BASE_URL</code></td><td>URL</td><td><code>https://gitlab.com</code></td><td>Base URL for self‑hosted GitLab instances.</td></tr><tr><td><code>GITFIC_TOKEN</code></td><td>string</td><td><em>none</em></td><td><strong>Required.</strong> GitFlic API token with <code>repo:read</code> scope.</td></tr><tr><td><code>GITFIC_TOKEN_SECONDARY</code></td><td>string</td><td><em>none</em></td><td>Secondary token (optional).</td></tr><tr><td><code>GITVERSE_TOKEN</code></td><td>string</td><td><em>none</em></td><td><strong>Required.</strong> GitVerse API token with <code>repo:read</code> scope.</td></tr><tr><td><code>GITVERSE_TOKEN_SECONDARY</code></td><td>string</td><td><em>none</em></td><td>Secondary token (optional).</td></tr></tbody></table><p><strong>Note:</strong> If a secondary token is provided, the manager will automatically switch to it when the primary token’s rate limit is exhausted.</p><h3 id=grace-period>Grace Period</h3><table><thead><tr><th>Variable</th><th>Type</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>GRACE_PERIOD_HOURS</code></td><td>integer</td><td><code>24</code></td><td>Hours after a repository change before new content is generated (prevents rapid updates). Set to <code>0</code> to disable.</td></tr></tbody></table><h3 id=admin>Admin</h3><table><thead><tr><th>Variable</th><th>Type</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>ADMIN_KEY</code></td><td>string</td><td><em>none</em></td><td>Secret key for administrative endpoints (<code>/admin/*</code>). If not set, admin endpoints are disabled.</td></tr></tbody></table><h2 id=validation-rules>Validation Rules</h2><ul><li><strong>Required variables</strong>: Must be set; otherwise the application fails to start.</li><li><strong>Ports</strong>: Must be between 1 and 65535.</li><li><strong>URLs</strong>: Must be valid URLs (parsed by <code>net/url</code>).</li><li><strong>Booleans</strong>: Accept <code>true</code>, <code>false</code>, <code>1</code>, <code>0</code> (case‑insensitive).</li><li><strong>Floats</strong>: Must be parseable as float64.</li><li><strong>Integers</strong>: Must be parseable as int.</li></ul><h2 id=example-env-file>Example <code>.env</code> File</h2><div class=highlight><pre tabindex=0 style=background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none><code class=language-env data-lang=env><span style=display:flex><span><span style=color:#57606a># Server</span>
+</span></span><span style=display:flex><span><span style=color:#953800>PORT</span><span style=color:#0550ae>=</span><span style=color:#0550ae>8080</span>
+</span></span><span style=display:flex><span><span style=color:#953800>GIN_MODE</span><span style=color:#0550ae>=</span>debug
+</span></span><span style=display:flex><span><span style=color:#953800>LOG_LEVEL</span><span style=color:#0550ae>=</span>info
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#57606a># Patreon API</span>
+</span></span><span style=display:flex><span><span style=color:#953800>PATREON_CLIENT_ID</span><span style=color:#0550ae>=</span>your_client_id_here
+</span></span><span style=display:flex><span><span style=color:#953800>PATREON_CLIENT_SECRET</span><span style=color:#0550ae>=</span>your_client_secret_here
+</span></span><span style=display:flex><span><span style=color:#953800>PATREON_ACCESS_TOKEN</span><span style=color:#0550ae>=</span>your_access_token_here
+</span></span><span style=display:flex><span><span style=color:#953800>PATREON_REFRESH_TOKEN</span><span style=color:#0550ae>=</span>your_refresh_token_here
+</span></span><span style=display:flex><span><span style=color:#953800>PATREON_CAMPAIGN_ID</span><span style=color:#0550ae>=</span>your_campaign_id_here
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#57606a># OAuth</span>
+</span></span><span style=display:flex><span><span style=color:#953800>REDIRECT_URI</span><span style=color:#0550ae>=</span>http://localhost:8080/callback
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#57606a># Database (SQLite)</span>
+</span></span><span style=display:flex><span><span style=color:#953800>DB_DRIVER</span><span style=color:#0550ae>=</span>sqlite
+</span></span><span style=display:flex><span><span style=color:#953800>DB_PATH</span><span style=color:#0550ae>=</span>patreon_manager.db
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#57606a># Content Generation</span>
+</span></span><span style=display:flex><span><span style=color:#953800>CONTENT_QUALITY_THRESHOLD</span><span style=color:#0550ae>=</span>0.75
+</span></span><span style=display:flex><span><span style=color:#953800>LLM_DAILY_TOKEN_BUDGET</span><span style=color:#0550ae>=</span><span style=color:#0550ae>100000</span>
+</span></span><span style=display:flex><span><span style=color:#953800>CONTENT_TIER_MAPPING_STRATEGY</span><span style=color:#0550ae>=</span>linear
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#57606a># HMAC Secret</span>
+</span></span><span style=display:flex><span><span style=color:#953800>HMAC_SECRET</span><span style=color:#0550ae>=</span>change_this_to_a_random_secret
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#57606a># Git Provider Tokens</span>
+</span></span><span style=display:flex><span><span style=color:#953800>GITHUB_TOKEN</span><span style=color:#0550ae>=</span>ghp_***
+</span></span><span style=display:flex><span><span style=color:#953800>GITLAB_TOKEN</span><span style=color:#0550ae>=</span>glpat-abcdefghijklmnop
+</span></span><span style=display:flex><span><span style=color:#953800>GITLAB_BASE_URL</span><span style=color:#0550ae>=</span>https://gitlab.com
+</span></span><span style=display:flex><span><span style=color:#953800>GITFIC_TOKEN</span><span style=color:#0550ae>=</span>your_gitflic_token
+</span></span><span style=display:flex><span><span style=color:#953800>GITVERSE_TOKEN</span><span style=color:#0550ae>=</span>your_gitverse_token
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#57606a># Grace Period</span>
+</span></span><span style=display:flex><span><span style=color:#953800>GRACE_PERIOD_HOURS</span><span style=color:#0550ae>=</span><span style=color:#0550ae>24</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#57606a># Video Generation (optional)</span>
+</span></span><span style=display:flex><span><span style=color:#953800>VIDEO_GENERATION_ENABLED</span><span style=color:#0550ae>=</span><span style=color:#6639ba>false</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#57606a># Admin Key (optional)</span>
+</span></span><span style=display:flex><span><span style=color:#953800>ADMIN_KEY</span><span style=color:#0550ae>=</span>super-secret-admin-key
+</span></span></code></pre></div><h2 id=environmentspecific-configuration>Environment‑Specific Configuration</h2><p>You can maintain separate <code>.env</code> files for different environments (e.g., <code>.env.production</code>, <code>.env.staging</code>) and load them via the <code>--config</code> flag:</p><div class=highlight><pre tabindex=0 style=background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span>patreon-manager sync --config .env.production
+</span></span></code></pre></div><h2 id=overriding-via-command-line>Overriding via Command Line</h2><p>Most configuration can also be overridden by command‑line flags. For example, <code>--log‑level debug</code> overrides <code>LOG_LEVEL</code>. See the <a href=/docs/cli-reference/>CLI Reference</a> for details.</p><h2 id=security-notes>Security Notes</h2><ul><li>Never commit <code>.env</code> files to version control.</li><li>Use strong, random secrets for <code>HMAC_SECRET</code> and <code>ADMIN_KEY</code>.</li><li>Rotate Git provider tokens periodically.</li><li>Store production secrets in a secure secret manager (e.g., HashiCorp Vault, AWS Secrets Manager) and inject them as environment variables at runtime.</li></ul><ul class=pa0></ul></div></article></main><footer class="bg-black bottom-0 w-100 pa3" role=contentinfo><div class="flex justify-between"><a class="f4 fw4 hover-white white-70 dn dib-ns pv2 ph3 no-underline" href=https://milos85vasic.github.io/My-Patreon-Manager/>&copy; My Patreon Manager 2026</a><div><div class=ananke-socials></div></div></div></footer></body></html>

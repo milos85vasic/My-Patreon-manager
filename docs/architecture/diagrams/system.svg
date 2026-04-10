@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+  <style>
+    text {
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+    }
+    .component {
+      fill: #e1f5fe;
+      stroke: #01579b;
+      stroke-width: 2;
+      rx: 5;
+    }
+    .external {
+      fill: #f3e5f5;
+      stroke: #4a148c;
+      stroke-width: 2;
+      rx: 5;
+    }
+    .arrow {
+      stroke: #333;
+      stroke-width: 2;
+      marker-end: url(#arrowhead);
+    }
+    .arrow-dashed {
+      stroke: #666;
+      stroke-width: 2;
+      stroke-dasharray: 5,5;
+      marker-end: url(#arrowhead);
+    }
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#333"/>
+    </marker>
+  </defs>
+  <!-- Title -->
+  <text x="400" y="30" text-anchor="middle" font-size="18" font-weight="bold">My Patreon Manager System Architecture</text>
+
+  <!-- External Services -->
+  <rect x="50" y="80" width="120" height="60" class="external"/>
+  <text x="110" y="110" text-anchor="middle">GitHub</text>
+  
+  <rect x="50" y="160" width="120" height="60" class="external"/>
+  <text x="110" y="190" text-anchor="middle">GitLab</text>
+  
+  <rect x="50" y="240" width="120" height="60" class="external"/>
+  <text x="110" y="270" text-anchor="middle">GitFlic</text>
+  
+  <rect x="50" y="320" width="120" height="60" class="external"/>
+  <text x="110" y="350" text-anchor="middle">GitVerse</text>
+  
+  <rect x="630" y="80" width="120" height="60" class="external"/>
+  <text x="690" y="110" text-anchor="middle">LLMsVerifier</text>
+  
+  <rect x="630" y="160" width="120" height="60" class="external"/>
+  <text x="690" y="190" text-anchor="middle">Patreon API</text>
+  
+  <rect x="630" y="240" width="120" height="60" class="external"/>
+  <text x="690" y="270" text-anchor="middle">PostgreSQL</text>
+  
+  <rect x="630" y="320" width="120" height="60" class="external"/>
+  <text x="690" y="350" text-anchor="middle">SQLite</text>
+
+  <!-- Internal Components -->
+  <rect x="250" y="80" width="120" height="60" class="component"/>
+  <text x="310" y="110" text-anchor="middle">CLI</text>
+  
+  <rect x="250" y="160" width="120" height="60" class="component"/>
+  <text x="310" y="190" text-anchor="middle">HTTP Server</text>
+  
+  <rect x="250" y="240" width="120" height="60" class="component"/>
+  <text x="310" y="270" text-anchor="middle">Git Providers</text>
+  
+  <rect x="250" y="320" width="120" height="60" class="component"/>
+  <text x="310" y="350" text-anchor="middle">Orchestrator</text>
+  
+  <rect x="440" y="80" width="120" height="60" class="component"/>
+  <text x="500" y="110" text-anchor="middle">LLM Client</text>
+  
+  <rect x="440" y="160" width="120" height="60" class="component"/>
+  <text x="500" y="190" text-anchor="middle">Patreon Client</text>
+  
+  <rect x="440" y="240" width="120" height="60" class="component"/>
+  <text x="500" y="270" text-anchor="middle">Renderer</text>
+  
+  <rect x="440" y="320" width="120" height="60" class="component"/>
+  <text x="500" y="350" text-anchor="middle">Database</text>
+
+  <!-- Arrows: Git providers to Orchestrator -->
+  <line x1="170" y1="110" x2="250" y2="350" class="arrow-dashed"/>
+  <line x1="170" y1="190" x2="250" y2="350" class="arrow-dashed"/>
+  <line x1="170" y1="270" x2="250" y2="350" class="arrow-dashed"/>
+  <line x1="170" y1="350" x2="250" y2="350" class="arrow-dashed"/>
+  
+  <!-- Orchestrator to LLM Client -->
+  <line x1="370" y1="350" x2="440" y2="110" class="arrow"/>
+  
+  <!-- LLM Client to LLMsVerifier -->
+  <line x1="560" y1="110" x2="630" y2="110" class="arrow-dashed"/>
+  
+  <!-- Orchestrator to Patreon Client -->
+  <line x1="370" y1="350" x2="440" y2="190" class="arrow"/>
+  
+  <!-- Patreon Client to Patreon API -->
+  <line x1="560" y1="190" x2="630" y2="190" class="arrow-dashed"/>
+  
+  <!-- Orchestrator to Renderer -->
+  <line x1="370" y1="350" x2="440" y2="270" class="arrow"/>
+  
+  <!-- Orchestrator to Database -->
+  <line x1="370" y1="350" x2="440" y2="350" class="arrow"/>
+  
+  <!-- Database to PostgreSQL/SQLite -->
+  <line x1="560" y1="350" x2="630" y2="270" class="arrow-dashed"/>
+  <line x1="560" y1="350" x2="630" y2="350" class="arrow-dashed"/>
+  
+  <!-- CLI to Orchestrator -->
+  <line x1="370" y1="110" x2="370" y2="350" class="arrow"/>
+  
+  <!-- HTTP Server to Orchestrator -->
+  <line x1="370" y1="190" x2="370" y2="350" class="arrow"/>
+  
+  <!-- Git Providers to Orchestrator (already done) -->
+  
+  <!-- Legend -->
+  <rect x="50" y="420" width="200" height="140" fill="#f9f9f9" stroke="#ccc" stroke-width="1"/>
+  <text x="60" y="440" font-weight="bold">Legend</text>
+  <rect x="70" y="450" width="20" height="20" class="component"/>
+  <text x="100" y="465">Internal Component</text>
+  <rect x="70" y="480" width="20" height="20" class="external"/>
+  <text x="100" y="495">External Service</text>
+  <line x1="70" y1="510" x2="90" y2="510" class="arrow"/>
+  <text x="100" y="515">Internal Call</text>
+  <line x1="70" y1="530" x2="90" y2="530" class="arrow-dashed"/>
+  <text x="100" y="535">External API Call</text>
+</svg>

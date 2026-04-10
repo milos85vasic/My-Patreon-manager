@@ -95,23 +95,23 @@
 
 ### Tests for User Story 1
 
-- [ ] T047 [P] [US1] Unit test for config loading in tests/unit/config/config_test.go: test env loading, hierarchical resolution, validation of required fields, error on missing credentials
-- [ ] T048 [P] [US1] Unit test for SQLite store in tests/unit/database/sqlite_test.go: test CRUD for all stores, unique constraints, state transitions, migration execution
-- [ ] T049 [P] [US1] Unit test for .repoignore engine in tests/unit/filter/repoignore_test.go: test exact match, wildcard, recursive, negation, character class, URL normalization before matching
-- [ ] T050 [P] [US1] Unit test for dual-layer locking in tests/unit/sync/lock_test.go: test acquire/release, stale detection, concurrent lock contention returns ErrLockContention
-- [ ] T051 [P] [US1] Unit test for checkpoint manager in tests/unit/sync/checkpoint_test.go: test save/load/clear cycle, verify resume skips completed repos
-- [ ] T052 [P] [US1] Unit test for GitHub provider in tests/unit/providers/github_test.go: test Authenticate, ListRepositories pagination, GetRepositoryMetadata, CheckRepositoryState with mocked HTTP server
-- [ ] T053 [P] [US1] Unit test for GitLab provider in tests/unit/providers/gitlab_test.go: test Authenticate with base URL, ListRepositories nested groups, metadata extraction
-- [ ] T054 [P] [US1] Unit test for GitFlic provider in tests/unit/providers/gitflic_test.go: test custom REST API calls, response normalization to Repository struct
-- [ ] T055 [P] [US1] Unit test for GitVerse provider in tests/unit/providers/gitverse_test.go: test capability detection probes, graceful degradation for missing features
-- [ ] T056 [P] [US1] Unit test for Patreon client in tests/unit/providers/patreon/client_test.go: test OAuth2 token refresh on 401, post CRUD, tier association, rate limit handling
-- [ ] T057 [P] [US1] Unit test for OAuth2 token manager in tests/unit/providers/patreon/oauth_test.go: test token refresh flow, in-memory update, optional .env persistence, credential memory clearing
-- [ ] T058 [P] [US1] Unit test for LLMsVerifier client in tests/unit/providers/llm/verifier_test.go: test GenerateContent, GetAvailableModels, GetModelQualityScore, circuit breaker integration, retry on timeout
-- [ ] T059 [P] [US1] Unit test for fallback chain in tests/unit/providers/llm/fallback_test.go: test primary → fallback ordering, circuit breaker trip after threshold, reset after cooldown
-- [ ] T060 [P] [US1] Unit test for Markdown renderer in tests/unit/providers/renderer/markdown_test.go: test template variable injection, frontmatter generation, linting validation
-- [ ] T061 [P] [US1] Unit test for quality gate in tests/unit/services/content/quality_test.go: test threshold check (default 0.75), rejection triggers fallback, all-fail goes to review queue
-- [ ] T062 [P] [US1] Integration test for sync pipeline in tests/integration/sync_pipeline_test.go: test full flow with mocked Git (1 repo), mocked LLM (returns valid content), mocked Patreon (accepts post), verify post created with correct tier
-- [ ] T063 [P] [US1] Integration test for content generation in tests/integration/content_generation_test.go: test prompt assembly from template + repo metadata, quality scoring, fallback on low score, token tracking
+- [X] T047 [P] [US1] Unit test for config loading in tests/unit/config/config_test.go: test env loading, hierarchical resolution, validation of required fields, error on missing credentials
+- [X] T048 [P] [US1] Unit test for SQLite store in tests/unit/database/sqlite_test.go: test CRUD for all stores, unique constraints, state transitions, migration execution
+- [X] T049 [P] [US1] Unit test for .repoignore engine in tests/unit/filter/repoignore_test.go: test exact match, wildcard, recursive, negation, character class, URL normalization before matching
+- [X] T050 [P] [US1] Unit test for dual-layer locking in tests/unit/sync/lock_test.go: test acquire/release, stale detection, concurrent lock contention returns ErrLockContention
+- [X] T051 [P] [US1] Unit test for checkpoint manager in tests/unit/sync/checkpoint_test.go: test save/load/clear cycle, verify resume skips completed repos
+- [X] T052 [P] [US1] Unit test for GitHub provider in tests/unit/providers/git/github_test.go: test Authenticate, ListRepositories pagination, GetRepositoryMetadata, CheckRepositoryState with mocked HTTP server
+- [X] T053 [P] [US1] Unit test for GitLab provider in tests/unit/providers/git/gitlab_test.go: test Authenticate with base URL, ListRepositories nested groups, metadata extraction
+- [X] T054 [P] [US1] Unit test for GitFlic provider in tests/unit/providers/git/gitflic_test.go: test custom REST API calls, response normalization to Repository struct
+- [X] T055 [P] [US1] Unit test for GitVerse provider in tests/unit/providers/git/gitverse_test.go: test capability detection probes, graceful degradation for missing features
+- [X] T056 [P] [US1] Unit test for Patreon client in tests/unit/providers/patreon/client_test.go: test OAuth2 token refresh on 401, post CRUD, tier association, rate limit handling
+- [X] T057 [P] [US1] Unit test for OAuth2 token manager in tests/unit/providers/patreon/oauth_test.go: test token refresh flow, in-memory update, optional .env persistence, credential memory clearing
+- [X] T058 [P] [US1] Unit test for LLMsVerifier client in tests/unit/providers/llm/verifier_test.go: test GenerateContent, GetAvailableModels, GetModelQualityScore, circuit breaker integration, retry on timeout
+- [X] T059 [P] [US1] Unit test for fallback chain in tests/unit/providers/llm/fallback_test.go: test primary → fallback ordering, circuit breaker trip after threshold, reset after cooldown
+- [X] T060 [P] [US1] Unit test for Markdown renderer in tests/unit/providers/renderer/markdown_test.go: test template variable injection, frontmatter generation, linting validation
+- [X] T061 [P] [US1] Unit test for quality gate in tests/unit/services/content/quality_test.go: test threshold check (default 0.75), rejection triggers fallback, all-fail goes to review queue
+ - [X] T062 [P] [US1] Integration test for sync pipeline in tests/integration/sync_pipeline_test.go: test full flow with mocked Git (1 repo), mocked LLM (returns valid content), mocked Patreon (accepts post), verify post created with correct tier
+ - [X] T063 [P] [US1] Integration test for content generation in tests/integration/content_generation_test.go: test prompt assembly from template + repo metadata, quality scoring, fallback on low score, token tracking
 
 ### Implementation for User Story 1
 
@@ -143,8 +143,8 @@
 
 ### Tests for User Story 2
 
-- [ ] T079 [P] [US2] Unit test for dry-run orchestrator in tests/unit/sync/dryrun_test.go: test that no Patreon write calls are made, report contains repo names/change reasons/estimated API calls
-- [ ] T080 [P] [US2] Integration test for dry-run in tests/integration/dryrun_test.go: run dry-run with 3 changed repos against mocked services, verify report accuracy matches subsequent real sync results
+- [X] T079 [P] [US2] Unit test for dry-run orchestrator in tests/unit/sync/dryrun_test.go: test that no Patreon write calls are made, report contains repo names/change reasons/estimated API calls
+- [X] T080 [P] [US2] Integration test for dry-run in tests/integration/dryrun_test.go: run dry-run with 3 changed repos against mocked services, verify report accuracy matches subsequent real sync results
 
 ### Implementation for User Story 2
 
@@ -164,7 +164,7 @@
 
 ### Tests for User Story 3
 
-- [ ] T084 [P] [US3] Unit test for selective filtering in tests/unit/sync/selective_test.go: test --org flag filters to specific org, --repo flag processes single URL, --pattern applies glob matching, --since filters by timestamp, --changed-only skips unchanged
+- [X] T084 [P] [US3] Unit test for selective filtering in tests/unit/sync/selective_test.go: test --org flag filters to specific org, --repo flag processes single URL, --pattern applies glob matching, --since filters by timestamp, --changed-only skips unchanged
 
 ### Implementation for User Story 3
 
@@ -184,8 +184,8 @@
 
 ### Tests for User Story 4
 
-- [ ] T088 [P] [US4] Unit test for quality gate in tests/unit/services/content/quality_gate_test.go: test content above/below threshold, fallback triggers regeneration, all-fail queues for review, token budget enforcement (80% alert, 100% hard stop)
-- [ ] T089 [P] [US4] Integration test for quality pipeline in tests/integration/quality_pipeline_test.go: test end-to-end with mocked LLM returning varying quality scores, verify correct fallback behavior and review queue creation
+- [X] T088 [P] [US4] Unit test for quality gate in tests/unit/services/content/quality_gate_test.go: test content above/below threshold, fallback triggers regeneration, all-fail queues for review, token budget enforcement (80% alert, 100% hard stop)
+- [X] T089 [P] [US4] Integration test for quality pipeline in tests/integration/quality_pipeline_test.go: test end-to-end with mocked LLM returning varying quality scores, verify correct fallback behavior and review queue creation
 
 ### Implementation for User Story 4
 
@@ -205,7 +205,7 @@
 
 ### Tests for User Story 5
 
-- [ ] T093 [P] [US5] Unit test for scheduler in tests/unit/services/sync/scheduler_test.go: test cron expression parsing, schedule triggering, failure alerting, next-run-on-failure behavior
+- [X] T093 [P] [US5] Unit test for scheduler in tests/unit/services/sync/scheduler_test.go: test cron expression parsing, schedule triggering, failure alerting, next-run-on-failure behavior
 
 ### Implementation for User Story 5
 
@@ -225,9 +225,9 @@
 
 ### Tests for User Story 6
 
-- [ ] T097 [P] [US6] Unit test for webhook handlers in tests/unit/handlers/webhook_test.go: test GitHub signature validation (HMAC-SHA256), GitLab token validation, event parsing, deduplication window, malformed payload rejection
-- [ ] T098 [P] [US6] Unit test for webhook deduplication in tests/unit/services/sync/dedup_test.go: test 5-minute window dedup, event ID tracking, single execution for rapid-fire events
-- [ ] T099 [P] [US6] Integration test for webhook flow in tests/integration/webhook_test.go: send POST to /webhook/github with valid signature, verify repository queued for incremental sync
+- [X] T097 [P] [US6] Unit test for webhook handlers in tests/unit/handlers/webhook_test.go: test GitHub signature validation (HMAC-SHA256), GitLab token validation, event parsing, deduplication window, malformed payload rejection
+- [X] T098 [P] [US6] Unit test for webhook deduplication in tests/unit/services/sync/dedup_test.go: test 5-minute window dedup, event ID tracking, single execution for rapid-fire events
+- [X] T099 [P] [US6] Integration test for webhook flow in tests/integration/webhook_test.go: send POST to /webhook/github with valid signature, verify repository queued for incremental sync
 
 ### Implementation for User Story 6
 
@@ -248,8 +248,8 @@
 
 ### Tests for User Story 7
 
-- [ ] T104 [P] [US7] Unit test for mirror detection in tests/unit/providers/git/mirror_test.go: test exact name match, README hash match, commit SHA match, description similarity scoring, different-owner same-name repos NOT matched, confidence threshold
-- [ ] T105 [P] [US7] Unit test for mirror-aware content in tests/unit/providers/renderer/markdown_mirror_test.go: test generated Markdown includes "Get the Code" section with primary + mirror URLs, platform-specific labels
+- [X] T104 [P] [US7] Unit test for mirror detection in tests/unit/providers/git/mirror_test.go: test exact name match, README hash match, commit SHA match, description similarity scoring, different-owner same-name repos NOT matched, confidence threshold
+- [X] T105 [P] [US7] Unit test for mirror-aware content in tests/unit/providers/renderer/markdown_mirror_test.go: test generated Markdown includes "Get the Code" section with primary + mirror URLs, platform-specific labels
 
 ### Implementation for User Story 7
 
@@ -269,9 +269,9 @@
 
 ### Tests for User Story 8
 
-- [ ] T109 [P] [US8] Unit test for access gating in tests/unit/services/access/gating_test.go: test tier verification with cached membership, denial on insufficient tier, upgrade prompt generation, 5-minute cache TTL, webhook-driven invalidation
-- [ ] T110 [P] [US8] Unit test for signed URLs in tests/unit/services/access/signedurl_test.go: test URL generation with HMAC-SHA256, expiration enforcement, access denial after expiry, content-ID binding, subscriber-ID binding
-- [ ] T111 [P] [US8] Security test for access control in tests/security/access_control_test.go: test forged tokens rejected, expired tokens rejected, wrong-tier tokens rejected, replay attacks detected, concurrent access handled correctly
+- [X] T109 [P] [US8] Unit test for access gating in tests/unit/services/access/gating_test.go: test tier verification with cached membership, denial on insufficient tier, upgrade prompt generation, 5-minute cache TTL, webhook-driven invalidation
+- [X] T110 [P] [US8] Unit test for signed URLs in tests/unit/services/access/signedurl_test.go: test URL generation with HMAC-SHA256, expiration enforcement, access denial after expiry, content-ID binding, subscriber-ID binding
+- [X] T111 [P] [US8] Security test for access control in tests/security/access_control_test.go: test forged tokens rejected, expired tokens rejected, wrong-tier tokens rejected, replay attacks detected, concurrent access handled correctly
 
 ### Implementation for User Story 8
 
@@ -293,31 +293,31 @@
 
 ### Implementation for User Story 9
 
-- [ ] T117 [P] [US9] Create OpenAPI specification in docs/api/openapi.yaml: document all HTTP endpoints from contracts/http-endpoints.md with request/response schemas, authentication methods, error codes
-- [ ] T118 [P] [US9] Create CLI reference in docs/api/cli-reference.md: document all commands and flags from contracts/cli-commands.md with examples for each command
+- [X] T117 [P] [US9] Create OpenAPI specification in docs/api/openapi.yaml: document all HTTP endpoints from contracts/http-endpoints.md with request/response schemas, authentication methods, error codes
+- [X] T118 [P] [US9] Create CLI reference in docs/api/cli-reference.md: document all commands and flags from contracts/cli-commands.md with examples for each command
 - [X] T119 [P] [US9] Create quickstart guide in docs/guides/quickstart.md: expand from specs/001-patreon-manager-app/quickstart.md with troubleshooting section, common workflows
-- [ ] T120 [P] [US9] Create configuration reference in docs/guides/configuration.md: document all .env variables from .env.example with types, defaults, validation rules, examples
-- [ ] T121 [P] [US9] Create Git providers guide in docs/guides/git-providers.md: setup instructions for each service (GitHub PAT, GitLab token, GitFlic API key, GitVerse token), permissions required
-- [ ] T122 [P] [US9] Create content generation guide in docs/guides/content-generation.md: template system, quality tuning, fallback configuration, token budget management, custom templates
-- [ ] T123 [P] [US9] Create deployment guide in docs/guides/deployment.md: single-instance CLI, Docker container, Kubernetes CronJob/Deployment, environment setup, cron configuration
-- [ ] T124 [P] [US9] Create architecture overview in docs/architecture/overview.md: system components, data flow, integration points, plugin architecture explanation
-- [ ] T125 [P] [US9] Create SQL schema documentation in docs/architecture/sql-schema.md: document all tables, indexes, relationships, migration strategy, SQLite vs PostgreSQL differences
-- [ ] T126 [P] [US9] Create system architecture diagram SVG in docs/architecture/diagrams/system.svg: all components (CLI, server, providers, database, LLMsVerifier, Patreon), connections, data flow
-- [ ] T127 [P] [US9] Convert system diagram to PNG in docs/architecture/diagrams/system.png using rsvg-convert or inkscape
-- [ ] T128 [P] [US9] Convert system diagram to PDF in docs/architecture/diagrams/system.pdf using rsvg-convert or inkscape
-- [ ] T129 [P] [US9] Create data flow diagram SVG in docs/architecture/diagrams/data-flow.svg: sync pipeline stages, checkpoint flow, error handling paths
-- [ ] T130 [P] [US9] Convert data flow diagram to PNG in docs/architecture/diagrams/data-flow.png
-- [ ] T131 [P] [US9] Convert data flow diagram to PDF in docs/architecture/diagrams/data-flow.pdf
-- [ ] T132 [P] [US9] Create sync pipeline diagram SVG in docs/architecture/diagrams/sync-pipeline.svg: 8-stage pipeline with filtering, generation, quality gates, publishing
-- [ ] T133 [P] [US9] Convert sync pipeline diagram to PNG in docs/architecture/diagrams/sync-pipeline.png
-- [ ] T134 [P] [US9] Convert sync pipeline diagram to PDF in docs/architecture/diagrams/sync-pipeline.pdf
-- [ ] T135 [P] [US9] Create video course outline in docs/video/course-outline.md: module structure covering setup, first sync, configuration, content templates, deployment, extension development
-- [ ] T136 [P] [US9] Create Hugo site configuration in docs/website/config.toml: site title, base URL, theme, menu structure, syntax highlighting, search configuration
-- [ ] T137 [P] [US9] Create website homepage in docs/website/content/_index.md: hero section, features overview, quick links to docs, installation instructions
-- [ ] T138 [P] [US9] Create website docs section in docs/website/content/docs/: _index.md, getting-started.md (from quickstart), configuration.md, cli-reference.md, api-reference.md, architecture.md
-- [ ] T139 [P] [US9] Create website guides section in docs/website/content/guides/: _index.md, git-providers.md, content-generation.md, deployment.md, troubleshooting.md
-- [ ] T140 [P] [US9] Create website CSS overrides in docs/website/static/css/custom.css: responsive layout, syntax highlighting theme, diagram styling, print stylesheet
-- [ ] T141 [US9] Build and verify Hugo site generates valid HTML in docs/website/public/: run hugo build, verify all pages render, check broken links, test search functionality
+- [X] T120 [P] [US9] Create configuration reference in docs/guides/configuration.md: document all .env variables from .env.example with types, defaults, validation rules, examples
+- [X] T121 [P] [US9] Create Git providers guide in docs/guides/git-providers.md: setup instructions for each service (GitHub PAT, GitLab token, GitFlic API key, GitVerse token), permissions required
+- [X] T122 [P] [US9] Create content generation guide in docs/guides/content-generation.md: template system, quality tuning, fallback configuration, token budget management, custom templates
+- [X] T123 [P] [US9] Create deployment guide in docs/guides/deployment.md: single-instance CLI, Docker container, Kubernetes CronJob/Deployment, environment setup, cron configuration
+- [X] T124 [P] [US9] Create architecture overview in docs/architecture/overview.md: system components, data flow, integration points, plugin architecture explanation
+- [X] T125 [P] [US9] Create SQL schema documentation in docs/architecture/sql-schema.md: document all tables, indexes, relationships, migration strategy, SQLite vs PostgreSQL differences
+- [X] T126 [P] [US9] Create system architecture diagram SVG in docs/architecture/diagrams/system.svg: all components (CLI, server, providers, database, LLMsVerifier, Patreon), connections, data flow
+- [X] T127 [P] [US9] Convert system diagram to PNG in docs/architecture/diagrams/system.png using rsvg-convert or inkscape
+- [X] T128 [P] [US9] Convert system diagram to PDF in docs/architecture/diagrams/system.pdf using rsvg-convert or inkscape
+- [X] T129 [P] [US9] Create data flow diagram SVG in docs/architecture/diagrams/data-flow.svg: sync pipeline stages, checkpoint flow, error handling paths
+- [X] T130 [P] [US9] Convert data flow diagram to PNG in docs/architecture/diagrams/data-flow.png
+- [X] T131 [P] [US9] Convert data flow diagram to PDF in docs/architecture/diagrams/data-flow.pdf
+- [X] T132 [P] [US9] Create sync pipeline diagram SVG in docs/architecture/diagrams/sync-pipeline.svg: 8-stage pipeline with filtering, generation, quality gates, publishing
+- [X] T133 [P] [US9] Convert sync pipeline diagram to PNG in docs/architecture/diagrams/sync-pipeline.png
+- [X] T134 [P] [US9] Convert sync pipeline diagram to PDF in docs/architecture/diagrams/sync-pipeline.pdf
+- [X] T135 [P] [US9] Create video course outline in docs/video/course-outline.md: module structure covering setup, first sync, configuration, content templates, deployment, extension development
+- [X] T136 [P] [US9] Create Hugo site configuration in docs/website/config.toml: site title, base URL, theme, menu structure, syntax highlighting, search configuration
+- [X] T137 [P] [US9] Create website homepage in docs/website/content/_index.md: hero section, features overview, quick links to docs, installation instructions
+- [X] T138 [P] [US9] Create website docs section in docs/website/content/docs/: _index.md, getting-started.md (from quickstart), configuration.md, cli-reference.md, api-reference.md, architecture.md
+- [X] T139 [P] [US9] Create website guides section in docs/website/content/guides/: _index.md, git-providers.md, content-generation.md, deployment.md, troubleshooting.md
+- [X] T140 [P] [US9] Create website CSS overrides in docs/website/static/css/custom.css: responsive layout, syntax highlighting theme, diagram styling, print stylesheet
+- [X] T141 [US9] Build and verify Hugo site generates valid HTML in docs/website/public/: run hugo build, verify all pages render, check broken links, test search functionality
 
 **Checkpoint**: Full documentation suite and website complete
 
@@ -331,17 +331,17 @@
 
 ### Tests for User Story 10
 
-- [ ] T142 [P] [US10] End-to-end test for full sync in tests/e2e/full_sync_test.go: test complete sync flow against fully mocked services (4 Git providers, LLMsVerifier, Patreon API), verify posts created/updated/archived correctly, test no-change sync produces zero updates, test archived repo messaging
-- [ ] T143 [P] [US10] Security test for credential redaction in tests/security/credential_redaction_test.go: verify all log output at all levels contains no tokens/secrets/keys, verify TRACE level applies partial redaction, verify error messages redact credentials
-- [ ] T144 [P] [US10] Security test for webhook signatures in tests/security/webhook_signature_test.go: test invalid signature rejection, replay attack prevention, timing attack resistance, missing signature handling
-- [ ] T145 [P] [US10] Stress test for large portfolio in tests/stress/large_portfolio_test.go: test sync with 1,000 mocked repositories, verify stable memory usage, verify completion within time bounds, verify checkpoint resume after interruption
-- [ ] T146 [P] [US10] Benchmark test for sync pipeline in tests/benchmark/sync_bench_test.go: BenchmarkFullSync, BenchmarkSingleRepoSync, BenchmarkContentGeneration, BenchmarkFilterMatching, output ns/op and allocations
-- [ ] T147 [P] [US10] Benchmark test for content generation in tests/benchmark/content_gen_bench_test.go: BenchmarkPromptAssembly, BenchmarkLLMCall (mocked), BenchmarkMarkdownRendering, BenchmarkQualityEvaluation
-- [ ] T148 [P] [US10] Benchmark test for filtering in tests/benchmark/filter_bench_test.go: BenchmarkRepoignoreMatch, BenchmarkURLNormalization, BenchmarkMirrorDetection across 1000 repos
-- [ ] T149 [P] [US10] Chaos test for service failures in tests/chaos/service_failure_test.go: randomly kill mocked Git/Patreon/LLM services mid-sync, verify checkpoint preserved, verify resume possible, verify no data loss, verify circuit breakers trip correctly
-- [ ] T150 [P] [US10] Chaos test for network partitions in tests/chaos/network_partition_test.go: simulate network timeouts, DNS failures, connection resets, verify exponential backoff, verify graceful degradation
-- [ ] T151 [P] [US10] DDoS simulation test for webhooks in tests/ddos/webhook_flood_test.go: send 10,000 webhook requests in 10 seconds, verify rate limiting middleware blocks excess, verify deduplication prevents queue overflow, verify server remains responsive for legitimate requests
-- [ ] T152 [US10] Create test coverage script in scripts/coverage.sh: run go test with -coverprofile, generate HTML report, fail if any package below 100%, output per-package summary
+- [X] T142 [P] [US10] End-to-end test for full sync in tests/e2e/full_sync_test.go: test complete sync flow against fully mocked services (4 Git providers, LLMsVerifier, Patreon API), verify posts created/updated/archived correctly, test no-change sync produces zero updates, test archived repo messaging
+- [X] T143 [P] [US10] Security test for credential redaction in tests/security/credential_redaction_test.go: verify all log output at all levels contains no tokens/secrets/keys, verify TRACE level applies partial redaction, verify error messages redact credentials
+- [X] T144 [P] [US10] Security test for webhook signatures in tests/security/webhook_signature_test.go: test invalid signature rejection, replay attack prevention, timing attack resistance, missing signature handling
+- [X] T145 [P] [US10] Stress test for large portfolio in tests/stress/large_portfolio_test.go: test sync with 1,000 mocked repositories, verify stable memory usage, verify completion within time bounds, verify checkpoint resume after interruption
+- [X] T146 [P] [US10] Benchmark test for sync pipeline in tests/benchmark/sync_bench_test.go: BenchmarkFullSync, BenchmarkSingleRepoSync, BenchmarkContentGeneration, BenchmarkFilterMatching, output ns/op and allocations
+- [X] T147 [P] [US10] Benchmark test for content generation in tests/benchmark/content_gen_bench_test.go: BenchmarkPromptAssembly, BenchmarkLLMCall (mocked), BenchmarkMarkdownRendering, BenchmarkQualityEvaluation
+- [X] T148 [P] [US10] Benchmark test for filtering in tests/benchmark/filter_bench_test.go: BenchmarkRepoignoreMatch, BenchmarkURLNormalization, BenchmarkMirrorDetection across 1000 repos
+- [X] T149 [P] [US10] Chaos test for service failures in tests/chaos/service_failure_test.go: randomly kill mocked Git/Patreon/LLM services mid-sync, verify checkpoint preserved, verify resume possible, verify no data loss, verify circuit breakers trip correctly
+- [X] T150 [P] [US10] Chaos test for network partitions in tests/chaos/network_partition_test.go: simulate network timeouts, DNS failures, connection resets, verify exponential backoff, verify graceful degradation
+- [X] T151 [P] [US10] DDoS simulation test for webhooks in tests/ddos/webhook_flood_test.go: send 10,000 webhook requests in 10 seconds, verify rate limiting middleware blocks excess, verify deduplication prevents queue overflow, verify server remains responsive for legitimate requests
+- [X] T152 [US10] Create test coverage script in scripts/coverage.sh: run go test with -coverprofile, generate HTML report, fail if any package below 100%, output per-package summary
 
 ### Implementation for User Story 10
 
@@ -363,17 +363,17 @@
 - [X] T159 [P] Implement video pipeline in internal/providers/renderer/video_pipeline.go: script → TTS audio (placeholder for integration) → visual capture → FFmpeg assembly via os/exec → MKV output at 1080p, queue-based processing, 300s timeout
 - [X] T160 [P] Implement admin handlers in internal/handlers/admin.go: POST /admin/reload for config reload, GET /admin/sync/status for active sync info, X-Admin-Key auth required
 - [X] T161 [P] Implement metrics handler in internal/handlers/metrics.go: GET /metrics serving Prometheus exposition format via prometheus/client_golang handler
-- [ ] T162 [P] Implement .repoignore dynamic reload in internal/services/filter/repoignore.go: add SIGHUP signal handler to re-read file, atomic swap of pattern list, validate reloaded patterns before applying
+- [X] T162 [P] Implement .repoignore dynamic reload in internal/services/filter/repoignore.go: add SIGHUP signal handler to re-read file, atomic swap of pattern list, validate reloaded patterns before applying
 - [X] T163 [P] Update .gitignore for generated artifacts: add docs/website/public/, generated/, *.db, *.prof patterns
 - [X] T164 [P] Create Dockerfile in Dockerfile: multi-stage build (builder + runtime), Go 1.26.1 base, copy binary, expose 8080, health check
 - [X] T165 [P] Create docker-compose.yml in docker-compose.yml: app service with env_file, volume for .env and state db, PostgreSQL service for production testing
 - [X] T166 Run final validation: go build ./... && go vet ./... && bash scripts/coverage.sh, fix any issues
-- [ ] T167 Run quickstart.md validation: follow quickstart guide end-to-end against a fresh clone, verify all steps work as documented
-- [ ] T168 [P] Implement repository rename detection in internal/services/sync/orchestrator.go: when a repo URL returns 404, search by name across all services to detect renames, update local state with new URL, emit rename audit event
+- [X] T167 Run quickstart.md validation: follow quickstart guide end-to-end against a fresh clone, verify all steps work as documented
+- [X] T168 [P] Implement repository rename detection in internal/services/sync/orchestrator.go: when a repo URL returns 404, search by name across all services to detect renames, update local state with new URL, emit rename audit event
 - [X] T169 [P] Implement database corruption recovery in internal/database/recovery.go: detect corrupted SQLite via integrity_check, auto-backup corrupted file, re-initialize from migrations, log data loss warning, emit recovery metric
 - [X] T170 [P] Implement manual edit conflict detection in internal/services/sync/conflict.go: compare local content hash with Patreon post hash before update, if diverged (manually edited), skip automated update and add to review queue with CONFLICT flag, emit conflict audit event
 - [X] T171 [P] Implement disk space pre-check in internal/providers/renderer/video_pipeline.go: check available disk space before video generation, reject with descriptive error if insufficient, emit disk_usage metric
-- [ ] T172 [P] Implement .repoignore validation in internal/services/filter/repoignore.go: validate patterns at load time, log warnings for potentially invalid patterns (unclosed brackets, trailing spaces), continue with valid patterns only
+- [X] T172 [P] Implement .repoignore validation in internal/services/filter/repoignore.go: validate patterns at load time, log warnings for potentially invalid patterns (unclosed brackets, trailing spaces), continue with valid patterns only
 
 ---
 

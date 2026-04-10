@@ -325,6 +325,11 @@ func (s *PostgresSyncStateStore) UpdateStatus(ctx context.Context, repoID, statu
 func (s *PostgresSyncStateStore) UpdateCheckpoint(ctx context.Context, repoID, checkpoint string) error {
 	return nil
 }
+func (s *PostgresSyncStateStore) Update(ctx context.Context, state *models.SyncState) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE sync_states SET repository_id=$1, patreon_post_id=$2, last_sync_at=$3, last_commit_sha=$4, last_content_hash=$5, status=$6, last_failure_reason=$7, grace_period_until=$8, checkpoint=$9, updated_at=CURRENT_TIMESTAMP WHERE id=$10`,
+		state.RepositoryID, state.PatreonPostID, state.LastSyncAt, state.LastCommitSHA, state.LastContentHash, state.Status, state.LastFailureReason, state.GracePeriodUntil, state.Checkpoint, state.ID)
+	return err
+}
 func (s *PostgresSyncStateStore) Delete(ctx context.Context, id string) error { return nil }
 
 func (s *PostgresMirrorMapStore) Create(ctx context.Context, m *models.MirrorMap) error { return nil }
@@ -337,6 +342,10 @@ func (s *PostgresMirrorMapStore) GetByRepositoryID(ctx context.Context, repoID s
 func (s *PostgresMirrorMapStore) GetAllGroups(ctx context.Context) ([]string, error)    { return nil, nil }
 func (s *PostgresMirrorMapStore) SetCanonical(ctx context.Context, repoID string) error { return nil }
 func (s *PostgresMirrorMapStore) Delete(ctx context.Context, id string) error           { return nil }
+func (s *PostgresMirrorMapStore) DeleteAll(ctx context.Context) error {
+	_, err := s.db.ExecContext(ctx, "DELETE FROM mirror_maps")
+	return err
+}
 
 func (s *PostgresGeneratedContentStore) Create(ctx context.Context, c *models.GeneratedContent) error {
 	return nil
@@ -352,6 +361,10 @@ func (s *PostgresGeneratedContentStore) GetByQualityRange(ctx context.Context, m
 }
 func (s *PostgresGeneratedContentStore) ListByRepository(ctx context.Context, repoID string) ([]*models.GeneratedContent, error) {
 	return nil, nil
+}
+
+func (s *PostgresGeneratedContentStore) Update(ctx context.Context, c *models.GeneratedContent) error {
+	return nil
 }
 
 func (s *PostgresContentTemplateStore) Create(ctx context.Context, t *models.ContentTemplate) error {
@@ -374,6 +387,9 @@ func (s *PostgresPostStore) GetByID(ctx context.Context, id string) (*models.Pos
 }
 func (s *PostgresPostStore) GetByRepositoryID(ctx context.Context, repoID string) (*models.Post, error) {
 	return nil, nil
+}
+func (s *PostgresPostStore) Update(ctx context.Context, p *models.Post) error {
+	return nil
 }
 func (s *PostgresPostStore) UpdatePublicationStatus(ctx context.Context, id, status string) error {
 	return nil

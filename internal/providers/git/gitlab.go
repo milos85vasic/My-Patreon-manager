@@ -18,7 +18,20 @@ type GitLabProvider struct {
 }
 
 func NewGitLabProvider(tokenManager *TokenManager, baseURL string) *GitLabProvider {
-	return &GitLabProvider{tm: tokenManager, baseURL: baseURL}
+	p := &GitLabProvider{tm: tokenManager, baseURL: baseURL}
+	// Create client with empty token (will be replaced in Authenticate)
+	// If baseURL is provided, use it
+	var err error
+	if baseURL != "" && baseURL != "https://gitlab.com" {
+		p.client, err = gitlab.NewClient("", gitlab.WithBaseURL(baseURL))
+	} else {
+		p.client, err = gitlab.NewClient("")
+	}
+	if err != nil {
+		// Should not happen with valid URL; fallback to nil client
+		p.client = nil
+	}
+	return p
 }
 
 func (p *GitLabProvider) Name() string { return "gitlab" }
@@ -86,11 +99,20 @@ func (p *GitLabProvider) GetRepositoryMetadata(ctx context.Context, repo models.
 	}
 	result := p.projectToRepo(proj)
 	result.ID = repo.ID
+
+	// fetch latest commit SHA
+	commits, _, err := p.client.Commits.ListCommits(fmt.Sprintf("%s/%s", repo.Owner, repo.Name), &gitlab.ListCommitsOptions{
+		ListOptions: gitlab.ListOptions{PerPage: 1},
+	})
+	if err == nil && len(commits) > 0 {
+		result.LastCommitSHA = commits[0].ID
+	}
+
 	return result, nil
 }
 
 func (p *GitLabProvider) DetectMirrors(ctx context.Context, repos []models.Repository) ([]models.MirrorMap, error) {
-	return nil, nil
+	return DetectMirrors(ctx, repos)
 }
 
 func (p *GitLabProvider) CheckRepositoryState(ctx context.Context, repo models.Repository) (models.SyncState, error) {
@@ -109,6 +131,28 @@ func (p *GitLabProvider) CheckRepositoryState(ctx context.Context, repo models.R
 		state.LastSyncAt = *proj.LastActivityAt
 	}
 	return state, nil
+}
+
+// SetBaseURL sets the base URL for the GitLab client (for testing).
+func (p *GitLabProvider) SetBaseURL(baseURL string) error {
+	p.baseURL = baseURL
+	// Recreate client with new base URL
+	var err error
+	var token string
+	if p.tm != nil {
+		token = p.tm.GetCurrentToken()
+	} else {
+		token = ""
+	}
+	if baseURL != "" && baseURL != "https://gitlab.com" {
+		p.client, err = gitlab.NewClient(token, gitlab.WithBaseURL(baseURL))
+	} else {
+		p.client, err = gitlab.NewClient(token)
+	}
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (p *GitLabProvider) projectToRepo(proj *gitlab.Project) models.Repository {

@@ -20,6 +20,15 @@ type Client struct {
 	campaignID      string
 	client          *http.Client
 	publicationMode string
+	baseURL         string
+}
+
+type Provider interface {
+	CampaignID() string
+	ListTiers(ctx context.Context) ([]models.Tier, error)
+	CreatePost(ctx context.Context, post *models.Post) (*models.Post, error)
+	UpdatePost(ctx context.Context, post *models.Post) (*models.Post, error)
+	DeletePost(ctx context.Context, postID string) error
 }
 
 func NewClient(oauth *OAuth2Manager, campaignID string) *Client {
@@ -28,6 +37,7 @@ func NewClient(oauth *OAuth2Manager, campaignID string) *Client {
 		campaignID:      campaignID,
 		client:          &http.Client{Timeout: 30 * time.Second},
 		publicationMode: "draft",
+		baseURL:         "https://www.patreon.com/api/oauth2/v2",
 	}
 }
 
@@ -35,23 +45,47 @@ func (c *Client) SetPublicationMode(mode string) {
 	c.publicationMode = mode
 }
 
+func (c *Client) SetBaseURL(baseURL string) {
+	c.baseURL = baseURL
+}
+
+func (c *Client) SetTransport(transport http.RoundTripper) {
+	c.client.Transport = transport
+}
+
+func (c *Client) CampaignID() string {
+	return c.campaignID
+}
+
+func (c *Client) buildURL(path string) string {
+	return c.baseURL + path
+}
+
 func (c *Client) doRequest(ctx context.Context, method, url string, body interface{}) (*http.Response, error) {
-	var reqBody io.Reader
-	if body != nil {
-		data, err := json.Marshal(body)
-		if err != nil {
-			return nil, fmt.Errorf("marshal request: %w", err)
+	// Helper to create a new request with current token
+	newRequest := func() (*http.Request, error) {
+		var reqBody io.Reader
+		if body != nil {
+			data, err := json.Marshal(body)
+			if err != nil {
+				return nil, fmt.Errorf("marshal request: %w", err)
+			}
+			reqBody = bytes.NewReader(data)
 		}
-		reqBody = bytes.NewReader(data)
+		req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
+		if err != nil {
+			return nil, fmt.Errorf("create request: %w", err)
+		}
+		req.Header.Set("Authorization", "Bearer "+c.oauth.GetAccessToken())
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+		return req, nil
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
+	req, err := newRequest()
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.oauth.GetAccessToken())
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -63,7 +97,11 @@ func (c *Client) doRequest(ctx context.Context, method, url string, body interfa
 		if refreshErr := c.oauth.Refresh(ctx); refreshErr != nil {
 			return nil, errors.InvalidCredentials("token refresh failed")
 		}
-		req.Header.Set("Authorization", "Bearer "+c.oauth.GetAccessToken())
+		// Create a new request with the refreshed token
+		req, err = newRequest()
+		if err != nil {
+			return nil, err
+		}
 		resp, err = c.client.Do(req)
 		if err != nil {
 			return nil, errors.NetworkTimeout(fmt.Sprintf("patreon retry failed: %v", err))
@@ -99,7 +137,7 @@ func (c *Client) doWithBackoff(ctx context.Context, method, url string, body int
 }
 
 func (c *Client) GetCampaign(ctx context.Context) (*models.Campaign, error) {
-	url := fmt.Sprintf("https://www.patreon.com/api/oauth2/v2/campaigns/%s?fields[campaign]=name,summary,patron_count", c.campaignID)
+	url := c.buildURL(fmt.Sprintf("/campaigns/%s?fields[campaign]=name,summary,patron_count", c.campaignID))
 	resp, err := c.doWithBackoff(ctx, "GET", url, nil, 3)
 	if err != nil {
 		return nil, err
@@ -128,7 +166,7 @@ func (c *Client) GetCampaign(ctx context.Context) (*models.Campaign, error) {
 }
 
 func (c *Client) ListTiers(ctx context.Context) ([]models.Tier, error) {
-	url := fmt.Sprintf("https://www.patreon.com/api/oauth2/v2/campaigns/%s/tiers?fields[tier]=title,description,amount_cents,patron_count", c.campaignID)
+	url := c.buildURL(fmt.Sprintf("/campaigns/%s/tiers?fields[tier]=title,description,amount_cents,patron_count", c.campaignID))
 	resp, err := c.doWithBackoff(ctx, "GET", url, nil, 3)
 	if err != nil {
 		return nil, err
@@ -165,7 +203,7 @@ func (c *Client) ListTiers(ctx context.Context) ([]models.Tier, error) {
 }
 
 func (c *Client) CreatePost(ctx context.Context, post *models.Post) (*models.Post, error) {
-	url := "https://www.patreon.com/api/oauth2/v2/posts"
+	url := c.buildURL("/posts")
 	body := map[string]interface{}{
 		"data": map[string]interface{}{
 			"type": "post",
@@ -204,7 +242,7 @@ func (c *Client) CreatePost(ctx context.Context, post *models.Post) (*models.Pos
 }
 
 func (c *Client) UpdatePost(ctx context.Context, post *models.Post) (*models.Post, error) {
-	url := fmt.Sprintf("https://www.patreon.com/api/oauth2/v2/posts/%s", post.ID)
+	url := c.buildURL(fmt.Sprintf("/posts/%s", post.ID))
 	body := map[string]interface{}{
 		"data": map[string]interface{}{
 			"type": "post",
@@ -225,7 +263,7 @@ func (c *Client) UpdatePost(ctx context.Context, post *models.Post) (*models.Pos
 }
 
 func (c *Client) DeletePost(ctx context.Context, postID string) error {
-	url := fmt.Sprintf("https://www.patreon.com/api/oauth2/v2/posts/%s", postID)
+	url := c.buildURL(fmt.Sprintf("/posts/%s", postID))
 	resp, err := c.doWithBackoff(ctx, "DELETE", url, nil, 3)
 	if err != nil {
 		return err
@@ -235,7 +273,7 @@ func (c *Client) DeletePost(ctx context.Context, postID string) error {
 }
 
 func (c *Client) AssociateTiers(ctx context.Context, postID string, tierIDs []string) error {
-	url := fmt.Sprintf("https://www.patreon.com/api/oauth2/v2/posts/%s", postID)
+	url := c.buildURL(fmt.Sprintf("/posts/%s", postID))
 	tierData := make([]map[string]interface{}, len(tierIDs))
 	for i, id := range tierIDs {
 		tierData[i] = map[string]interface{}{"type": "tier", "id": id}

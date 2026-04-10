@@ -95,9 +95,12 @@ func main() {
 
 	verifier := llm.NewVerifierClient("", cfg.HMACSecret, promMetrics)
 	fallbackChain := llm.NewFallbackChain([]llm.LLMProvider{verifier}, cfg.ContentQualityThreshold, promMetrics)
-	generator := content.NewGenerator(fallbackChain, budget, gate, nil, promMetrics, renderers)
+	store := db.GeneratedContents()
+	generator := content.NewGenerator(fallbackChain, budget, gate, store, promMetrics, renderers)
+	reviewQueue := content.NewReviewQueue(store)
+	generator.SetReviewQueue(reviewQueue)
 
-	orchestrator := syncsvc.NewOrchestrator(db, providers, patreonClient, generator, promMetrics, logger)
+	orchestrator := syncsvc.NewOrchestrator(db, providers, patreonClient, generator, promMetrics, logger, nil)
 
 	syncOpts := syncsvc.SyncOptions{
 		DryRun: dryRun,

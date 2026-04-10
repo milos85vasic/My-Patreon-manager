@@ -98,6 +98,50 @@ func TestMirrorDetector_SingleRepo(t *testing.T) {
 	assert.Empty(t, mirrors)
 }
 
+func TestMirrorDetector_CommitSHAMatch(t *testing.T) {
+	detector := git.NewMirrorDetector()
+	repos := []models.Repository{
+		{ID: "gh-1", Service: "github", Owner: "user", Name: "repo", LastCommitSHA: "abc123"},
+		{ID: "gl-1", Service: "gitlab", Owner: "user", Name: "repo", LastCommitSHA: "abc123"},
+	}
+	mirrors := detector.DetectMirrors(repos)
+	assert.Len(t, mirrors, 2)
+	for _, m := range mirrors {
+		assert.GreaterOrEqual(t, m.ConfidenceScore, 0.8)
+	}
+}
+
+func TestMirrorDetector_DescriptionSimilarity(t *testing.T) {
+	detector := git.NewMirrorDetector()
+	repos := []models.Repository{
+		{ID: "gh-1", Service: "github", Owner: "user", Name: "repo", Description: "A great project for developers"},
+		{ID: "gl-1", Service: "gitlab", Owner: "user", Name: "repo", Description: "Great project for developers"},
+	}
+	mirrors := detector.DetectMirrors(repos)
+	// Expect match because similarity > 0.7
+	assert.Len(t, mirrors, 2)
+}
+
+func TestMirrorDetector_DifferentOwnerSameNameNoMatch(t *testing.T) {
+	detector := git.NewMirrorDetector()
+	repos := []models.Repository{
+		{ID: "gh-1", Service: "github", Owner: "alice", Name: "repo", Description: "Project"},
+		{ID: "gl-1", Service: "gitlab", Owner: "bob", Name: "repo", Description: "Project"},
+	}
+	mirrors := detector.DetectMirrors(repos)
+	assert.Empty(t, mirrors)
+}
+
+func TestMirrorDetector_ConfidenceThreshold(t *testing.T) {
+	detector := git.NewMirrorDetector()
+	repos := []models.Repository{
+		{ID: "gh-1", Service: "github", Owner: "user", Name: "repo1"},
+		{ID: "gl-1", Service: "gitlab", Owner: "user", Name: "repo2"}, // different name
+	}
+	mirrors := detector.DetectMirrors(repos)
+	assert.Empty(t, mirrors)
+}
+
 func TestDetectMirrors_Context(t *testing.T) {
 	repos := []models.Repository{
 		{ID: "gh-1", Service: "github", Owner: "user", Name: "repo", Description: "A project"},

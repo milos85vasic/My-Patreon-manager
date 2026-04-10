@@ -130,6 +130,31 @@ func TestSyncStateStore_CRUD(t *testing.T) {
 	require.NoError(t, store.UpdateCheckpoint(ctx, "repo-1", `{"last":"step3"}`))
 	found, _ = store.GetByRepositoryID(ctx, "repo-1")
 	assert.Contains(t, found.Checkpoint, "step3")
+
+	// Additional tests for uncovered methods
+	// GetByID
+	foundByID, err := store.GetByID(ctx, "state-1")
+	require.NoError(t, err)
+	assert.Equal(t, "state-1", foundByID.ID)
+
+	// GetByStatus
+	states, err := store.GetByStatus(ctx, "failed")
+	require.NoError(t, err)
+	assert.Len(t, states, 1)
+	assert.Equal(t, "state-1", states[0].ID)
+
+	// Update
+	state.Status = "synced"
+	state.LastCommitSHA = "def456"
+	require.NoError(t, store.Update(ctx, state))
+	updated, _ := store.GetByID(ctx, "state-1")
+	assert.Equal(t, "synced", updated.Status)
+	assert.Equal(t, "def456", updated.LastCommitSHA)
+
+	// Delete
+	require.NoError(t, store.Delete(ctx, "state-1"))
+	deleted, _ := store.GetByID(ctx, "state-1")
+	assert.Nil(t, deleted)
 }
 
 func TestMirrorMapStore(t *testing.T) {

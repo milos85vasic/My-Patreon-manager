@@ -3,6 +3,7 @@ package git
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/google/go-github/v69/github"
@@ -29,7 +30,15 @@ func (p *GitHubProvider) Authenticate(ctx context.Context, credentials Credentia
 		return errors.InvalidCredentials("GitHub token is required")
 	}
 	p.tm = NewTokenManager(credentials.PrimaryToken, credentials.SecondaryToken)
+	// Preserve existing base URL if any
+	var existingBaseURL *url.URL
+	if p.client != nil {
+		existingBaseURL = p.client.BaseURL
+	}
 	p.client = github.NewTokenClient(ctx, credentials.PrimaryToken)
+	if existingBaseURL != nil {
+		p.client.BaseURL = existingBaseURL
+	}
 	_, _, err := p.client.Repositories.List(ctx, "", &github.RepositoryListOptions{ListOptions: github.ListOptions{PerPage: 1}})
 	if err != nil {
 		return errors.InvalidCredentials(fmt.Sprintf("GitHub auth failed: %v", err))
@@ -92,11 +101,18 @@ func (p *GitHubProvider) GetRepositoryMetadata(ctx context.Context, repo models.
 		}
 		result.READMEFormat = "markdown"
 	}
+
+	// fetch latest commit SHA
+	commits, _, err := p.client.Repositories.ListCommits(ctx, repo.Owner, repo.Name, &github.CommitsListOptions{ListOptions: github.ListOptions{PerPage: 1}})
+	if err == nil && len(commits) > 0 {
+		result.LastCommitSHA = commits[0].GetSHA()
+	}
+
 	return result, nil
 }
 
 func (p *GitHubProvider) DetectMirrors(ctx context.Context, repos []models.Repository) ([]models.MirrorMap, error) {
-	return nil, nil
+	return DetectMirrors(ctx, repos)
 }
 
 func (p *GitHubProvider) CheckRepositoryState(ctx context.Context, repo models.Repository) (models.SyncState, error) {
@@ -138,4 +154,16 @@ func (p *GitHubProvider) toRepository(r *github.Repository) models.Repository {
 		repo.LastCommitAt = r.PushedAt.Time
 	}
 	return repo
+}
+
+// SetBaseURL sets the base URL for the GitHub client (for testing).
+func (p *GitHubProvider) SetBaseURL(baseURL string) error {
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		return err
+	}
+	if p.client != nil {
+		p.client.BaseURL = parsed
+	}
+	return nil
 }

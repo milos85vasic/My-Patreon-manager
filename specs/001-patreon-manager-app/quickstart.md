@@ -52,15 +52,7 @@ LLMSVERIFIER_API_KEY=your_api_key
 go run ./cmd/cli validate
 ```
 
-This tests connectivity to all configured services. Expected output:
-
-```
-Configuration: VALID
-  Patreon API:   CONNECTED
-  GitHub:        CONNECTED
-  LLMsVerifier:  CONNECTED
-  Database:      CONNECTED
-```
+This validates the configuration file. If configuration is valid, the command logs `"config valid"` in JSON format. If invalid, an error is logged with missing required fields.
 
 ## Step 4: Preview (Dry-Run)
 
@@ -134,7 +126,7 @@ go run ./cmd/cli sync --repo git@github.com:myorg/my-project.git
 
 | Issue | Solution |
 |-------|----------|
-| "Configuration: INVALID" | Check `.env` file has all required values |
+| "config validation failed" | Check `.env` file has all required values |
 | "Patreon API: UNAUTHORIZED" | Token expired; run `sync` again (auto-refresh) |
 | "GitHub: RATE LIMITED" | Wait or reduce scan frequency |
 | "Lock contention" | Another sync is running; wait or check PID |

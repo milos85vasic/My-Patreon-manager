@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="600" viewBox="0 0 1000 600">
+  <style>
+    text {
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+    }
+    .stage {
+      fill: #e8f5e9;
+      stroke: #2e7d32;
+      stroke-width: 2;
+      rx: 8;
+    }
+    .decision {
+      fill: #fff3e0;
+      stroke: #ef6c00;
+      stroke-width: 2;
+      rx: 8;
+    }
+    .endpoint {
+      fill: #fce4ec;
+      stroke: #c2185b;
+      stroke-width: 2;
+      rx: 8;
+    }
+    .arrow {
+      stroke: #333;
+      stroke-width: 2;
+      marker-end: url(#arrowhead);
+    }
+    .arrow-dashed {
+      stroke: #666;
+      stroke-width: 2;
+      stroke-dasharray: 5,5;
+      marker-end: url(#arrowhead);
+    }
+    .arrow-error {
+      stroke: #d32f2f;
+      stroke-width: 2;
+      stroke-dasharray: 5,5;
+      marker-end: url(#arrowhead-error);
+    }
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#333"/>
+    </marker>
+    <marker id="arrowhead-error" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#d32f2f"/>
+    </marker>
+  </defs>
+  <!-- Title -->
+  <text x="500" y="30" text-anchor="middle" font-size="18" font-weight="bold">Data Flow &amp; Checkpoint/Resume</text>
+
+  <!-- Pipeline Stages -->
+  <rect x="50" y="80" width="150" height="60" class="stage"/>
+  <text x="125" y="110" text-anchor="middle">1. Repository Discovery</text>
+  <text x="125" y="130" text-anchor="middle" font-size="10">(List repos from all providers)</text>
+  
+  <rect x="250" y="80" width="150" height="60" class="stage"/>
+  <text x="325" y="110" text-anchor="middle">2. Filtering</text>
+  <text x="325" y="130" text-anchor="middle" font-size="10">(.repoignore, CLI filters)</text>
+  
+  <rect x="450" y="80" width="150" height="60" class="stage"/>
+  <text x="525" y="110" text-anchor="middle">3. Mirror Detection</text>
+  <text x="525" y="130" text-anchor="middle" font-size="10">(Group identical repos)</text>
+  
+  <rect x="650" y="80" width="150" height="60" class="stage"/>
+  <text x="725" y="110" text-anchor="middle">4. Metadata Enhancement</text>
+  <text x="725" y="130" text-anchor="middle" font-size="10">(Fetch README, topics, commits)</text>
+  
+  <rect x="50" y="200" width="150" height="60" class="stage"/>
+  <text x="125" y="230" text-anchor="middle">5. Content Generation</text>
+  <text x="125" y="250" text-anchor="middle" font-size="10">(LLM + templates + quality gate)</text>
+  
+  <rect x="250" y="200" width="150" height="60" class="stage"/>
+  <text x="325" y="230" text-anchor="middle">6. Quality Gate</text>
+  <text x="325" y="250" text-anchor="middle" font-size="10">(Score threshold, fallback chain)</text>
+  
+  <rect x="450" y="200" width="150" height="60" class="stage"/>
+  <text x="525" y="230" text-anchor="middle">7. Patreon Mapping</text>
+  <text x="525" y="250" text-anchor="middle" font-size="10">(Campaign/tier mapping)</text>
+  
+  <rect x="650" y="200" width="150" height="60" class="stage"/>
+  <text x="725" y="230" text-anchor="middle">8. Publishing</text>
+  <text x="725" y="250" text-anchor="middle" font-size="10">(Create/update/archive posts)</text>
+
+  <!-- Checkpoint Database -->
+  <rect x="800" y="300" width="180" height="80" class="endpoint"/>
+  <text x="890" y="330" text-anchor="middle">Checkpoint Store</text>
+  <text x="890" y="350" text-anchor="middle" font-size="10">(Sync State Table)</text>
+  
+  <!-- Review Queue -->
+  <rect x="800" y="400" width="180" height="80" class="endpoint"/>
+  <text x="890" y="430" text-anchor="middle">Review Queue</text>
+  <text x="890" y="450" text-anchor="middle" font-size="10">(Manual inspection)</text>
+
+  <!-- Decision diamonds -->
+  <path d="M 125 350 L 175 380 L 125 410 L 75 380 Z" class="decision"/>
+  <text x="125" y="380" text-anchor="middle">Quality OK?</text>
+  
+  <path d="M 325 350 L 375 380 L 325 410 L 275 380 Z" class="decision"/>
+  <text x="325" y="380" text-anchor="middle">Fallback left?</text>
+  
+  <path d="M 525 350 L 575 380 L 525 410 L 475 380 Z" class="decision"/>
+  <text x="525" y="380" text-anchor="middle">Existing post?</text>
+
+  <!-- Arrows between stages -->
+  <line x1="200" y1="110" x2="250" y2="110" class="arrow"/>
+  <line x1="400" y1="110" x2="450" y2="110" class="arrow"/>
+  <line x1="600" y1="110" x2="650" y2="110" class="arrow"/>
+  <line x1="650" y1="140" x2="125" y2="200" class="arrow"/>
+  <line x1="200" y1="230" x2="250" y2="230" class="arrow"/>
+  <line x1="400" y1="230" x2="450" y2="230" class="arrow"/>
+  <line x1="600" y1="230" x2="650" y2="230" class="arrow"/>
+  
+  <!-- Checkpoint arrows -->
+  <line x1="125" y1="80" x2="890" y2="340" class="arrow-dashed"/>
+  <line x1="325" y1="80" x2="890" y2="340" class="arrow-dashed"/>
+  <line x1="525" y1="80" x2="890" y2="340" class="arrow-dashed"/>
+  <line x1="725" y1="80" x2="890" y2="340" class="arrow-dashed"/>
+  <line x1="125" y1="200" x2="890" y2="340" class="arrow-dashed"/>
+  <line x1="325" y1="200" x2="890" y2="340" class="arrow-dashed"/>
+  <line x1="525" y1="200" x2="890" y2="340" class="arrow-dashed"/>
+  <line x1="725" y1="200" x2="890" y2="340" class="arrow-dashed"/>
+  
+  <!-- Quality gate flow -->
+  <line x1="325" y1="260" x2="325" y2="350" class="arrow"/>
+  <line x1="175" y1="380" x2="250" y2="380" class="arrow"/>
+  <line x1="125" y1="410" x2="125" y2="480" class="arrow-error"/>
+  <text x="100" y="470" text-anchor="middle" fill="#d32f2f">Fail</text>
+  <line x1="75" y1="380" x2="50" y2="380" class="arrow"/>
+  <line x1="50" y1="380" x2="50" y2="200" class="arrow"/>
+  <text x="40" y="300" text-anchor="middle" transform="rotate(-90,40,300)">Retry with fallback</text>
+  
+  <!-- Fallback decision -->
+  <line x1="375" y1="380" x2="450" y2="380" class="arrow"/>
+  <line x1="325" y1="410" x2="325" y2="480" class="arrow-error"/>
+  <text x="300" y="470" text-anchor="middle" fill="#d32f2f">All fallbacks exhausted</text>
+  <line x1="275" y1="380" x2="200" y2="380" class="arrow"/>
+  <line x1="200" y1="380" x2="200" y2="200" class="arrow"/>
+  <text x="190" y="300" text-anchor="middle" transform="rotate(-90,190,300)">Try next LLM</text>
+  
+  <!-- Review queue arrow -->
+  <line x1="325" y1="480" x2="890" y2="440" class="arrow-error"/>
+  <text x="600" y="460" text-anchor="middle" fill="#d32f2f">Send to review queue</text>
+  
+  <!-- Existing post decision -->
+  <line x1="575" y1="380" x2="650" y2="380" class="arrow"/>
+  <line x1="525" y1="410" x2="525" y2="480" class="arrow"/>
+  <text x="525" y="470" text-anchor="middle">Update existing</text>
+  <line x1="475" y1="380" x2="400" y2="380" class="arrow"/>
+  <line x1="400" y1="380" x2="400" y2="200" class="arrow"/>
+  <text x="390" y="300" text-anchor="middle" transform="rotate(-90,390,300)">Create new</text>
+  
+  <!-- Legend -->
+  <rect x="50" y="500" width="300" height="90" fill="#f9f9f9" stroke="#ccc" stroke-width="1"/>
+  <text x="60" y="520" font-weight="bold">Legend</text>
+  <rect x="70" y="530" width="20" height="20" class="stage"/>
+  <text x="100" y="545">Pipeline Stage</text>
+  <path d="M 70 560 L 90 575 L 70 590 L 50 575 Z" class="decision" transform="scale(0.7) translate(20,560)"/>
+  <text x="100" y="575">Decision Point</text>
+  <rect x="70" y="590" width="20" height="20" class="endpoint"/>
+  <text x="100" y="605">Endpoint/Store</text>
+  <line x1="70" y1="620" x2="90" y2="620" class="arrow"/>
+  <text x="100" y="625">Normal Flow</text>
+  <line x1="70" y1="635" x2="90" y2="635" class="arrow-error"/>
+  <text x="100" y="640">Error/Alternative Flow</text>
+</svg>

@@ -39,7 +39,7 @@ func (t *TokenBudget) CheckBudget(tokensNeeded int) error {
 		}
 	}
 
-	if usedPct >= 100 {
+	if usedPct > 100 {
 		if t.OnHardStop != nil {
 			t.OnHardStop()
 		}
@@ -64,6 +64,15 @@ func (t *TokenBudget) Remaining() int {
 		return 0
 	}
 	return remaining
+}
+
+func (t *TokenBudget) Refund(tokens int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.CurrentUsage -= tokens
+	if t.CurrentUsage < 0 {
+		t.CurrentUsage = 0
+	}
 }
 
 func startOfTomorrow() time.Time {

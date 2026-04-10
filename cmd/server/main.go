@@ -21,6 +21,17 @@ func main() {
 	cfg := config.NewConfig()
 	cfg.LoadFromEnv()
 
+	r := setupRouter(cfg)
+
+	addr := fmt.Sprintf(":%d", cfg.Port)
+	logger.Info("server starting", slog.String("addr", addr))
+	if err := r.Run(addr); err != nil {
+		logger.Error("server failed", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+}
+
+func setupRouter(cfg *config.Config) *gin.Engine {
 	gin.SetMode(cfg.GinMode)
 	r := gin.New()
 
@@ -40,11 +51,5 @@ func main() {
 		service := c.Param("service")
 		c.JSON(http.StatusOK, gin.H{"status": "received", "service": service})
 	})
-
-	addr := fmt.Sprintf(":%d", cfg.Port)
-	logger.Info("server starting", slog.String("addr", addr))
-	if err := r.Run(addr); err != nil {
-		logger.Error("server failed", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
+	return r
 }

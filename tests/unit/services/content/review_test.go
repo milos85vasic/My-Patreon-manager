@@ -40,6 +40,15 @@ func (m *mockContentStore) GetByQualityRange(_ context.Context, min, max float64
 func (m *mockContentStore) ListByRepository(_ context.Context, _ string) ([]*models.GeneratedContent, error) {
 	return nil, nil
 }
+func (m *mockContentStore) Update(_ context.Context, c *models.GeneratedContent) error {
+	for i, existing := range m.contents {
+		if existing.ID == c.ID {
+			m.contents[i] = c
+			return nil
+		}
+	}
+	return nil
+}
 
 func TestReviewQueue_AddToReview(t *testing.T) {
 	store := &mockContentStore{}

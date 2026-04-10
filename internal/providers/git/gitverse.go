@@ -30,6 +30,11 @@ func NewGitVerseProvider(tokenManager *TokenManager) *GitVerseProvider {
 
 func (p *GitVerseProvider) Name() string { return "gitverse" }
 
+func (p *GitVerseProvider) SetBaseURL(baseURL string) error {
+	p.baseURL = baseURL
+	return nil
+}
+
 func (p *GitVerseProvider) Authenticate(ctx context.Context, credentials Credentials) error {
 	if credentials.PrimaryToken == "" {
 		return errors.InvalidCredentials("GitVerse token is required")
@@ -175,11 +180,31 @@ func (p *GitVerseProvider) GetRepositoryMetadata(ctx context.Context, repo model
 	if p.capabilities["topics"] {
 		repo.Topics = gvRepo.Topics
 	}
+
+	// fetch latest commit SHA
+	commitsURL := fmt.Sprintf("%s/repos/%s/%s/commits?per_page=1", p.baseURL, repo.Owner, repo.Name)
+	req2, err := http.NewRequestWithContext(ctx, "GET", commitsURL, nil)
+	if err == nil {
+		req2.Header.Set("Authorization", "Bearer "+p.tm.GetCurrentToken())
+		resp2, err := p.client.Do(req2)
+		if err == nil {
+			defer resp2.Body.Close()
+			if resp2.StatusCode == 200 {
+				var commits []struct {
+					Sha string `json:"sha"`
+				}
+				if json.NewDecoder(resp2.Body).Decode(&commits) == nil && len(commits) > 0 {
+					repo.LastCommitSHA = commits[0].Sha
+				}
+			}
+		}
+	}
+
 	return repo, nil
 }
 
 func (p *GitVerseProvider) DetectMirrors(ctx context.Context, repos []models.Repository) ([]models.MirrorMap, error) {
-	return nil, nil
+	return DetectMirrors(ctx, repos)
 }
 
 func (p *GitVerseProvider) CheckRepositoryState(ctx context.Context, repo models.Repository) (models.SyncState, error) {

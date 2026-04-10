@@ -1,0 +1,138 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta http-equiv=X-UA-Compatible content="IE=edge,chrome=1"><title>CLI Reference | My Patreon Manager</title><meta name=viewport content="width=device-width,minimum-scale=1"><meta name=description content="CLI Reference
+The My Patreon Manager CLI provides commands for synchronizing Git repositories,
+generating content, publishing to Patreon, and managing configuration.
+Global Flags
+The following flags apply to all commands:
+
+  
+      
+          Flag
+          Type
+          Default
+          Description
+      
+  
+  
+      
+          --config
+          string
+          .env
+          Path to configuration file (.env format)
+      
+      
+          --dry-run
+          bool
+          false
+          Preview changes without side effects (no API calls, no writes)
+      
+      
+          --log-level
+          string
+          info
+          Log level: error, warn, info, debug, trace
+      
+      
+          --json
+          bool
+          false
+          Output in JSON format for scripting
+      
+  
+
+Global flags must appear before the subcommand."><meta name=generator content="Hugo 0.160.1"><meta name=robots content="index, follow"><meta name=author content="Milos Vasic"><link rel=stylesheet href=/My-Patreon-Manager/ananke/css/main.min.efe4d852f731d5d1fbb87718387202a97aafd768cdcdaed0662bbe6982e91824.css><link rel=canonical href=https://milos85vasic.github.io/My-Patreon-Manager/docs/cli-reference/><meta property="og:url" content="https://milos85vasic.github.io/My-Patreon-Manager/docs/cli-reference/"><meta property="og:site_name" content="My Patreon Manager"><meta property="og:title" content="CLI Reference"><meta property="og:description" content="CLI Reference The My Patreon Manager CLI provides commands for synchronizing Git repositories, generating content, publishing to Patreon, and managing configuration.
+Global Flags The following flags apply to all commands:
+Flag Type Default Description --config string .env Path to configuration file (.env format) --dry-run bool false Preview changes without side effects (no API calls, no writes) --log-level string info Log level: error, warn, info, debug, trace --json bool false Output in JSON format for scripting Global flags must appear before the subcommand."><meta property="og:locale" content="en_us"><meta property="og:type" content="article"><meta property="article:section" content="docs"><meta property="article:published_time" content="2026-04-10T00:00:00+00:00"><meta property="article:modified_time" content="2026-04-10T00:00:00+00:00"><meta itemprop=name content="CLI Reference"><meta itemprop=description content="CLI Reference The My Patreon Manager CLI provides commands for synchronizing Git repositories, generating content, publishing to Patreon, and managing configuration.
+Global Flags The following flags apply to all commands:
+Flag Type Default Description --config string .env Path to configuration file (.env format) --dry-run bool false Preview changes without side effects (no API calls, no writes) --log-level string info Log level: error, warn, info, debug, trace --json bool false Output in JSON format for scripting Global flags must appear before the subcommand."><meta itemprop=datePublished content="2026-04-10T00:00:00+00:00"><meta itemprop=dateModified content="2026-04-10T00:00:00+00:00"><meta itemprop=wordCount content="979"><meta name=twitter:card content="summary"><meta name=twitter:title content="CLI Reference"><meta name=twitter:description content="CLI Reference The My Patreon Manager CLI provides commands for synchronizing Git repositories, generating content, publishing to Patreon, and managing configuration.
+Global Flags The following flags apply to all commands:
+Flag Type Default Description --config string .env Path to configuration file (.env format) --dry-run bool false Preview changes without side effects (no API calls, no writes) --log-level string info Log level: error, warn, info, debug, trace --json bool false Output in JSON format for scripting Global flags must appear before the subcommand."><link rel=stylesheet href=/My-Patreon-Manager/css/custom.css></head><body class="ma0 avenir bg-near-white production is-page is-page page-cli-reference"><header><div class=bg-black><nav class="pv3 ph3 ph4-ns" role=navigation><div class="flex-l center items-center justify-between"><a href=/My-Patreon-Manager/ class="f3 fw2 hover-white white-90 dib no-underline">My Patreon Manager</a><div class="flex-l items-center"><ul class="pl0 mr3"><li class="list f5 f4-ns fw4 dib pr3"><a class="hover-white white-90 no-underline" href=/My-Patreon-Manager/ title="Home page">Home</a></li><li class="list f5 f4-ns fw4 dib pr3"><a class="hover-white white-90 no-underline" href=/My-Patreon-Manager/docs/ title="Docs page">Docs</a></li><li class="list f5 f4-ns fw4 dib pr3"><a class="hover-white white-90 no-underline" href=/My-Patreon-Manager/guides/ title="Guides page">Guides</a></li><li class="list f5 f4-ns fw4 dib pr3"><a class="hover-white white-90 no-underline" href=/My-Patreon-Manager/api/ title="API page">API</a></li><li class="list f5 f4-ns fw4 dib pr3"><a class="hover-white white-90 no-underline" href=/My-Patreon-Manager/architecture/ title="Architecture page">Architecture</a></li><li class="list f5 f4-ns fw4 dib pr3"><a class="hover-white white-90 no-underline" href=https://github.com/milos85vasic/My-Patreon-Manager title="GitHub page">GitHub</a></li></ul><div class=ananke-socials></div></div></div></nav></div></header><main class=pb7 role=main><article class="page-cli-reference flex-l mw7 center ph3 flex-wrap justify-between"><header class="mt4 w-100"><aside class="instapaper_ignoref b helvetica tracked ttu">Documentation</aside><div id=sharing class="mt3 ananke-socials"></div><h1 class="f1 athelas mt3 mb1">CLI Reference</h1><p class=tracked><strong>Milos Vasic</strong></p><time class="f6 mv4 dib tracked" datetime=2026-04-10T00:00:00Z>April 10, 2026</time></header><div class="nested-copy-line-height lh-copy serif f4 nested-links mid-gray pr4-l w-100-l"><h1 id=cli-reference>CLI Reference</h1><p>The My Patreon Manager CLI provides commands for synchronizing Git repositories,
+generating content, publishing to Patreon, and managing configuration.</p><h2 id=global-flags>Global Flags</h2><p>The following flags apply to all commands:</p><table><thead><tr><th>Flag</th><th>Type</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>--config</code></td><td>string</td><td><code>.env</code></td><td>Path to configuration file (<code>.env</code> format)</td></tr><tr><td><code>--dry-run</code></td><td>bool</td><td>false</td><td>Preview changes without side effects (no API calls, no writes)</td></tr><tr><td><code>--log-level</code></td><td>string</td><td><code>info</code></td><td>Log level: <code>error</code>, <code>warn</code>, <code>info</code>, <code>debug</code>, <code>trace</code></td></tr><tr><td><code>--json</code></td><td>bool</td><td>false</td><td>Output in JSON format for scripting</td></tr></tbody></table><p>Global flags must appear before the subcommand.</p><h2 id=commands>Commands</h2><h3 id=sync><code>sync</code></h3><p>Full synchronization: discover repositories → generate content → publish to Patreon.</p><div class=highlight><pre tabindex=0 style=background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span>patreon-manager sync <span style=color:#0550ae>[</span>flags<span style=color:#0550ae>]</span>
+</span></span></code></pre></div><p><strong>Flags</strong>:</p><table><thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code>--org</code></td><td>string</td><td>Process only repositories belonging to the specified organization</td></tr><tr><td><code>--repo</code></td><td>string</td><td>Process a single repository (full URL, e.g., <code>https://github.com/owner/repo</code>)</td></tr><tr><td><code>--pattern</code></td><td>string</td><td>Process repositories matching a glob pattern (e.g., <code>*-plugin</code>)</td></tr><tr><td><code>--since</code></td><td>string</td><td>Process repositories changed since timestamp (RFC3339, e.g., <code>2026-04-01T00:00:00Z</code>)</td></tr><tr><td><code>--changed-only</code></td><td>bool</td><td>Skip repositories that have not changed since last sync</td></tr><tr><td><code>--full</code></td><td>bool</td><td>Force full rescan ignoring previous state (clears cache)</td></tr></tbody></table><p><strong>Exit codes</strong>:</p><ul><li><code>0</code>: Success (all repositories processed)</li><li><code>1</code>: Partial failure (some repositories failed, but sync completed)</li><li><code>2</code>: Configuration error (missing credentials, invalid settings)</li><li><code>3</code>: Lock contention (another sync is already running)</li></ul><p><strong>Example output</strong>:</p><pre tabindex=0><code>Sync complete: 15 processed, 3 created, 8 updated, 4 unchanged, 0 failed
+Duration: 4m32s | Tokens: 12,450 | Est. cost: $0.38
+</code></pre><p><strong>Examples</strong>:</p><div class=highlight><pre tabindex=0 style=background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span><span style=color:#57606a># Full sync with default configuration</span>
+</span></span><span style=display:flex><span>patreon-manager sync
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#57606a># Sync only a specific organization</span>
+</span></span><span style=display:flex><span>patreon-manager sync --org my-company
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#57606a># Sync a single repository</span>
+</span></span><span style=display:flex><span>patreon-manager sync --repo https://github.com/owner/project
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#57606a># Sync repositories changed in the last 7 days</span>
+</span></span><span style=display:flex><span>patreon-manager sync --since <span style=color:#cf222e>$(</span>date -u -d <span style=color:#0a3069>&#39;7 days ago&#39;</span> +%Y-%m-%dT%H:%M:%SZ<span style=color:#cf222e>)</span>
+</span></span></code></pre></div><hr><h3 id=scan><code>scan</code></h3><p>Repository discovery only — no content generation or publishing.</p><div class=highlight><pre tabindex=0 style=background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span>patreon-manager scan <span style=color:#0550ae>[</span>flags<span style=color:#0550ae>]</span>
+</span></span></code></pre></div><p>Accepts the same filter flags as <code>sync</code>. Outputs discovered repository list with metadata summary.</p><p><strong>Exit codes</strong>: Same as <code>sync</code>.</p><p><strong>Example output</strong>:</p><pre tabindex=0><code>Discovered 23 repositories across 4 services
+  GitHub:  12 (3 orgs)
+  GitLab:   6 (2 orgs)
+  GitFlic:  3 (1 org)
+  GitVerse: 2 (1 org)
+Mirrors detected: 4 groups (8 repositories)
+Filtered by .repoignore: 3 excluded
+</code></pre><p><strong>Examples</strong>:</p><div class=highlight><pre tabindex=0 style=background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span><span style=color:#57606a># Scan all repositories</span>
+</span></span><span style=display:flex><span>patreon-manager scan
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#57606a># Scan with JSON output for scripting</span>
+</span></span><span style=display:flex><span>patreon-manager scan --json <span style=color:#1f2328>|</span> jq <span style=color:#0a3069>&#39;.repositories[] | .name&#39;</span>
+</span></span></code></pre></div><hr><h3 id=generate><code>generate</code></h3><p>Content generation without publishing. Writes output to local files.</p><div class=highlight><pre tabindex=0 style=background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span>patreon-manager generate <span style=color:#0550ae>[</span>flags<span style=color:#0550ae>]</span>
+</span></span></code></pre></div><p><strong>Flags</strong>:</p><table><thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code>--type</code></td><td>string</td><td>Content type: <code>overview</code>, <code>technical_doc</code>, <code>sponsorship</code>, <code>announcement</code> (default: all)</td></tr><tr><td><code>--format</code></td><td>string</td><td>Output format: <code>markdown</code>, <code>html</code>, <code>pdf</code>, <code>video_script</code> (default: <code>markdown</code>)</td></tr><tr><td><code>--output</code></td><td>string</td><td>Output directory (default: <code>./generated/</code>)</td></tr><tr><td><code>--all</code></td><td>bool</td><td>Generate all content types for all repositories (overrides <code>--type</code>)</td></tr></tbody></table><p><strong>Exit codes</strong>:</p><ul><li><code>0</code>: Success</li><li><code>1</code>: Generation failure (some content could not be generated)</li><li><code>2</code>: Configuration error</li></ul><p><strong>Example output</strong>:</p><pre tabindex=0><code>Generating content for 5 repositories...
+  repo1: overview.md (quality: 0.92) ✓
+  repo1: technical_doc.md (quality: 0.85) ✓
+  repo2: overview.md (quality: 0.78) ✓
+  repo2: technical_doc.md (quality: 0.81) ✓
+  repo3: overview.md (quality: 0.45) ✗ (below threshold)
+Generation complete: 4 files written, 1 skipped
+</code></pre><p><strong>Examples</strong>:</p><div class=highlight><pre tabindex=0 style=background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span><span style=color:#57606a># Generate overviews for all repositories</span>
+</span></span><span style=display:flex><span>patreon-manager generate --type overview
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#57606a># Generate PDF technical documentation</span>
+</span></span><span style=display:flex><span>patreon-manager generate --type technical_doc --format pdf --output ./docs/
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#57606a># Generate all content types (overview, technical_doc, sponsorship, announcement)</span>
+</span></span><span style=display:flex><span>patreon-manager generate --all
+</span></span></code></pre></div><hr><h3 id=validate><code>validate</code></h3><p>Validate configuration and test connectivity to all services.</p><div class=highlight><pre tabindex=0 style=background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span>patreon-manager validate
+</span></span></code></pre></div><p><strong>Exit codes</strong>:</p><ul><li><code>0</code>: All services connected and configuration valid</li><li><code>1</code>: Some services failed to connect (partial failure)</li><li><code>2</code>: Configuration missing or invalid</li></ul><p><strong>Example output</strong>:</p><pre tabindex=0><code>Configuration: VALID
+  Patreon API:   CONNECTED (campaign: &#34;My Campaign&#34;, 142 patrons)
+  GitHub:        CONNECTED (rate limit: 4,850/5,000 remaining)
+  GitLab:        CONNECTED (self-hosted: false)
+  GitFlic:       CONNECTED
+  GitVerse:      CONNECTED
+  LLMsVerifier:  CONNECTED (3 models available)
+  Database:      CONNECTED (SQLite, 23 repos tracked)
+</code></pre><p><strong>Examples</strong>:</p><div class=highlight><pre tabindex=0 style=background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span><span style=color:#57606a># Validate configuration</span>
+</span></span><span style=display:flex><span>patreon-manager validate
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#57606a># Validate with JSON output</span>
+</span></span><span style=display:flex><span>patreon-manager validate --json
+</span></span></code></pre></div><hr><h3 id=publish><code>publish</code></h3><p>Push previously generated content to Patreon.</p><div class=highlight><pre tabindex=0 style=background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span>patreon-manager publish <span style=color:#0550ae>[</span>flags<span style=color:#0550ae>]</span>
+</span></span></code></pre></div><p><strong>Flags</strong>:</p><table><thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code>--input</code></td><td>string</td><td>Input directory containing generated content (default: <code>./generated/</code>)</td></tr><tr><td><code>--draft</code></td><td>bool</td><td>Publish as draft instead of immediate publication</td></tr><tr><td><code>--schedule</code></td><td>string</td><td>Schedule publication (RFC3339 timestamp)</td></tr><tr><td><code>--tier</code></td><td>string</td><td>Override tier association (tier ID)</td></tr></tbody></table><p><strong>Exit codes</strong>:</p><ul><li><code>0</code>: Success (all content published)</li><li><code>1</code>: Partial failure (some posts failed)</li><li><code>2</code>: Configuration error</li></ul><p><strong>Example output</strong>:</p><pre tabindex=0><code>Publishing 3 posts to Patreon...
+  Post #1 (repo1 overview) → published as draft
+  Post #2 (repo1 technical) → published to tier &#34;premium&#34;
+  Post #3 (repo2 overview) → scheduled for 2026-04-11 10:00 UTC
+Publish complete: 3 succeeded, 0 failed
+</code></pre><p><strong>Examples</strong>:</p><div class=highlight><pre tabindex=0 style=background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span><span style=color:#57606a># Publish generated content as drafts</span>
+</span></span><span style=display:flex><span>patreon-manager publish --draft
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#57606a># Schedule publication for next week</span>
+</span></span><span style=display:flex><span>patreon-manager publish --schedule <span style=color:#cf222e>$(</span>date -u -d <span style=color:#0a3069>&#39;next Monday 10:00&#39;</span> +%Y-%m-%dT%H:%M:%SZ<span style=color:#cf222e>)</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#57606a># Publish to a specific tier</span>
+</span></span><span style=display:flex><span>patreon-manager publish --tier premium
+</span></span></code></pre></div><hr><h3 id=schedule><code>schedule</code></h3><p>Start a long‑running process that executes sync on a cron schedule.</p><div class=highlight><pre tabindex=0 style=background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span>patreon-manager schedule --cron <span style=color:#0a3069>&#34;0 */6 * * *&#34;</span>
+</span></span></code></pre></div><p><strong>Flags</strong>:</p><table><thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td><code>--cron</code></td><td>string</td><td>Cron expression (required)</td></tr><tr><td><code>--alert</code></td><td>string</td><td>Alert method: <code>log</code>, <code>email</code>, <code>webhook</code> (default: <code>log</code>)</td></tr><tr><td><code>--alert‑config</code></td><td>string</td><td>Path to alert configuration file</td></tr></tbody></table><p><strong>Exit codes</strong>:</p><ul><li><code>0</code>: Scheduler started (runs until SIGTERM)</li><li><code>1</code>: Invalid cron expression</li><li><code>2</code>: Configuration error</li></ul><p><strong>Example</strong>:</p><div class=highlight><pre tabindex=0 style=background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span><span style=color:#57606a># Run sync every 6 hours</span>
+</span></span><span style=display:flex><span>patreon-manager schedule --cron <span style=color:#0a3069>&#34;0 */6 * * *&#34;</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#57606a># Run every hour, send email alerts on failure</span>
+</span></span><span style=display:flex><span>patreon-manager schedule --cron <span style=color:#0a3069>&#34;0 * * * *&#34;</span> --alert email --alert‑config alerts.yaml
+</span></span></code></pre></div><hr><h3 id=serve><code>serve</code></h3><p>Start the HTTP server (webhook endpoints, content access, admin API).</p><div class=highlight><pre tabindex=0 style=background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span>patreon-manager serve <span style=color:#0550ae>[</span>--port 8080<span style=color:#0550ae>]</span> <span style=color:#0550ae>[</span>--host 0.0.0.0<span style=color:#0550ae>]</span>
+</span></span></code></pre></div><p><strong>Flags</strong>:</p><table><thead><tr><th>Flag</th><th>Type</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>--port</code></td><td>int</td><td><code>8080</code></td><td>Port to listen on</td></tr><tr><td><code>--host</code></td><td>string</td><td><code>0.0.0.0</code></td><td>Host address to bind</td></tr></tbody></table><p><strong>Exit codes</strong>:</p><ul><li><code>0</code>: Server stopped gracefully</li><li><code>1</code>: Server failed to start (address in use, configuration error)</li></ul><p><strong>Example</strong>:</p><div class=highlight><pre tabindex=0 style=background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span><span style=color:#57606a># Start server on port 3000</span>
+</span></span><span style=display:flex><span>patreon-manager serve --port <span style=color:#0550ae>3000</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#57606a># Start server on localhost only</span>
+</span></span><span style=display:flex><span>patreon-manager serve --host 127.0.0.1
+</span></span></code></pre></div><hr><h2 id=environment-variables>Environment Variables</h2><p>All configuration can be provided via environment variables (loaded from <code>.env</code> file or system environment). See the <a href=/docs/configuration/>Configuration Reference</a> for the complete list.</p><h2 id=configuration-file>Configuration File</h2><p>By default, the CLI reads configuration from <code>.env</code> in the current directory. Use <code>--config</code> to specify a different file.</p><p>Example <code>.env</code> file:</p><div class=highlight><pre tabindex=0 style=background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none><code class=language-env data-lang=env><span style=display:flex><span><span style=color:#953800>PATREON_ACCESS_TOKEN</span><span style=color:#0550ae>=</span>...
+</span></span><span style=display:flex><span><span style=color:#953800>GITHUB_TOKEN</span><span style=color:#0550ae>=</span>...
+</span></span><span style=display:flex><span><span style=color:#953800>GITLAB_TOKEN</span><span style=color:#0550ae>=</span>...
+</span></span><span style=display:flex><span><span style=color:#953800>DATABASE_URL</span><span style=color:#0550ae>=</span>sqlite://./patreon-manager.db
+</span></span><span style=display:flex><span><span style=color:#953800>LLM_PROVIDER</span><span style=color:#0550ae>=</span>openai
+</span></span><span style=display:flex><span><span style=color:#953800>LLM_API_KEY</span><span style=color:#0550ae>=</span>...
+</span></span></code></pre></div><h2 id=exit-code-summary>Exit Code Summary</h2><table><thead><tr><th>Code</th><th>Meaning</th></tr></thead><tbody><tr><td>0</td><td>Success</td></tr><tr><td>1</td><td>Partial failure (some operations failed)</td></tr><tr><td>2</td><td>Configuration error (missing or invalid settings)</td></tr><tr><td>3</td><td>Lock contention (another instance is already running)</td></tr><tr><td>130</td><td>Process terminated by SIGINT (Ctrl+C)</td></tr></tbody></table><ul class=pa0></ul></div></article></main><footer class="bg-black bottom-0 w-100 pa3" role=contentinfo><div class="flex justify-between"><a class="f4 fw4 hover-white white-70 dn dib-ns pv2 ph3 no-underline" href=https://milos85vasic.github.io/My-Patreon-Manager/>&copy; My Patreon Manager 2026</a><div><div class=ananke-socials></div></div></div></footer></body></html>

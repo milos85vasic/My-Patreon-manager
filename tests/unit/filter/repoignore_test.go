@@ -138,3 +138,24 @@ func TestRepoignore_Recursive(t *testing.T) {
 	assert.True(t, r.Match("https://github.com/owner/repo"))
 	assert.True(t, r.Match("https://github.com/owner/repo/sub"))
 }
+
+func TestParseRepoignoreFile_InvalidPatterns(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".repoignore")
+	// Invalid pattern: unclosed bracket
+	err := os.WriteFile(path, []byte("github.com/owner/repo[123\n"), 0644)
+	require.NoError(t, err)
+
+	r, err := filter.ParseRepoignoreFile(path)
+	assert.NoError(t, err)
+	// The invalid pattern should be filtered out, so no matches
+	assert.False(t, r.Match("https://github.com/owner/repo1"))
+	assert.False(t, r.Match("https://github.com/owner/repo2"))
+	// Valid pattern still works
+	err = os.WriteFile(path, []byte("github.com/owner/repo[123]\n"), 0644)
+	require.NoError(t, err)
+	r, err = filter.ParseRepoignoreFile(path)
+	assert.NoError(t, err)
+	assert.True(t, r.Match("https://github.com/owner/repo1"))
+	assert.False(t, r.Match("https://github.com/owner/repo4"))
+}

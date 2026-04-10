@@ -1,0 +1,100 @@
+#!/bin/bash
+set -e
+
+# Test coverage script for My Patreon Manager
+# Runs all tests with coverage and generates reports
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+COVERAGE_DIR="${PROJECT_ROOT}/coverage"
+COVERAGE_FILE="${COVERAGE_DIR}/coverage.out"
+COVERAGE_HTML="${COVERAGE_DIR}/html"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+ARCHIVE_DIR="${PROJECT_ROOT}/test-results/archive/${TIMESTAMP}"
+
+echo "📊 Running full test suite with coverage..."
+
+# Create directories
+mkdir -p "${COVERAGE_DIR}"
+mkdir -p "${COVERAGE_HTML}"
+mkdir -p "${ARCHIVE_DIR}"
+
+# First, run all tests to ensure they pass
+echo "🧪 Running all test suites..."
+go test ./internal/... ./cmd/... ./tests/... -v
+
+# Run tests with coverage for production code (internal and cmd packages)
+# Run tests on all packages to collect coverage
+echo "📈 Collecting coverage data..."
+go test -coverprofile="${COVERAGE_FILE}" -covermode=atomic -coverpkg=./internal/...,./cmd/... ./...
+
+# Generate HTML report
+echo "📊 Generating HTML coverage report..."
+go tool cover -html="${COVERAGE_FILE}" -o "${COVERAGE_HTML}/index.html"
+
+# Generate summary
+echo "📋 Coverage summary:"
+go tool cover -func="${COVERAGE_FILE}"
+
+# Check if coverage is 100% per package (required) for internal and cmd packages
+echo "📊 Checking per-package coverage..."
+ALL_PASS=true
+while IFS= read -r line; do
+    # Look for lines with coverage percentage
+    if [[ "$line" =~ ^[[:space:]]*ok[[:space:]]+([^[:space:]]+)[[:space:]]+.*coverage:[[:space:]]+([0-9]+\.[0-9]+)% ]]; then
+        pkg="${BASH_REMATCH[1]}"
+        coverage="${BASH_REMATCH[2]}"
+        # Only check internal and cmd packages
+        if [[ "$pkg" == github.com/milos85vasic/My-Patreon-Manager/internal/* ]] || [[ "$pkg" == github.com/milos85vasic/My-Patreon-Manager/cmd/* ]]; then
+            if (( $(echo "$coverage < 100" | bc -l) )); then
+                echo "❌ Package $pkg coverage is ${coverage}% (< 100%)"
+                ALL_PASS=false
+            else
+                echo "✅ Package $pkg coverage is ${coverage}%"
+            fi
+        fi
+    elif [[ "$line" =~ ^[[:space:]]*\?[[:space:]]+([^[:space:]]+)[[:space:]]+.*coverage:[[:space:]]+([0-9]+\.[0-9]+)% ]]; then
+        # No tests
+        pkg="${BASH_REMATCH[1]}"
+        # Only check internal and cmd packages
+        if [[ "$pkg" == github.com/milos85vasic/My-Patreon-Manager/internal/* ]] || [[ "$pkg" == github.com/milos85vasic/My-Patreon-Manager/cmd/* ]]; then
+            echo "❌ Package $pkg has no tests (coverage 0%)"
+            ALL_PASS=false
+        fi
+    elif [[ "$line" =~ ^[[:space:]]*([^[:space:]]+)[[:space:]]+.*coverage:[[:space:]]+([0-9]+\.[0-9]+)% ]]; then
+        # Package line without ok/? (no tests)
+        pkg="${BASH_REMATCH[1]}"
+        coverage="${BASH_REMATCH[2]}"
+        # Only check internal and cmd packages
+        if [[ "$pkg" == github.com/milos85vasic/My-Patreon-Manager/internal/* ]] || [[ "$pkg" == github.com/milos85vasic/My-Patreon-Manager/cmd/* ]]; then
+            if (( $(echo "$coverage < 100" | bc -l) )); then
+                echo "❌ Package $pkg coverage is ${coverage}% (< 100%)"
+                ALL_PASS=false
+            fi
+        fi
+    fi
+done < <(go test -cover -coverpkg=./internal/...,./cmd/... ./... 2>&1)
+
+if [[ "$ALL_PASS" != "true" ]]; then
+    echo "❌ Some packages have coverage below 100%. Failing."
+    exit 1
+fi
+
+# Also check total coverage as summary
+TOTAL_COVERAGE=$(go tool cover -func="${COVERAGE_FILE}" | grep total | awk '{print $3}' | sed 's/%//')
+echo "✅ Total coverage: ${TOTAL_COVERAGE}%"
+
+if (( $(echo "$TOTAL_COVERAGE < 100" | bc -l) )); then
+    echo "❌ Total coverage is below 100%. Failing."
+    exit 1
+fi
+
+# Archive results
+cp "${COVERAGE_FILE}" "${ARCHIVE_DIR}/"
+cp -r "${COVERAGE_HTML}" "${ARCHIVE_DIR}/"
+echo "📦 Results archived to ${ARCHIVE_DIR}"
+
+# Generate JSON report for CI (optional)
+echo "{\"coverage\": ${TOTAL_COVERAGE}, \"timestamp\": \"${TIMESTAMP}\"}" > "${COVERAGE_DIR}/coverage-summary.json"
+
+echo "🎉 Coverage script completed successfully!"
+echo "📁 HTML report: file://${COVERAGE_HTML}/index.html"

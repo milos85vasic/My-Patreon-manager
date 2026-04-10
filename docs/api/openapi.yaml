@@ -1,0 +1,428 @@
+openapi: 3.0.3
+info:
+  title: My Patreon Manager API
+  version: 1.0.0
+  description: |
+    REST API for My Patreon Manager, a tool that scans Git repositories
+    and publishes content to Patreon via their API.
+  contact:
+    name: Project maintainer
+    url: https://github.com/milos85vasic/My-Patreon-Manager
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://patreon-manager.example.com
+    description: Production server (example)
+
+tags:
+  - name: Health
+    description: Health check endpoint
+  - name: Webhooks
+    description: Webhook endpoints for Git services
+  - name: Content
+    description: Premium content access and verification
+  - name: Metrics
+    description: Prometheus metrics endpoint
+  - name: Admin
+    description: Administrative endpoints (require admin API key)
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Returns service health status and version info
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '500':
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /webhook/github:
+    post:
+      tags:
+        - Webhooks
+      summary: GitHub webhook endpoint
+      description: Receives GitHub webhook events (push, release, repository)
+      security:
+        - GitHubSignature: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GitHubWebhookPayload'
+      responses:
+        '200':
+          description: Webhook accepted and queued for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '401':
+          description: Invalid or missing signature
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Malformed payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /webhook/gitlab:
+    post:
+      tags:
+        - Webhooks
+      summary: GitLab webhook endpoint
+      description: Receives GitLab webhook events (push, tag_push, repository_update)
+      security:
+        - GitLabToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GitLabWebhookPayload'
+      responses:
+        '200':
+          description: Webhook accepted and queued for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '401':
+          description: Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /webhook/{service}:
+    post:
+      tags:
+        - Webhooks
+      summary: Generic webhook endpoint for other Git services
+      description: Supports GitFlic and GitVerse via token validation
+      parameters:
+        - name: service
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [gitflic, gitverse]
+          description: Git service name
+      security:
+        - GenericToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericWebhookPayload'
+      responses:
+        '200':
+          description: Webhook accepted and queued for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '401':
+          description: Invalid token
+
+  /download/{content_id}:
+    get:
+      tags:
+        - Content
+      summary: Download premium content
+      description: |
+        Downloads premium content (PDF, video, etc.) using a signed URL token.
+        The token must be valid, not expired, and the subscriber must have the required tier.
+      parameters:
+        - name: content_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique identifier of the content
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Signed URL token (HMAC-SHA256) containing content ID, subscriber ID, and expiration
+      responses:
+        '200':
+          description: File content with Content-Disposition header
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '403':
+          description: Token expired or insufficient tier
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Content not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /access/{content_id}:
+    get:
+      tags:
+        - Content
+      summary: Verify access to premium content
+      description: |
+        Returns whether the current user (via Patreon session cookie or Bearer token)
+        has access to the specified content, along with tier information and upgrade URL if denied.
+      parameters:
+        - name: content_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique identifier of the content
+      security:
+        - PatreonSession: []
+        - PatreonBearer: []
+      responses:
+        '200':
+          description: Access status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessVerificationResponse'
+        '403':
+          description: No valid authentication provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /metrics:
+    get:
+      tags:
+        - Metrics
+      summary: Prometheus metrics endpoint
+      description: Exposes Prometheus metrics for monitoring
+      responses:
+        '200':
+          description: Prometheus exposition format
+          content:
+            text/plain; version=0.0.4:
+              schema:
+                type: string
+
+  /admin/reload:
+    post:
+      tags:
+        - Admin
+      summary: Reload configuration
+      description: Reloads configuration from disk (requires admin API key)
+      security:
+        - AdminApiKey: []
+      responses:
+        '200':
+          description: Configuration reloaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminReloadResponse'
+        '401':
+          description: Invalid admin API key
+
+  /admin/sync/status:
+    get:
+      tags:
+        - Admin
+      summary: Get sync status
+      description: Returns current sync process status (requires admin API key)
+      security:
+        - AdminApiKey: []
+      responses:
+        '200':
+          description: Sync status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncStatusResponse'
+        '401':
+          description: Invalid admin API key
+
+components:
+  securitySchemes:
+    GitHubSignature:
+      type: apiKey
+      in: header
+      name: X-Hub-Signature-256
+      description: HMAC-SHA256 signature of request body using webhook secret
+    GitLabToken:
+      type: apiKey
+      in: header
+      name: X-Gitlab-Token
+      description: Secret token configured in GitLab webhook
+    GenericToken:
+      type: apiKey
+      in: query
+      name: token
+      description: Secret token configured for generic webhook
+    PatreonSession:
+      type: apiKey
+      in: cookie
+      name: patreon_session
+      description: Patreon session cookie (set by OAuth flow)
+    PatreonBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Bearer token from Patreon OAuth
+    AdminApiKey:
+      type: apiKey
+      in: header
+      name: X-Admin-Key
+      description: Admin API key configured in environment
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: healthy
+        version:
+          type: string
+          example: 1.0.0
+        uptime_seconds:
+          type: integer
+          example: 86400
+      required:
+        - status
+        - version
+        - uptime_seconds
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+        code:
+          type: string
+          description: Machine-readable error code
+      required:
+        - error
+
+    WebhookResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [queued, rejected]
+          example: queued
+        event_id:
+          type: string
+          example: abc123
+        repository:
+          type: string
+          example: owner/repo
+      required:
+        - status
+
+    AccessVerificationResponse:
+      type: object
+      properties:
+        access:
+          type: boolean
+          description: Whether the user has access to the content
+        tier:
+          type: string
+          description: Tier of the user (if access is true) or required tier (if access is false)
+          example: premium
+        expires_at:
+          type: string
+          format: date-time
+          description: When access expires (if applicable)
+        current_tier:
+          type: string
+          description: Current tier of the user (present when access is false)
+          example: basic
+        upgrade_url:
+          type: string
+          description: URL to upgrade tier (present when access is false)
+          example: https://patreon.com/...
+      required:
+        - access
+
+    AdminReloadResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: reloaded
+        config_source:
+          type: string
+          example: .env
+      required:
+        - status
+        - config_source
+
+    SyncStatusResponse:
+      type: object
+      properties:
+        active:
+          type: boolean
+          description: Whether a sync is currently running
+        pid:
+          type: integer
+          description: Process ID of the sync runner
+        started_at:
+          type: string
+          format: date-time
+          description: When the sync started
+        repos_completed:
+          type: integer
+          description: Number of repositories processed so far
+        repos_total:
+          type: integer
+          description: Total number of repositories to process
+        eta_seconds:
+          type: integer
+          description: Estimated seconds until completion
+      required:
+        - active
+
+    # Webhook payload schemas are generic objects; we define minimal structure
+    GitHubWebhookPayload:
+      type: object
+      description: GitHub webhook payload (varies by event type)
+      additionalProperties: true
+
+    GitLabWebhookPayload:
+      type: object
+      description: GitLab webhook payload (varies by event type)
+      additionalProperties: true
+
+    GenericWebhookPayload:
+      type: object
+      description: Generic webhook payload (varies by service)
+      additionalProperties: true

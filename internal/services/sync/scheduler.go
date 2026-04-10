@@ -8,21 +8,26 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-type Scheduler struct {
-	cron         *cron.Cron
-	orchestrator *Orchestrator
-	opts         SyncOptions
-	alert        Alert
-	logger       *slog.Logger
+// SyncRunner defines the interface for a component that can run a sync.
+type SyncRunner interface {
+	Run(ctx context.Context, opts SyncOptions) (*SyncResult, error)
 }
 
-func NewScheduler(orchestrator *Orchestrator, opts SyncOptions, alert Alert, logger *slog.Logger) *Scheduler {
+type Scheduler struct {
+	cron   *cron.Cron
+	runner SyncRunner
+	opts   SyncOptions
+	alert  Alert
+	logger *slog.Logger
+}
+
+func NewScheduler(runner SyncRunner, opts SyncOptions, alert Alert, logger *slog.Logger) *Scheduler {
 	return &Scheduler{
-		cron:         cron.New(),
-		orchestrator: orchestrator,
-		opts:         opts,
-		alert:        alert,
-		logger:       logger,
+		cron:   cron.New(),
+		runner: runner,
+		opts:   opts,
+		alert:  alert,
+		logger: logger,
 	}
 }
 
@@ -35,7 +40,7 @@ func (s *Scheduler) Start(schedule string) error {
 			s.logger.Info("scheduled sync started")
 		}
 
-		result, err := s.orchestrator.Run(ctx, s.opts)
+		result, err := s.runner.Run(ctx, s.opts)
 		if err != nil {
 			if s.alert != nil {
 				s.alert.Send("Sync Failed", err.Error())

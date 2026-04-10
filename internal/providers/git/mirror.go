@@ -90,9 +90,15 @@ func (d *MirrorDetector) computeSimilarity(r1, r2 models.Repository) float64 {
 		}
 	}
 
+	// commit SHA match adds high confidence
+	if r1.LastCommitSHA != "" && r2.LastCommitSHA != "" && r1.LastCommitSHA == r2.LastCommitSHA {
+		score += 0.5
+	}
+
 	if r1.Description != "" && r2.Description != "" {
-		if strings.ToLower(r1.Description) == strings.ToLower(r2.Description) {
-			score += 0.2
+		sim := utils.JaccardSimilarity(r1.Description, r2.Description)
+		if sim >= 0.7 {
+			score += 0.2 * sim // scale by similarity
 		}
 	}
 
@@ -111,6 +117,14 @@ func (d *MirrorDetector) selectCanonical(r1, r2 models.Repository) string {
 	}
 	if !ok2 {
 		p2 = 99
+	}
+	// If same service priority, compare creation dates
+	if p1 == p2 {
+		if !r1.CreatedAt.IsZero() && !r2.CreatedAt.IsZero() && r1.CreatedAt.Before(r2.CreatedAt) {
+			return r1.ID
+		}
+		// default to r2 if r1 not older
+		return r2.ID
 	}
 	if p1 <= p2 {
 		return r1.ID

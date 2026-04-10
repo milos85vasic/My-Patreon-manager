@@ -177,3 +177,15 @@ func (v *VerifierClient) doRequest(ctx context.Context, method, url string, body
 	}
 	return resp, nil
 }
+
+func (v *VerifierClient) SetBaseURL(url string) {
+	v.baseURL = url
+}
+
+func (v *VerifierClient) SetTransport(rt http.RoundTripper) {
+	v.client.Transport = rt
+}
+
+func (v *VerifierClient) SetCircuitBreaker(cb *metrics.CircuitBreaker) {
+	v.cb = cb
+}

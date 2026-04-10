@@ -1,0 +1,357 @@
+package integration
+
+import (
+	"context"
+	"testing"
+
+	"github.com/milos85vasic/My-Patreon-Manager/internal/database"
+	"github.com/milos85vasic/My-Patreon-Manager/internal/models"
+	"github.com/milos85vasic/My-Patreon-Manager/internal/providers/llm"
+	"github.com/milos85vasic/My-Patreon-Manager/internal/services/content"
+	"github.com/milos85vasic/My-Patreon-Manager/internal/services/sync"
+	"github.com/milos85vasic/My-Patreon-Manager/tests/mocks"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// mockMetricsCollector implements metrics.MetricsCollector for testing
+type mockMetricsCollector struct {
+	recordedLLMQuality []struct {
+		repository string
+		score      float64
+	}
+	recordedLLMTokens []struct {
+		model     string
+		tokenType string
+		count     int
+	}
+	recordedContentGenerated []struct {
+		format      string
+		qualityTier string
+	}
+	budgetUtilization []float64
+}
+
+func (m *mockMetricsCollector) RecordSyncDuration(service, status string, seconds float64) {}
+func (m *mockMetricsCollector) RecordReposProcessed(service, action string)                {}
+func (m *mockMetricsCollector) RecordAPIError(service, errorType string)                   {}
+func (m *mockMetricsCollector) RecordLLMLatency(model string, seconds float64)             {}
+func (m *mockMetricsCollector) RecordLLMTokens(model, tokenType string, count int) {
+	m.recordedLLMTokens = append(m.recordedLLMTokens, struct {
+		model     string
+		tokenType string
+		count     int
+	}{model, tokenType, count})
+}
+func (m *mockMetricsCollector) RecordLLMQualityScore(repository string, score float64) {
+	m.recordedLLMQuality = append(m.recordedLLMQuality, struct {
+		repository string
+		score      float64
+	}{repository, score})
+}
+func (m *mockMetricsCollector) RecordContentGenerated(format, qualityTier string) {
+	m.recordedContentGenerated = append(m.recordedContentGenerated, struct {
+		format      string
+		qualityTier string
+	}{format, qualityTier})
+}
+func (m *mockMetricsCollector) RecordPostCreated(tier string)                {}
+func (m *mockMetricsCollector) RecordPostUpdated(tier string)                {}
+func (m *mockMetricsCollector) RecordWebhookEvent(service, eventType string) {}
+func (m *mockMetricsCollector) SetActiveSyncs(count int)                     {}
+func (m *mockMetricsCollector) SetBudgetUtilization(percent float64) {
+	m.budgetUtilization = append(m.budgetUtilization, percent)
+}
+
+func setupDB(t *testing.T) *database.SQLiteDB {
+	t.Helper()
+	db := database.NewSQLiteDB(":memory:")
+	require.NoError(t, db.Connect(context.Background(), ""))
+	require.NoError(t, db.Migrate(context.Background()))
+	t.Cleanup(func() { db.Close() })
+	return db
+}
+
+func TestContentGenerationPipeline(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+
+	llm := &mocks.MockLLMProvider{
+		GenerateContentFunc: func(_ context.Context, _ models.Prompt, _ models.GenerationOptions) (models.Content, error) {
+			return models.Content{
+				Title: "Generated Post", Body: "# My Repo\n\nGreat project!",
+				QualityScore: 0.9, ModelUsed: "gpt-4", TokenCount: 250,
+			}, nil
+		},
+	}
+
+	budget := content.NewTokenBudget(100000)
+	gate := content.NewQualityGate(0.75)
+	gen := content.NewGenerator(llm, budget, gate, db.GeneratedContents(), nil, nil)
+
+	repo := models.Repository{
+		ID: "repo-1", Service: "github", Owner: "testowner", Name: "testrepo",
+		Description: "A test repository", Stars: 100, Forks: 20,
+		HTTPSURL: "https://github.com/testowner/testrepo", PrimaryLanguage: "Go",
+	}
+
+	result, err := gen.GenerateForRepository(ctx, repo, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "Generated Post", result.Title)
+	assert.True(t, result.PassedQualityGate)
+
+	stored, err := db.GeneratedContents().GetLatestByRepo(ctx, "repo-1")
+	require.NoError(t, err)
+	assert.Equal(t, result.ID, stored.ID)
+}
+
+func TestContentGeneration_LowQuality(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+
+	llm := &mocks.MockLLMProvider{
+		GenerateContentFunc: func(_ context.Context, _ models.Prompt, _ models.GenerationOptions) (models.Content, error) {
+			return models.Content{
+				Title: "Bad", Body: "short", QualityScore: 0.3, ModelUsed: "test", TokenCount: 50,
+			}, nil
+		},
+	}
+
+	gen := content.NewGenerator(llm, content.NewTokenBudget(100000), content.NewQualityGate(0.75), db.GeneratedContents(), nil, nil)
+	result, err := gen.GenerateForRepository(ctx, models.Repository{
+		ID: "r1", Service: "github", Owner: "o", Name: "n", HTTPSURL: "u",
+	}, nil)
+	require.NoError(t, err)
+	assert.False(t, result.PassedQualityGate)
+}
+
+func TestContentGeneration_BudgetExceeded(t *testing.T) {
+	db := setupDB(t)
+	gen := content.NewGenerator(&mocks.MockLLMProvider{}, content.NewTokenBudget(0), content.NewQualityGate(0.75), db.GeneratedContents(), nil, nil)
+	_, err := gen.GenerateForRepository(context.Background(), models.Repository{ID: "r1", Service: "github", Owner: "o", Name: "n", HTTPSURL: "u"}, nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "token budget")
+}
+
+func TestQualityPipeline_ReviewQueue(t *testing.T) {
+	db := setupDB(t)
+	budget := content.NewTokenBudget(100000)
+	gate := content.NewQualityGate(0.75)
+	llm := &mocks.MockLLMProvider{
+		GenerateContentFunc: func(_ context.Context, _ models.Prompt, _ models.GenerationOptions) (models.Content, error) {
+			return models.Content{Title: "Low", Body: "meh", QualityScore: 0.5, ModelUsed: "test", TokenCount: 100}, nil
+		},
+	}
+
+	gen := content.NewGenerator(llm, budget, gate, db.GeneratedContents(), nil, nil)
+	result, err := gen.GenerateForRepository(context.Background(), models.Repository{
+		ID: "r1", Service: "github", Owner: "o", Name: "n", HTTPSURL: "u",
+	}, nil)
+	require.NoError(t, err)
+	assert.False(t, result.PassedQualityGate)
+
+	rq := content.NewReviewQueue(db.GeneratedContents())
+	pending, err := rq.ListPending(context.Background())
+	require.NoError(t, err)
+	require.Len(t, pending, 1)
+	assert.Equal(t, result.ID, pending[0].ID)
+	assert.False(t, pending[0].PassedQualityGate)
+}
+
+func TestQualityPipeline_FallbackChain(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	mockMetrics := &mockMetricsCollector{}
+
+	// Create two mock providers with different quality scores
+	provider1 := &mocks.MockLLMProvider{
+		GenerateContentFunc: func(_ context.Context, _ models.Prompt, _ models.GenerationOptions) (models.Content, error) {
+			return models.Content{
+				Title: "Low Quality", Body: "Low", QualityScore: 0.6, ModelUsed: "gpt-3", TokenCount: 80,
+			}, nil
+		},
+	}
+	provider2 := &mocks.MockLLMProvider{
+		GenerateContentFunc: func(_ context.Context, _ models.Prompt, _ models.GenerationOptions) (models.Content, error) {
+			return models.Content{
+				Title: "High Quality", Body: "High", QualityScore: 0.9, ModelUsed: "gpt-4", TokenCount: 120,
+			}, nil
+		},
+	}
+
+	// Create a fallback chain with threshold 0.8
+	chain := llm.NewFallbackChain([]llm.LLMProvider{provider1, provider2}, 0.8, mockMetrics)
+	budget := content.NewTokenBudget(100000)
+	gate := content.NewQualityGate(0.75) // gate threshold lower than chain threshold
+	gen := content.NewGenerator(chain, budget, gate, db.GeneratedContents(), mockMetrics, nil)
+
+	repo := models.Repository{
+		ID: "repo-fallback", Service: "github", Owner: "test", Name: "test",
+		HTTPSURL: "https://github.com/test/test", Description: "Test",
+	}
+
+	// Generate content: provider1 returns low quality (0.6) which is below chain threshold (0.8),
+	// so chain should try provider2, which returns high quality (0.9) above chain threshold,
+	// thus chain returns provider2's content.
+	result, err := gen.GenerateForRepository(ctx, repo, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "High Quality", result.Title)
+	assert.True(t, result.PassedQualityGate) // quality gate threshold is 0.75, 0.9 passes
+	assert.Equal(t, 0.9, result.QualityScore)
+
+	// Verify that metrics were recorded for provider1's low quality score (by chain)
+	// and for the final content (by generator). There should be 2 recordings.
+	require.Len(t, mockMetrics.recordedLLMQuality, 2)
+	// Chain records with empty repository, generator records with repository name.
+	// Find the chain recording (score 0.6, repository empty)
+	var chainRecord, genRecord struct {
+		repository string
+		score      float64
+	}
+	for _, rec := range mockMetrics.recordedLLMQuality {
+		if rec.repository == "" && rec.score == 0.6 {
+			chainRecord = rec
+		}
+		if rec.repository == repo.Name && rec.score == 0.9 {
+			genRecord = rec
+		}
+	}
+	assert.Equal(t, "", chainRecord.repository)
+	assert.Equal(t, 0.6, chainRecord.score)
+	assert.Equal(t, repo.Name, genRecord.repository)
+	assert.Equal(t, 0.9, genRecord.score)
+}
+
+func TestQualityPipeline_FallbackChain_AllBelowThreshold(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	mockMetrics := &mockMetricsCollector{}
+
+	// Both providers return content below chain threshold
+	provider1 := &mocks.MockLLMProvider{
+		GenerateContentFunc: func(_ context.Context, _ models.Prompt, _ models.GenerationOptions) (models.Content, error) {
+			return models.Content{
+				Title: "Low1", Body: "Low1", QualityScore: 0.5, ModelUsed: "gpt-3", TokenCount: 70,
+			}, nil
+		},
+	}
+	provider2 := &mocks.MockLLMProvider{
+		GenerateContentFunc: func(_ context.Context, _ models.Prompt, _ models.GenerationOptions) (models.Content, error) {
+			return models.Content{
+				Title: "Low2", Body: "Low2", QualityScore: 0.7, ModelUsed: "gpt-3", TokenCount: 90,
+			}, nil
+		},
+	}
+
+	chain := llm.NewFallbackChain([]llm.LLMProvider{provider1, provider2}, 0.8, mockMetrics)
+	budget := content.NewTokenBudget(100000)
+	gate := content.NewQualityGate(0.75) // gate threshold lower than chain threshold
+	gen := content.NewGenerator(chain, budget, gate, db.GeneratedContents(), mockMetrics, nil)
+
+	repo := models.Repository{
+		ID: "repo-all-low", Service: "github", Owner: "test", Name: "test",
+		HTTPSURL: "https://github.com/test/test", Description: "Test",
+	}
+
+	// Both providers below chain threshold, chain returns the best content (0.7)
+	// This content passes the quality gate (0.75? Actually 0.7 < 0.75, so fails)
+	result, err := gen.GenerateForRepository(ctx, repo, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "Low2", result.Title)
+	assert.Equal(t, 0.7, result.QualityScore)
+	assert.False(t, result.PassedQualityGate) // 0.7 < 0.75
+
+	// Should have recorded quality score for both providers? The chain records quality score for each below-threshold content.
+	// The chain records quality score when content is below threshold (line 59-61). It will record for provider1 (0.5) and provider2 (0.7).
+	// Additionally, the generator records quality score for the final selected content (0.7) with repository name.
+	// So total 3 recordings.
+	require.Len(t, mockMetrics.recordedLLMQuality, 3)
+	// Count chain recordings (repository empty) and generator recording (repository = repo.Name)
+	var chainRecords []float64
+	var genRecordScore float64
+	for _, rec := range mockMetrics.recordedLLMQuality {
+		if rec.repository == "" {
+			chainRecords = append(chainRecords, rec.score)
+		} else if rec.repository == repo.Name {
+			genRecordScore = rec.score
+		}
+	}
+	assert.ElementsMatch(t, []float64{0.5, 0.7}, chainRecords)
+	assert.Equal(t, 0.7, genRecordScore)
+
+	// Content should be stored with PassedQualityGate = false, review queue can list it
+	rq := content.NewReviewQueue(db.GeneratedContents())
+	pending, err := rq.ListPending(ctx)
+	require.NoError(t, err)
+	require.Len(t, pending, 1)
+	assert.Equal(t, result.ID, pending[0].ID)
+	assert.False(t, pending[0].PassedQualityGate)
+}
+
+func TestQualityPipeline_FallbackChain_WithCircuitBreaker(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	mockMetrics := &mockMetricsCollector{}
+
+	callCount := 0
+	provider1 := &mocks.MockLLMProvider{
+		GenerateContentFunc: func(_ context.Context, _ models.Prompt, _ models.GenerationOptions) (models.Content, error) {
+			callCount++
+			return models.Content{}, assert.AnError
+		},
+	}
+	provider2 := &mocks.MockLLMProvider{
+		GenerateContentFunc: func(_ context.Context, _ models.Prompt, _ models.GenerationOptions) (models.Content, error) {
+			return models.Content{
+				Title: "Fallback", Body: "Body", QualityScore: 0.9, ModelUsed: "gpt-4", TokenCount: 100,
+			}, nil
+		},
+	}
+
+	chain := llm.NewFallbackChain([]llm.LLMProvider{provider1, provider2}, 0.8, mockMetrics)
+	budget := content.NewTokenBudget(100000)
+	gate := content.NewQualityGate(0.75)
+	gen := content.NewGenerator(chain, budget, gate, db.GeneratedContents(), mockMetrics, nil)
+
+	repo := models.Repository{
+		ID: "repo-circuit", Service: "github", Owner: "test", Name: "test",
+		HTTPSURL: "https://github.com/test/test", Description: "Test",
+	}
+
+	// First three calls: provider1 fails, provider2 succeeds, breaker counts failures
+	for i := 0; i < 3; i++ {
+		result, err := gen.GenerateForRepository(ctx, repo, nil, nil)
+		require.NoError(t, err)
+		assert.Equal(t, "Fallback", result.Title)
+	}
+	assert.Equal(t, 3, callCount, "Provider1 should be called 3 times before breaker opens")
+
+	// After three failures, breaker should be open for provider1
+	// Next call should skip provider1 (call count unchanged) and use provider2
+	callCountBefore := callCount
+	result, err := gen.GenerateForRepository(ctx, repo, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "Fallback", result.Title)
+	assert.Equal(t, callCountBefore, callCount, "Provider1 should not be called when breaker is open")
+}
+
+// Dry-run report test belongs in dryrun_test.go, but keep it here for now.
+func TestDryRunReport(t *testing.T) {
+	report := &sync.DryRunReport{
+		TotalRepos: 5,
+		PlannedActions: []sync.PlannedAction{
+			{RepoName: "repo1", ChangeReason: "new commit", ContentType: "promo", Action: "create"},
+			{RepoName: "repo2", ChangeReason: "updated", ContentType: "promo", Action: "update"},
+		},
+		EstimatedAPICalls: 10,
+		EstimatedTokens:   5000,
+		EstimatedTime:     "30s",
+	}
+
+	output := sync.FormatDryRunReport(report, false)
+	assert.Contains(t, output, "Total repositories: 5")
+	assert.Contains(t, output, "repo1")
+
+	jsonOutput := sync.FormatDryRunReport(report, true)
+	assert.Contains(t, jsonOutput, `"total_repos": 5`)
+}

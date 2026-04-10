@@ -29,6 +29,11 @@ func NewGitFlicProvider(tokenManager *TokenManager) *GitFlicProvider {
 
 func (p *GitFlicProvider) Name() string { return "gitflic" }
 
+func (p *GitFlicProvider) SetBaseURL(baseURL string) error {
+	p.baseURL = baseURL
+	return nil
+}
+
 func (p *GitFlicProvider) Authenticate(ctx context.Context, credentials Credentials) error {
 	if credentials.PrimaryToken == "" {
 		return errors.InvalidCredentials("GitFlic token is required")
@@ -168,11 +173,31 @@ func (p *GitFlicProvider) GetRepositoryMetadata(ctx context.Context, repo models
 	repo.PrimaryLanguage = gfRepo.Language
 	repo.Stars = gfRepo.Stars
 	repo.Forks = gfRepo.Forks
+
+	// fetch latest commit SHA
+	commitsURL := fmt.Sprintf("%s/repos/%s/%s/commits?per_page=1", p.baseURL, repo.Owner, repo.Name)
+	req2, err := http.NewRequestWithContext(ctx, "GET", commitsURL, nil)
+	if err == nil {
+		req2.Header.Set("Authorization", "token "+p.tm.GetCurrentToken())
+		resp2, err := p.client.Do(req2)
+		if err == nil {
+			defer resp2.Body.Close()
+			if resp2.StatusCode == 200 {
+				var commits []struct {
+					Sha string `json:"sha"`
+				}
+				if json.NewDecoder(resp2.Body).Decode(&commits) == nil && len(commits) > 0 {
+					repo.LastCommitSHA = commits[0].Sha
+				}
+			}
+		}
+	}
+
 	return repo, nil
 }
 
 func (p *GitFlicProvider) DetectMirrors(ctx context.Context, repos []models.Repository) ([]models.MirrorMap, error) {
-	return nil, nil
+	return DetectMirrors(ctx, repos)
 }
 
 func (p *GitFlicProvider) CheckRepositoryState(ctx context.Context, repo models.Repository) (models.SyncState, error) {

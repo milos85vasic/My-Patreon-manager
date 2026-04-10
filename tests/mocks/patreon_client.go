@@ -8,13 +8,14 @@ import (
 
 type PatreonClient struct {
 	GetCampaignFunc      func(ctx context.Context) (models.Campaign, error)
-	CreatePostFunc       func(ctx context.Context, post models.Post) (models.Post, error)
-	UpdatePostFunc       func(ctx context.Context, post models.Post) (models.Post, error)
+	CreatePostFunc       func(ctx context.Context, post *models.Post) (*models.Post, error)
+	UpdatePostFunc       func(ctx context.Context, post *models.Post) (*models.Post, error)
 	DeletePostFunc       func(ctx context.Context, postID string) error
-	ListTiersFunc        func(ctx context.Context, campaignID string) ([]models.Tier, error)
+	ListTiersFunc        func(ctx context.Context) ([]models.Tier, error)
 	AssociateTiersFunc   func(ctx context.Context, postID string, tierIDs []string) error
 	RefreshTokenFunc     func(ctx context.Context) error
 	VerifyMembershipFunc func(ctx context.Context, patronID, campaignID string) ([]models.Tier, error)
+	CampaignIDFunc       func() string
 }
 
 func (m *PatreonClient) GetCampaign(ctx context.Context) (models.Campaign, error) {
@@ -24,18 +25,25 @@ func (m *PatreonClient) GetCampaign(ctx context.Context) (models.Campaign, error
 	return models.Campaign{}, nil
 }
 
-func (m *PatreonClient) CreatePost(ctx context.Context, post models.Post) (models.Post, error) {
+func (m *PatreonClient) CampaignID() string {
+	if m.CampaignIDFunc != nil {
+		return m.CampaignIDFunc()
+	}
+	return ""
+}
+
+func (m *PatreonClient) CreatePost(ctx context.Context, post *models.Post) (*models.Post, error) {
 	if m.CreatePostFunc != nil {
 		return m.CreatePostFunc(ctx, post)
 	}
-	return models.Post{}, nil
+	return nil, nil
 }
 
-func (m *PatreonClient) UpdatePost(ctx context.Context, post models.Post) (models.Post, error) {
+func (m *PatreonClient) UpdatePost(ctx context.Context, post *models.Post) (*models.Post, error) {
 	if m.UpdatePostFunc != nil {
 		return m.UpdatePostFunc(ctx, post)
 	}
-	return models.Post{}, nil
+	return nil, nil
 }
 
 func (m *PatreonClient) DeletePost(ctx context.Context, postID string) error {
@@ -45,9 +53,9 @@ func (m *PatreonClient) DeletePost(ctx context.Context, postID string) error {
 	return nil
 }
 
-func (m *PatreonClient) ListTiers(ctx context.Context, campaignID string) ([]models.Tier, error) {
+func (m *PatreonClient) ListTiers(ctx context.Context) ([]models.Tier, error) {
 	if m.ListTiersFunc != nil {
-		return m.ListTiersFunc(ctx, campaignID)
+		return m.ListTiersFunc(ctx)
 	}
 	return nil, nil
 }

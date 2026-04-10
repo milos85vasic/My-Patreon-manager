@@ -35,6 +35,7 @@ func ParseRepoignoreFile(path string) (*Repoignore, error) {
 	}
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
+	var rawPatterns []Pattern
 	for scanner.Scan() {
 		line := strings.TrimRight(scanner.Text(), " \t\r")
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -50,9 +51,18 @@ func ParseRepoignoreFile(path string) (*Repoignore, error) {
 		if strings.HasSuffix(pattern.Pattern, "/**") || strings.HasSuffix(pattern.Pattern, "/**/") {
 			pattern.IsRecursive = true
 		}
-		r.patterns = append(r.patterns, pattern)
+		rawPatterns = append(rawPatterns, pattern)
 	}
-	return r, scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	// Filter invalid patterns and log warnings
+	filtered, issues := filterValidPatterns(rawPatterns)
+	for _, issue := range issues {
+		slog.Warn("repoignore validation", "issue", issue)
+	}
+	r.patterns = filtered
+	return r, nil
 }
 
 func (r *Repoignore) Match(repoURL string) bool {
@@ -152,10 +162,6 @@ func (r *Repoignore) Reload() error {
 	if err != nil {
 		return err
 	}
-	issues := ValidatePatterns(newR.patterns)
-	for _, issue := range issues {
-		slog.Warn("repoignore validation", "issue", issue)
-	}
 	r.mu.Lock()
 	r.patterns = newR.patterns
 	r.mu.Unlock()
@@ -190,6 +196,45 @@ func ValidatePatterns(patterns []Pattern) []string {
 		}
 	}
 	return issues
+}
+
+// filterValidPatterns filters out invalid patterns and returns the filtered slice and any validation issues.
+// Invalid patterns are those with unclosed brackets or unmatched closing brackets.
+// Patterns with trailing whitespace are kept after trimming.
+func filterValidPatterns(patterns []Pattern) ([]Pattern, []string) {
+	var valid []Pattern
+	var issues []string
+	for _, p := range patterns {
+		raw := p.Raw
+		// Check for bracket errors
+		if strings.Contains(raw, "[") && !strings.Contains(raw, "]") {
+			issues = append(issues, "unclosed bracket: "+raw)
+			continue
+		}
+		if strings.Contains(raw, "]") && !strings.Contains(raw, "[") {
+			issues = append(issues, "unmatched closing bracket: "+raw)
+			continue
+		}
+		// Trim trailing whitespace from raw line and adjust pattern fields
+		trimmed := strings.TrimRight(raw, " \t")
+		if trimmed != raw {
+			issues = append(issues, "trailing whitespace: "+raw)
+			// Update the pattern with trimmed raw and pattern fields
+			p.Raw = trimmed
+			if p.IsNegation {
+				p.Pattern = trimmed[1:]
+			} else {
+				p.Pattern = trimmed
+			}
+			// Re-evaluate recursive suffix after trimming
+			p.IsRecursive = false
+			if strings.HasSuffix(p.Pattern, "/**") || strings.HasSuffix(p.Pattern, "/**/") {
+				p.IsRecursive = true
+			}
+		}
+		valid = append(valid, p)
+	}
+	return valid, issues
 }
 
 func normalizeForMatch(url string) string {

@@ -63,6 +63,30 @@ func TestIsRateLimited(t *testing.T) {
 	assert.False(t, errors.IsRateLimited(err2))
 
 	assert.False(t, errors.IsRateLimited(nil))
+	// Non-ProviderError error
+	assert.False(t, errors.IsRateLimited(assert.AnError))
+}
+
+func TestIsLockContention(t *testing.T) {
+	err := errors.LockContention("lock contention")
+	assert.True(t, errors.IsLockContention(err))
+	// Different ProviderError
+	err2 := errors.NetworkTimeout("timeout")
+	assert.False(t, errors.IsLockContention(err2))
+	// Non-ProviderError error
+	assert.False(t, errors.IsLockContention(assert.AnError))
+	assert.False(t, errors.IsLockContention(nil))
+}
+
+func TestIsInvalidCredentials(t *testing.T) {
+	err := errors.InvalidCredentials("bad creds")
+	assert.True(t, errors.IsInvalidCredentials(err))
+	// Different ProviderError
+	err2 := errors.NetworkTimeout("timeout")
+	assert.False(t, errors.IsInvalidCredentials(err2))
+	// Non-ProviderError error
+	assert.False(t, errors.IsInvalidCredentials(assert.AnError))
+	assert.False(t, errors.IsInvalidCredentials(nil))
 }
 
 func TestNewProviderError(t *testing.T) {

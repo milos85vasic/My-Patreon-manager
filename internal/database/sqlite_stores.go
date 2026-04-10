@@ -152,6 +152,12 @@ func (s *SQLiteSyncStateStore) UpdateCheckpoint(ctx context.Context, repoID, che
 	return err
 }
 
+func (s *SQLiteSyncStateStore) Update(ctx context.Context, state *models.SyncState) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE sync_states SET repository_id=?, patreon_post_id=?, last_sync_at=?, last_commit_sha=?, last_content_hash=?, status=?, last_failure_reason=?, grace_period_until=?, checkpoint=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+		state.RepositoryID, state.PatreonPostID, state.LastSyncAt, state.LastCommitSHA, state.LastContentHash, state.Status, state.LastFailureReason, state.GracePeriodUntil, state.Checkpoint, state.ID)
+	return err
+}
+
 func (s *SQLiteSyncStateStore) Delete(ctx context.Context, id string) error {
 	_, err := s.db.ExecContext(ctx, "DELETE FROM sync_states WHERE id=?", id)
 	return err
@@ -232,6 +238,11 @@ func (s *SQLiteMirrorMapStore) Delete(ctx context.Context, id string) error {
 	return err
 }
 
+func (s *SQLiteMirrorMapStore) DeleteAll(ctx context.Context) error {
+	_, err := s.db.ExecContext(ctx, "DELETE FROM mirror_maps")
+	return err
+}
+
 type SQLiteGeneratedContentStore struct {
 	db *sql.DB
 }
@@ -292,6 +303,12 @@ func (s *SQLiteGeneratedContentStore) ListByRepository(ctx context.Context, repo
 		contents = append(contents, c)
 	}
 	return contents, nil
+}
+
+func (s *SQLiteGeneratedContentStore) Update(ctx context.Context, c *models.GeneratedContent) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE generated_contents SET repository_id=?, content_type=?, format=?, title=?, body=?, quality_score=?, model_used=?, prompt_template=?, token_count=?, generation_attempts=?, passed_quality_gate=?, created_at=? WHERE id=?`,
+		c.RepositoryID, c.ContentType, c.Format, c.Title, c.Body, c.QualityScore, c.ModelUsed, c.PromptTemplate, c.TokenCount, c.GenerationAttempts, c.PassedQualityGate, c.CreatedAt, c.ID)
+	return err
 }
 
 type SQLiteContentTemplateStore struct {
@@ -387,6 +404,13 @@ func (s *SQLitePostStore) GetByRepositoryID(ctx context.Context, repoID string) 
 	}
 	json.Unmarshal(tierIDs, &p.TierIDs)
 	return p, nil
+}
+
+func (s *SQLitePostStore) Update(ctx context.Context, p *models.Post) error {
+	tierIDs, _ := json.Marshal(p.TierIDs)
+	_, err := s.db.ExecContext(ctx, `UPDATE posts SET campaign_id=?, repository_id=?, title=?, content=?, post_type=?, tier_ids=?, publication_status=?, published_at=?, is_manually_edited=?, content_hash=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+		p.CampaignID, p.RepositoryID, p.Title, p.Content, p.PostType, string(tierIDs), p.PublicationStatus, p.PublishedAt, p.IsManuallyEdited, p.ContentHash, p.ID)
+	return err
 }
 
 func (s *SQLitePostStore) UpdatePublicationStatus(ctx context.Context, id, status string) error {

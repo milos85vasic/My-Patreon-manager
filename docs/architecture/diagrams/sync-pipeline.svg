@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="500" viewBox="0 0 1200 500">
+  <style>
+    text {
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+    }
+    .stage {
+      fill: #e8f5e9;
+      stroke: #2e7d32;
+      stroke-width: 2;
+      rx: 8;
+    }
+    .decision {
+      fill: #fff3e0;
+      stroke: #ef6c00;
+      stroke-width: 2;
+      rx: 8;
+    }
+    .endpoint {
+      fill: #fce4ec;
+      stroke: #c2185b;
+      stroke-width: 2;
+      rx: 8;
+    }
+    .arrow {
+      stroke: #333;
+      stroke-width: 2;
+      marker-end: url(#arrowhead);
+    }
+    .arrow-dashed {
+      stroke: #666;
+      stroke-width: 2;
+      stroke-dasharray: 5,5;
+      marker-end: url(#arrowhead);
+    }
+    .arrow-error {
+      stroke: #d32f2f;
+      stroke-width: 2;
+      stroke-dasharray: 5,5;
+      marker-end: url(#arrowhead-error);
+    }
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#333"/>
+    </marker>
+    <marker id="arrowhead-error" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#d32f2f"/>
+    </marker>
+  </defs>
+  <!-- Title -->
+  <text x="600" y="30" text-anchor="middle" font-size="18" font-weight="bold">Sync Pipeline (8 Stages)</text>
+
+  <!-- Pipeline Stages -->
+  <g id="stages">
+    <!-- Stage 1 -->
+    <rect x="50" y="80" width="120" height="60" class="stage"/>
+    <text x="110" y="110" text-anchor="middle">1. Repository Discovery</text>
+    <text x="110" y="130" text-anchor="middle" font-size="10">(List repos from all providers)</text>
+
+    <!-- Stage 2 -->
+    <rect x="200" y="80" width="120" height="60" class="stage"/>
+    <text x="260" y="110" text-anchor="middle">2. Filtering</text>
+    <text x="260" y="130" text-anchor="middle" font-size="10">(.repoignore, CLI filters)</text>
+
+    <!-- Stage 3 -->
+    <rect x="350" y="80" width="120" height="60" class="stage"/>
+    <text x="410" y="110" text-anchor="middle">3. Mirror Detection</text>
+    <text x="410" y="130" text-anchor="middle" font-size="10">(Cross‑platform mirrors)</text>
+
+    <!-- Stage 4 -->
+    <rect x="500" y="80" width="120" height="60" class="stage"/>
+    <text x="560" y="110" text-anchor="middle">4. Content Generation</text>
+    <text x="560" y="130" text-anchor="middle" font-size="10">(LLM + templates)</text>
+
+    <!-- Stage 5 -->
+    <rect x="650" y="80" width="120" height="60" class="stage"/>
+    <text x="710" y="110" text-anchor="middle">5. Quality Gate</text>
+    <text x="710" y="130" text-anchor="middle" font-size="10">(Score &amp; threshold)</text>
+
+    <!-- Stage 6 -->
+    <rect x="800" y="80" width="120" height="60" class="stage"/>
+    <text x="860" y="110" text-anchor="middle">6. Review Queue</text>
+    <text x="860" y="130" text-anchor="middle" font-size="10">(Optional manual review)</text>
+
+    <!-- Stage 7 -->
+    <rect x="950" y="80" width="120" height="60" class="stage"/>
+    <text x="1010" y="110" text-anchor="middle">7. Format Rendering</text>
+    <text x="1010" y="130" text-anchor="middle" font-size="10">(Markdown/PDF/Video)</text>
+
+    <!-- Stage 8 -->
+    <rect x="1100" y="80" width="120" height="60" class="stage"/>
+    <text x="1160" y="110" text-anchor="middle">8. Publishing</text>
+    <text x="1160" y="130" text-anchor="middle" font-size="10">(Patreon API)</text>
+  </g>
+
+  <!-- Arrows between stages -->
+  <g id="arrows">
+    <line x1="170" y1="110" x2="200" y2="110" class="arrow"/>
+    <line x1="320" y1="110" x2="350" y2="110" class="arrow"/>
+    <line x1="470" y1="110" x2="500" y2="110" class="arrow"/>
+    <line x1="620" y1="110" x2="650" y2="110" class="arrow"/>
+    <line x1="770" y1="110" x2="800" y2="110" class="arrow"/>
+    <line x1="920" y1="110" x2="950" y2="110" class="arrow"/>
+    <line x1="1070" y1="110" x2="1100" y2="110" class="arrow"/>
+  </g>
+
+  <!-- Decision paths -->
+  <g id="decisions">
+    <!-- Quality gate decision -->
+    <rect x="650" y="180" width="120" height="60" class="decision"/>
+    <text x="710" y="210" text-anchor="middle">Quality Pass?</text>
+    <text x="710" y="230" text-anchor="middle" font-size="10">(Score ≥ threshold)</text>
+
+    <!-- Arrow from stage 5 to decision -->
+    <line x1="710" y1="140" x2="710" y2="180" class="arrow-dashed"/>
+
+    <!-- Yes path: to stage 6 -->
+    <line x1="710" y1="240" x2="710" y2="280" class="arrow"/>
+    <text x="740" y="260" text-anchor="start" font-size="11">Yes → Continue</text>
+
+    <!-- No path: to review queue or discard -->
+    <line x1="650" y1="210" x2="500" y2="210" class="arrow-error"/>
+    <text x="575" y="200" text-anchor="middle" font-size="11">No → Review Queue</text>
+
+    <!-- Review queue decision -->
+    <rect x="500" y="280" width="120" height="60" class="decision"/>
+    <text x="560" y="310" text-anchor="middle">Approve?</text>
+    <text x="560" y="330" text-anchor="middle" font-size="10">(Manual decision)</text>
+
+    <!-- Arrow from review queue to stage 6 -->
+    <line x1="560" y1="340" x2="560" y2="380" class="arrow"/>
+    <text x="590" y="360" text-anchor="start" font-size="11">Approve → Continue</text>
+
+    <!-- Reject path: discard -->
+    <line x1="500" y1="310" x2="350" y2="310" class="arrow-error"/>
+    <text x="425" y="300" text-anchor="middle" font-size="11">Reject → Discard</text>
+  </g>
+
+  <!-- Endpoints -->
+  <g id="endpoints">
+    <rect x="350" y="380" width="120" height="60" class="endpoint"/>
+    <text x="410" y="410" text-anchor="middle">Discarded</text>
+    <text x="410" y="430" text-anchor="middle" font-size="10">(No further action)</text>
+
+    <rect x="1100" y="380" width="120" height="60" class="endpoint"/>
+    <text x="1160" y="410" text-anchor="middle">Published</text>
+    <text x="1160" y="430" text-anchor="middle" font-size="10">(Post live on Patreon)</text>
+  </g>
+
+  <!-- Legend -->
+  <g id="legend">
+    <rect x="50" y="300" width="200" height="150" fill="#f5f5f5" stroke="#ccc" stroke-width="1" rx="4"/>
+    <text x="150" y="320" text-anchor="middle" font-size="14" font-weight="bold">Legend</text>
+    
+    <rect x="70" y="340" width="20" height="20" class="stage"/>
+    <text x="100" y="355" text-anchor="start">Pipeline stage</text>
+    
+    <rect x="70" y="370" width="20" height="20" class="decision"/>
+    <text x="100" y="385" text-anchor="start">Decision point</text>
+    
+    <rect x="70" y="400" width="20" height="20" class="endpoint"/>
+    <text x="100" y="415" text-anchor="start">Endpoint</text>
+    
+    <line x1="70" y1="430" x2="90" y2="430" class="arrow"/>
+    <text x="100" y="435" text-anchor="start">Normal flow</text>
+    
+    <line x1="70" y1="450" x2="90" y2="450" class="arrow-error"/>
+    <text x="100" y="455" text-anchor="start">Error/reject flow</text>
+  </g>
+</svg>

@@ -35,6 +35,9 @@ func NewFallbackChain(providers []LLMProvider, threshold float64, m metrics.Metr
 
 func (fc *FallbackChain) GenerateContent(ctx context.Context, prompt models.Prompt, opts models.GenerationOptions) (models.Content, error) {
 	var lastErr error
+	var bestContent models.Content
+	bestScore := -1.0
+
 	for i, provider := range fc.providers {
 		if fc.breakers[i].State() == metrics.CircuitOpen {
 			continue
@@ -56,8 +59,18 @@ func (fc *FallbackChain) GenerateContent(ctx context.Context, prompt models.Prom
 		if fc.metrics != nil {
 			fc.metrics.RecordLLMQualityScore("", content.QualityScore)
 		}
+		// store the best content so far (highest score)
+		if content.QualityScore > bestScore {
+			bestScore = content.QualityScore
+			bestContent = content
+		}
 		lastErr = fmt.Errorf("quality score %.2f below threshold %.2f for model %s",
 			content.QualityScore, fc.threshold, content.ModelUsed)
+	}
+
+	// If we have at least one content (even below threshold), return it
+	if bestScore >= 0 {
+		return bestContent, nil
 	}
 
 	return models.Content{}, fmt.Errorf("all providers failed: %w", lastErr)

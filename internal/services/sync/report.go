@@ -22,6 +22,20 @@ type PlannedAction struct {
 	Action       string `json:"action"`
 }
 
+func (r *DryRunReport) AddPlannedAction(repoName, changeReason, contentType, action string, apiCalls, tokens int, estimatedTime string) {
+	r.PlannedActions = append(r.PlannedActions, PlannedAction{
+		RepoName:     repoName,
+		ChangeReason: changeReason,
+		ContentType:  contentType,
+		Action:       action,
+	})
+	r.EstimatedAPICalls += apiCalls
+	r.EstimatedTokens += tokens
+	// EstimatedTime is a string, we can keep a simple default or parse and add.
+	// For simplicity, we'll just keep the existing EstimatedTime (overall estimate).
+	// The caller should set EstimatedTime at the end.
+}
+
 func FormatDryRunReport(report *DryRunReport, asJSON bool) string {
 	if asJSON {
 		data, _ := json.MarshalIndent(report, "", "  ")

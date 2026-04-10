@@ -15,12 +15,13 @@ import (
 )
 
 type Generator struct {
-	llm       llm.LLMProvider
-	budget    *TokenBudget
-	gate      *QualityGate
-	store     database.GeneratedContentStore
-	metrics   metrics.MetricsCollector
-	renderers []renderer.FormatRenderer
+	llm         llm.LLMProvider
+	budget      *TokenBudget
+	gate        *QualityGate
+	store       database.GeneratedContentStore
+	metrics     metrics.MetricsCollector
+	renderers   []renderer.FormatRenderer
+	reviewQueue *ReviewQueue
 }
 
 func NewGenerator(
@@ -41,17 +42,16 @@ func NewGenerator(
 	}
 }
 
+func (g *Generator) SetReviewQueue(rq *ReviewQueue) {
+	g.reviewQueue = rq
+}
+
 func (g *Generator) GenerateForRepository(
 	ctx context.Context,
 	repo models.Repository,
 	templates []models.ContentTemplate,
+	mirrorURLs []renderer.MirrorURL,
 ) (*models.GeneratedContent, error) {
-
-	if g.budget != nil {
-		if err := g.budget.CheckBudget(1000); err != nil {
-			return nil, fmt.Errorf("token budget: %w", err)
-		}
-	}
 
 	prompt := g.assemblePrompt(repo, templates)
 	opts := models.GenerationOptions{
@@ -60,13 +60,56 @@ func (g *Generator) GenerateForRepository(
 		Timeout:   30 * time.Second,
 	}
 
-	content, err := g.llm.GenerateContent(ctx, prompt, opts)
+	if g.budget != nil {
+		if err := g.budget.CheckBudget(opts.MaxTokens); err != nil {
+			return nil, fmt.Errorf("token budget insufficient for generation: %w", err)
+		}
+		if g.metrics != nil {
+			g.metrics.SetBudgetUtilization(g.budget.CurrentUtilization())
+		}
+	}
+
+	maxRetries := 3
+	baseDelay := 100 * time.Millisecond
+	var content models.Content
+	var err error
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		content, err = g.llm.GenerateContent(ctx, prompt, opts)
+		if err == nil {
+			break
+		}
+		// If context is done, don't retry
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("generate content: %w", err)
+		}
+		// If this is the last attempt, break and return error
+		if attempt == maxRetries {
+			break
+		}
+		// Exponential backoff
+		delay := time.Duration(1<<uint(attempt)) * baseDelay
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("generate content: %w", err)
+		case <-time.After(delay):
+			// continue retry
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("generate content: %w", err)
 	}
+	if g.metrics != nil {
+		g.metrics.RecordLLMTokens(content.ModelUsed, "total", content.TokenCount)
+	}
 
 	if g.budget != nil {
-		g.budget.CheckBudget(content.TokenCount)
+		// refund unused tokens if actual usage is less than reserved MaxTokens
+		if content.TokenCount < opts.MaxTokens {
+			g.budget.Refund(opts.MaxTokens - content.TokenCount)
+		}
+		if g.metrics != nil {
+			g.metrics.SetBudgetUtilization(g.budget.CurrentUtilization())
+		}
 	}
 
 	passed, score := g.gate.Evaluate(content)
@@ -89,7 +132,9 @@ func (g *Generator) GenerateForRepository(
 	}
 
 	for _, r := range g.renderers {
-		rendered, err := r.Render(ctx, content, renderer.RenderOptions{})
+		rendered, err := r.Render(ctx, content, renderer.RenderOptions{
+			MirrorURLs: mirrorURLs,
+		})
 		if err != nil {
 			continue
 		}

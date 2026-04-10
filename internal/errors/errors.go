@@ -63,3 +63,17 @@ func IsRateLimited(err error) bool {
 	}
 	return false
 }
+
+func IsLockContention(err error) bool {
+	if pe, ok := err.(ProviderError); ok {
+		return pe.Code() == "lock_contention"
+	}
+	return false
+}
+
+func IsInvalidCredentials(err error) bool {
+	if pe, ok := err.(ProviderError); ok {
+		return pe.Code() == "invalid_credentials"
+	}
+	return false
+}

@@ -6,8 +6,15 @@ import (
 	"github.com/milos85vasic/My-Patreon-Manager/internal/models"
 )
 
+type MirrorURL struct {
+	Service string
+	URL     string
+	Label   string
+}
+
 type RenderOptions struct {
 	TierMapping map[string]string
+	MirrorURLs  []MirrorURL
 }
 
 type FormatRenderer interface {
