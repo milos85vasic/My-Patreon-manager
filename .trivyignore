@@ -1,0 +1,2 @@
+# .trivyignore — CVE suppressions require an ADR in docs/adr/
+# Format: CVE-YYYY-NNNN (one per line). None as of Phase 0.
