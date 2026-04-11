@@ -1,0 +1,112 @@
+# docker-compose.security.yml — podman-compose compatible
+# Usage:
+#   podman-compose -f docker-compose.security.yml up -d sonarqube sonarqube-db
+#   podman-compose -f docker-compose.security.yml run --rm gosec
+#   podman-compose -f docker-compose.security.yml run --rm govulncheck
+#   podman-compose -f docker-compose.security.yml run --rm gitleaks
+#   podman-compose -f docker-compose.security.yml run --rm trivy-fs
+#   podman-compose -f docker-compose.security.yml run --rm semgrep
+#   podman-compose -f docker-compose.security.yml run --rm snyk
+# All one-shots read the repo via /workspace bind mount.
+
+version: "3.8"
+
+services:
+  sonarqube-db:
+    image: docker.io/library/postgres:16-alpine
+    environment:
+      POSTGRES_DB: sonarqube
+      POSTGRES_USER: sonar
+      POSTGRES_PASSWORD: ${SONARQUBE_DB_PASSWORD:-sonarpw}
+    volumes:
+      - sonarqube_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sonar"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  sonarqube:
+    image: docker.io/library/sonarqube:10-community
+    depends_on:
+      sonarqube-db:
+        condition: service_healthy
+    environment:
+      SONAR_JDBC_URL: jdbc:postgresql://sonarqube-db:5432/sonarqube
+      SONAR_JDBC_USERNAME: sonar
+      SONAR_JDBC_PASSWORD: ${SONARQUBE_DB_PASSWORD:-sonarpw}
+    ports:
+      - "9000:9000"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_logs:/opt/sonarqube/logs
+      - sonarqube_extensions:/opt/sonarqube/extensions
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9000/api/system/status | grep -q UP"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+
+  gosec:
+    image: docker.io/securego/gosec:latest
+    working_dir: /workspace
+    volumes:
+      - .:/workspace:z
+    entrypoint: ["/bin/gosec", "-fmt=json", "-out=/workspace/coverage/gosec.json", "./..."]
+
+  govulncheck:
+    image: docker.io/golang:1.26-alpine
+    working_dir: /workspace
+    volumes:
+      - .:/workspace:z
+    entrypoint:
+      - /bin/sh
+      - -c
+      - "apk add --no-cache git && go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck ./... > /workspace/coverage/govulncheck.txt"
+
+  gitleaks:
+    image: docker.io/zricethezav/gitleaks:v8.18.4
+    working_dir: /workspace
+    volumes:
+      - .:/workspace:z
+    entrypoint: ["gitleaks", "detect", "--source=/workspace", "--redact", "--report-path=/workspace/coverage/gitleaks.json"]
+
+  trivy-fs:
+    image: docker.io/aquasec/trivy:latest
+    working_dir: /workspace
+    volumes:
+      - .:/workspace:z
+      - trivy_cache:/root/.cache/trivy
+    entrypoint: ["trivy", "fs", "--severity=HIGH,CRITICAL", "--format=json", "-o", "/workspace/coverage/trivy.json", "/workspace"]
+
+  semgrep:
+    image: docker.io/returntocorp/semgrep:latest
+    working_dir: /workspace
+    volumes:
+      - .:/workspace:z
+    entrypoint: ["semgrep", "--config=/workspace/.semgrep/rules.yml", "--json", "--output=/workspace/coverage/semgrep.json", "/workspace"]
+
+  snyk:
+    image: docker.io/snyk/snyk:golang
+    working_dir: /workspace
+    volumes:
+      - .:/workspace:z
+      - snyk_cache:/root/.snyk
+    environment:
+      SNYK_TOKEN: ${SNYK_TOKEN}
+    entrypoint: ["snyk", "test", "--json-file-output=/workspace/coverage/snyk.json"]
+
+  syft:
+    image: docker.io/anchore/syft:latest
+    working_dir: /workspace
+    volumes:
+      - .:/workspace:z
+    entrypoint: ["syft", "dir:/workspace", "-o", "cyclonedx-json=/workspace/coverage/sbom.cdx.json"]
+
+volumes:
+  sonarqube_db:
+  sonarqube_data:
+  sonarqube_logs:
+  sonarqube_extensions:
+  trivy_cache:
+  snyk_cache:
