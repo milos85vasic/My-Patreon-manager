@@ -88,10 +88,14 @@ func (g *Generator) GenerateForRepository(
 		}
 		// Exponential backoff
 		delay := time.Duration(1<<uint(attempt)) * baseDelay
+		timer := time.NewTimer(delay)
 		select {
 		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
 			return nil, fmt.Errorf("generate content: %w", err)
-		case <-time.After(delay):
+		case <-timer.C:
 			// continue retry
 		}
 	}
