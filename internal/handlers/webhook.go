@@ -35,6 +35,10 @@ func (h *WebhookHandler) GitHubWebhook(c *gin.Context) {
 	eventID := c.GetHeader("X-GitHub-Delivery")
 	eventType := c.GetHeader("X-GitHub-Event")
 
+	if h.logger != nil {
+		h.logger.Debug("GitHubWebhook invoked")
+	}
+
 	if h.dedup != nil {
 		if h.dedup.IsDuplicate(eventID) {
 			c.JSON(200, gin.H{"status": "duplicate_ignored"})

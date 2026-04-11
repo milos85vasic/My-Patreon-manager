@@ -33,13 +33,15 @@ func TestVideoPipeline_Render_Disabled(t *testing.T) {
 }
 
 func TestVideoPipeline_Render_Enabled(t *testing.T) {
+	// Temporarily set PATH empty to ensure ffmpeg not found
+	t.Setenv("PATH", "")
 	p := NewVideoPipeline(true)
 	content := models.Content{Title: "Test", Body: "Body"}
 	opts := RenderOptions{}
 	result, err := p.Render(context.Background(), content, opts)
 	assert.Error(t, err)
 	assert.Nil(t, result)
-	assert.Contains(t, err.Error(), "video pipeline not yet implemented")
+	assert.Contains(t, err.Error(), "ffmpeg not found")
 }
 
 func TestVideoPipeline_CheckDiskSpace(t *testing.T) {

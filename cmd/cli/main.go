@@ -191,7 +191,21 @@ func runSync(ctx context.Context, orch orchestrator, opts syncsvc.SyncOptions, l
 }
 
 func runScheduled(ctx context.Context, orch orchestrator, opts syncsvc.SyncOptions, schedule string, logger *slog.Logger) {
-	logger.Info("scheduled mode not yet implemented", slog.String("schedule", schedule))
+	alert := &syncsvc.LogAlert{}
+	scheduler := syncsvc.NewScheduler(orch, opts, alert, logger)
+	if err := scheduler.Start(schedule); err != nil {
+		logger.Error("failed to start scheduler", slog.String("error", err.Error()))
+		osExit(1)
+	}
+	logger.Info("scheduler started", slog.String("schedule", schedule))
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	<-sigCh
+	logger.Info("shutdown signal received, stopping scheduler")
+	scheduler.Stop()
+	logger.Info("scheduler stopped")
 }
 
 func parseLogLevel(level string) slog.Level {
