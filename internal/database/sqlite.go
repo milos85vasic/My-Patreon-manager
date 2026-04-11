@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"path/filepath"
@@ -269,20 +270,29 @@ func (db *SQLiteDB) AcquireLock(ctx context.Context, lockInfo SyncLock) error {
 	var existing int
 	err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM sync_locks").Scan(&existing)
 	if err != nil {
-		return err
+		return fmt.Errorf("sqlite: scan lock count: %w", err)
 	}
 	if existing > 0 {
 		var expiresAt string
-		tx.QueryRowContext(ctx, "SELECT expires_at FROM sync_locks LIMIT 1").Scan(&expiresAt)
+		if err := tx.QueryRowContext(ctx, "SELECT expires_at FROM sync_locks LIMIT 1").Scan(&expiresAt); err != nil {
+			if !errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("sqlite: scan lock row: %w", err)
+			}
+			// No existing lock row — treat as absent expiry.
+			expiresAt = ""
+		}
 		return fmt.Errorf("lock already held: %s", expiresAt)
 	}
 	_, err = tx.ExecContext(ctx,
 		"INSERT INTO sync_locks (id, pid, hostname, started_at, expires_at) VALUES (?, ?, ?, ?, ?)",
 		lockInfo.ID, lockInfo.PID, lockInfo.Hostname, lockInfo.StartedAt, lockInfo.ExpiresAt)
 	if err != nil {
-		return err
+		return fmt.Errorf("sqlite: insert lock: %w", err)
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("sqlite: commit lock tx: %w", err)
+	}
+	return nil
 }
 
 func (db *SQLiteDB) ReleaseLock(ctx context.Context) error {
