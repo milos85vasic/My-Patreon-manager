@@ -259,30 +259,28 @@ func TestWebhookAuth(t *testing.T) {
 }
 
 func TestIPRateLimiter_CleanupStale(t *testing.T) {
+	// Fresh entries (age below maxAge) are preserved.
 	limiter := NewIPRateLimiter(1, 5) // rate 1 per second, burst 5
 	ip := "192.168.1.1"
 	l := limiter.GetLimiter(ip)
-	// Consume 2 tokens
 	assert.True(t, l.Allow())
 	assert.True(t, l.Allow())
-	// Tokens left should be 3, not equal to burst (5), so not cleaned up
 	limiter.CleanupStale(time.Hour)
-	// Use reflection to check if ip still exists in limiters map
 	rv := reflect.ValueOf(limiter).Elem()
 	limitersField := rv.FieldByName("limiters")
-	key := reflect.ValueOf(ip)
-	entry := limitersField.MapIndex(key)
-	assert.True(t, entry.IsValid(), "limiter should not be removed")
+	entry := limitersField.MapIndex(reflect.ValueOf(ip))
+	assert.True(t, entry.IsValid(), "fresh limiter should not be removed")
 
-	// Create new limiter with burst 1, no tokens consumed
-	limiter2 := NewIPRateLimiter(1, 1)
+	// Entries older than maxAge are evicted (maxAge=0 sweeps using TTL).
+	limiter2 := NewIPRateLimiter(1, 1, 1*time.Nanosecond)
 	ip2 := "192.168.1.2"
 	_ = limiter2.GetLimiter(ip2)
-	limiter2.CleanupStale(time.Hour)
+	time.Sleep(5 * time.Millisecond)
+	limiter2.CleanupStale(0)
 	rv2 := reflect.ValueOf(limiter2).Elem()
 	limitersField2 := rv2.FieldByName("limiters")
 	entry2 := limitersField2.MapIndex(reflect.ValueOf(ip2))
-	assert.False(t, entry2.IsValid(), "limiter should be removed")
+	assert.False(t, entry2.IsValid(), "stale limiter should be removed")
 }
 
 func TestWebhookAuth_ErrorReadingBody(t *testing.T) {
