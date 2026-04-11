@@ -1,9 +1,11 @@
 package middleware
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"io"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -36,8 +38,16 @@ func WebhookAuth(secret string) gin.HandlerFunc {
 		service := c.Param("service")
 		switch service {
 		case "github":
+			// Read the request body for signature validation
+			body, err := io.ReadAll(c.Request.Body)
+			if err != nil {
+				c.AbortWithStatusJSON(401, gin.H{"error": "invalid request body"})
+				return
+			}
+			// Restore the body for subsequent handlers
+			c.Request.Body = io.NopCloser(bytes.NewBuffer(body))
 			signature := c.GetHeader("X-Hub-Signature-256")
-			if !ValidateGitHubSignature(nil, signature, secret) {
+			if !ValidateGitHubSignature(body, signature, secret) {
 				c.AbortWithStatusJSON(401, gin.H{"error": "invalid signature"})
 				return
 			}

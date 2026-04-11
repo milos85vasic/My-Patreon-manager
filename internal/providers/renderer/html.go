@@ -89,7 +89,7 @@ func markdownToHTML(md string) string {
 func sanitizeScripts(htmlContent string) string {
 	scriptTag := regexp.MustCompile(`(?i)<script[^>]*>.*?</script>`)
 	htmlContent = scriptTag.ReplaceAllString(htmlContent, "")
-	eventHandler := regexp.MustCompile(`(?i)\s*on\w+\s*=\s*["'][^"']*["']`)
+	eventHandler := regexp.MustCompile(`(?i)\s*on\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)`)
 	htmlContent = eventHandler.ReplaceAllString(htmlContent, "")
 	return htmlContent
 }

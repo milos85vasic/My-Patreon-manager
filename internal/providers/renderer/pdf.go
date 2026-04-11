@@ -8,6 +8,8 @@ import (
 	"github.com/milos85vasic/My-Patreon-Manager/internal/models"
 )
 
+var newHTMLRenderer func() FormatRenderer = func() FormatRenderer { return NewHTMLRenderer() }
+
 type PDFRenderer struct{}
 
 func NewPDFRenderer() *PDFRenderer { return &PDFRenderer{} }
@@ -19,7 +21,7 @@ func (r *PDFRenderer) SupportedContentTypes() []string {
 }
 
 func (r *PDFRenderer) Render(ctx context.Context, content models.Content, opts RenderOptions) ([]byte, error) {
-	htmlRenderer := NewHTMLRenderer()
+	htmlRenderer := newHTMLRenderer()
 	htmlContent, err := htmlRenderer.Render(ctx, content, opts)
 	if err != nil {
 		return nil, fmt.Errorf("render html for pdf: %w", err)
