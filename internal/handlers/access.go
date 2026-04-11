@@ -1,21 +1,30 @@
 package handlers
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/milos85vasic/My-Patreon-Manager/internal/services/access"
 )
 
+// interfaces for mocking
+type tierGater interface {
+	VerifyAccess(ctx context.Context, patronID, contentID, requiredTier string, patronTiers []string) (bool, string, error)
+}
+
+type signedURLGenerator interface {
+	VerifySignedURL(token, contentID, subscriberID string, expires int64) bool
+}
+
 type AccessHandler struct {
-	gater  *access.TierGater
-	urlGen *access.SignedURLGenerator
+	gater  tierGater
+	urlGen signedURLGenerator
 	logger *slog.Logger
 }
 
-func NewAccessHandler(gater *access.TierGater, urlGen *access.SignedURLGenerator, logger *slog.Logger) *AccessHandler {
+func NewAccessHandler(gater tierGater, urlGen signedURLGenerator, logger *slog.Logger) *AccessHandler {
 	return &AccessHandler{gater: gater, urlGen: urlGen, logger: logger}
 }
 

@@ -21,6 +21,21 @@ import (
 	syncsvc "github.com/milos85vasic/My-Patreon-Manager/internal/services/sync"
 )
 
+var osExit = os.Exit
+var newConfig = config.NewConfig
+var newDatabase = database.NewDatabase
+var newPromMetrics = metrics.NewPrometheusCollector
+
+type orchestratorFactory func(db database.Database, providers []git.RepositoryProvider, patreonClient patreon.Provider, generator *content.Generator, m metrics.MetricsCollector, logger *slog.Logger, tierMapper *content.TierMapper) orchestrator
+
+var newOrchestrator orchestratorFactory = func(db database.Database, providers []git.RepositoryProvider, patreonClient patreon.Provider, generator *content.Generator, m metrics.MetricsCollector, logger *slog.Logger, tierMapper *content.TierMapper) orchestrator {
+	return syncsvc.NewOrchestrator(db, providers, patreonClient, generator, m, logger, tierMapper)
+}
+
+type orchestrator interface {
+	Run(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error)
+}
+
 func main() {
 	var (
 		configFile string
@@ -47,7 +62,7 @@ func main() {
 	if len(args) == 0 {
 		fmt.Println("Usage: patreon-manager <command> [options]")
 		fmt.Println("Commands: sync, scan, generate, validate, publish")
-		os.Exit(1)
+		osExit(1)
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -55,32 +70,32 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
-	cfg := config.NewConfig()
+	cfg := newConfig()
 	cfg.LoadFromEnv()
 
 	if args[0] == "validate" {
 		if err := cfg.Validate(); err != nil {
 			logger.Error("config validation failed", slog.String("error", err.Error()))
-			os.Exit(1)
+			osExit(1)
 		}
 		logger.Info("config valid")
 		return
 	}
 
-	db := database.NewDatabase(cfg.DBDriver, cfg.DSN())
+	db := newDatabase(cfg.DBDriver, cfg.DSN())
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := db.Connect(ctx, cfg.DSN()); err != nil {
 		logger.Error("database connect failed", slog.String("error", err.Error()))
-		os.Exit(1)
+		osExit(1)
 	}
 	defer db.Close()
 	if err := db.Migrate(ctx); err != nil {
 		logger.Error("migration failed", slog.String("error", err.Error()))
-		os.Exit(1)
+		osExit(1)
 	}
 
-	promMetrics := metrics.NewPrometheusCollector()
+	promMetrics := newPromMetrics()
 
 	providers := setupProviders(cfg)
 	oauth := patreon.NewOAuth2Manager(cfg.PatreonClientID, cfg.PatreonClientSecret, cfg.PatreonAccessToken, cfg.PatreonRefreshToken)
@@ -100,7 +115,7 @@ func main() {
 	reviewQueue := content.NewReviewQueue(store)
 	generator.SetReviewQueue(reviewQueue)
 
-	orchestrator := syncsvc.NewOrchestrator(db, providers, patreonClient, generator, promMetrics, logger, nil)
+	orchestrator := newOrchestrator(db, providers, patreonClient, generator, promMetrics, logger, nil)
 
 	syncOpts := syncsvc.SyncOptions{
 		DryRun: dryRun,
@@ -126,7 +141,7 @@ func main() {
 		runSync(ctx, orchestrator, syncOpts, logger)
 	default:
 		fmt.Printf("Unknown command: %s\n", args[0])
-		os.Exit(1)
+		osExit(1)
 	}
 }
 
@@ -151,7 +166,7 @@ func setupProviders(cfg *config.Config) []git.RepositoryProvider {
 	return providers
 }
 
-func runSync(ctx context.Context, orch *syncsvc.Orchestrator, opts syncsvc.SyncOptions, logger *slog.Logger) {
+func runSync(ctx context.Context, orch orchestrator, opts syncsvc.SyncOptions, logger *slog.Logger) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -166,7 +181,7 @@ func runSync(ctx context.Context, orch *syncsvc.Orchestrator, opts syncsvc.SyncO
 	result, err := orch.Run(ctx, opts)
 	if err != nil {
 		logger.Error("sync failed", slog.String("error", err.Error()))
-		os.Exit(1)
+		osExit(1)
 	}
 	logger.Info("sync result",
 		slog.Int("processed", result.Processed),
@@ -175,7 +190,7 @@ func runSync(ctx context.Context, orch *syncsvc.Orchestrator, opts syncsvc.SyncO
 	)
 }
 
-func runScheduled(ctx context.Context, orch *syncsvc.Orchestrator, opts syncsvc.SyncOptions, schedule string, logger *slog.Logger) {
+func runScheduled(ctx context.Context, orch orchestrator, opts syncsvc.SyncOptions, schedule string, logger *slog.Logger) {
 	logger.Info("scheduled mode not yet implemented", slog.String("schedule", schedule))
 }
 
