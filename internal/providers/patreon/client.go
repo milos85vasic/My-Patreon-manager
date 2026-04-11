@@ -13,6 +13,7 @@ import (
 
 	"github.com/milos85vasic/My-Patreon-Manager/internal/errors"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/models"
+	"github.com/sony/gobreaker"
 )
 
 type Client struct {
@@ -21,6 +22,8 @@ type Client struct {
 	client          *http.Client
 	publicationMode string
 	baseURL         string
+	maxRetries      int
+	cb              *gobreaker.CircuitBreaker
 }
 
 type Provider interface {
@@ -32,13 +35,44 @@ type Provider interface {
 }
 
 func NewClient(oauth *OAuth2Manager, campaignID string) *Client {
-	return &Client{
+	c := &Client{
 		oauth:           oauth,
 		campaignID:      campaignID,
 		client:          &http.Client{Timeout: 30 * time.Second},
 		publicationMode: "draft",
 		baseURL:         "https://www.patreon.com/api/oauth2/v2",
+		maxRetries:      3,
 	}
+	c.cb = gobreaker.NewCircuitBreaker(gobreaker.Settings{
+		Name:        "patreon",
+		MaxRequests: 1,
+		Interval:    60 * time.Second,
+		Timeout:     30 * time.Second,
+		ReadyToTrip: func(counts gobreaker.Counts) bool {
+			return counts.ConsecutiveFailures >= 5
+		},
+	})
+	return c
+}
+
+// SetMaxRetries overrides the default per-call retry budget used by
+// doWithBackoff. Primarily used by tests to make circuit-breaker math
+// deterministic.
+func (c *Client) SetMaxRetries(n int) {
+	if n < 1 {
+		n = 1
+	}
+	c.maxRetries = n
+}
+
+// execMutation wraps a mutating API call with the circuit breaker so
+// consecutive upstream failures (5xx, rate limits, network errors) short-
+// circuit instead of flooding the Patreon API.
+func (c *Client) execMutation(fn func() error) error {
+	_, err := c.cb.Execute(func() (interface{}, error) {
+		return nil, fn()
+	})
+	return err
 }
 
 func (c *Client) SetPublicationMode(mode string) {
@@ -114,6 +148,11 @@ func (c *Client) doRequest(ctx context.Context, method, url string, body interfa
 		return nil, errors.RateLimited("patreon rate limited", time.Now().Add(retryAfter))
 	}
 
+	if resp.StatusCode >= 500 {
+		resp.Body.Close()
+		return nil, errors.NetworkTimeout(fmt.Sprintf("patreon upstream error: %d", resp.StatusCode))
+	}
+
 	return resp, nil
 }
 
@@ -138,7 +177,7 @@ func (c *Client) doWithBackoff(ctx context.Context, method, url string, body int
 
 func (c *Client) GetCampaign(ctx context.Context) (*models.Campaign, error) {
 	url := c.buildURL(fmt.Sprintf("/campaigns/%s?fields[campaign]=name,summary,patron_count", c.campaignID))
-	resp, err := c.doWithBackoff(ctx, "GET", url, nil, 3)
+	resp, err := c.doWithBackoff(ctx, "GET", url, nil, c.maxRetries)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +206,7 @@ func (c *Client) GetCampaign(ctx context.Context) (*models.Campaign, error) {
 
 func (c *Client) ListTiers(ctx context.Context) ([]models.Tier, error) {
 	url := c.buildURL(fmt.Sprintf("/campaigns/%s/tiers?fields[tier]=title,description,amount_cents,patron_count", c.campaignID))
-	resp, err := c.doWithBackoff(ctx, "GET", url, nil, 3)
+	resp, err := c.doWithBackoff(ctx, "GET", url, nil, c.maxRetries)
 	if err != nil {
 		return nil, err
 	}
@@ -203,6 +242,16 @@ func (c *Client) ListTiers(ctx context.Context) ([]models.Tier, error) {
 }
 
 func (c *Client) CreatePost(ctx context.Context, post *models.Post) (*models.Post, error) {
+	err := c.execMutation(func() error {
+		return c.createPostRaw(ctx, post)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return post, nil
+}
+
+func (c *Client) createPostRaw(ctx context.Context, post *models.Post) error {
 	url := c.buildURL("/posts")
 	body := map[string]interface{}{
 		"data": map[string]interface{}{
@@ -222,9 +271,9 @@ func (c *Client) CreatePost(ctx context.Context, post *models.Post) (*models.Pos
 		},
 	}
 
-	resp, err := c.doWithBackoff(ctx, "POST", url, body, 3)
+	resp, err := c.doWithBackoff(ctx, "POST", url, body, c.maxRetries)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer resp.Body.Close()
 
@@ -234,14 +283,24 @@ func (c *Client) CreatePost(ctx context.Context, post *models.Post) (*models.Pos
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decode create post: %w", err)
+		return fmt.Errorf("decode create post: %w", err)
 	}
 	post.ID = result.Data.ID
 	post.PublicationStatus = c.publicationMode
-	return post, nil
+	return nil
 }
 
 func (c *Client) UpdatePost(ctx context.Context, post *models.Post) (*models.Post, error) {
+	err := c.execMutation(func() error {
+		return c.updatePostRaw(ctx, post)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return post, nil
+}
+
+func (c *Client) updatePostRaw(ctx context.Context, post *models.Post) error {
 	url := c.buildURL(fmt.Sprintf("/posts/%s", post.ID))
 	body := map[string]interface{}{
 		"data": map[string]interface{}{
@@ -254,17 +313,23 @@ func (c *Client) UpdatePost(ctx context.Context, post *models.Post) (*models.Pos
 		},
 	}
 
-	resp, err := c.doWithBackoff(ctx, "PATCH", url, body, 3)
+	resp, err := c.doWithBackoff(ctx, "PATCH", url, body, c.maxRetries)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer resp.Body.Close()
-	return post, nil
+	return nil
 }
 
 func (c *Client) DeletePost(ctx context.Context, postID string) error {
+	return c.execMutation(func() error {
+		return c.deletePostRaw(ctx, postID)
+	})
+}
+
+func (c *Client) deletePostRaw(ctx context.Context, postID string) error {
 	url := c.buildURL(fmt.Sprintf("/posts/%s", postID))
-	resp, err := c.doWithBackoff(ctx, "DELETE", url, nil, 3)
+	resp, err := c.doWithBackoff(ctx, "DELETE", url, nil, c.maxRetries)
 	if err != nil {
 		return err
 	}
@@ -273,6 +338,12 @@ func (c *Client) DeletePost(ctx context.Context, postID string) error {
 }
 
 func (c *Client) AssociateTiers(ctx context.Context, postID string, tierIDs []string) error {
+	return c.execMutation(func() error {
+		return c.associateTiersRaw(ctx, postID, tierIDs)
+	})
+}
+
+func (c *Client) associateTiersRaw(ctx context.Context, postID string, tierIDs []string) error {
 	url := c.buildURL(fmt.Sprintf("/posts/%s", postID))
 	tierData := make([]map[string]interface{}, len(tierIDs))
 	for i, id := range tierIDs {
@@ -288,7 +359,7 @@ func (c *Client) AssociateTiers(ctx context.Context, postID string, tierIDs []st
 		},
 	}
 
-	resp, err := c.doWithBackoff(ctx, "PATCH", url, body, 3)
+	resp, err := c.doWithBackoff(ctx, "PATCH", url, body, c.maxRetries)
 	if err != nil {
 		return err
 	}
