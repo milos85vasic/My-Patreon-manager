@@ -1,0 +1,49 @@
+# .gitleaks.toml — tailored to this repo's redaction rules from CLAUDE.md
+title = "My Patreon Manager gitleaks config"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "patreon-access-token"
+description = "Patreon access token"
+regex = '''(?i)patreon.{0,30}?['"][a-zA-Z0-9]{32,}['"]'''
+tags = ["key", "patreon"]
+
+[[rules]]
+id = "github-pat"
+description = "GitHub personal access token"
+regex = '''ghp_[0-9A-Za-z]{36}'''
+tags = ["key", "github"]
+
+[[rules]]
+id = "gitlab-pat"
+description = "GitLab personal access token"
+regex = '''glpat-[0-9A-Za-z\-_]{20}'''
+tags = ["key", "gitlab"]
+
+[[rules]]
+id = "sonar-token"
+description = "SonarQube token"
+regex = '''(?i)sonar.{0,30}?['"][0-9a-f]{40}['"]'''
+tags = ["key", "sonar"]
+
+[[rules]]
+id = "snyk-token"
+description = "Snyk token"
+regex = '''(?i)snyk.{0,30}?['"][0-9a-f\-]{36}['"]'''
+tags = ["key", "snyk"]
+
+[allowlist]
+description = "Placeholders and test fixtures"
+regexes = [
+  '''your_client_id_here''',
+  '''your_client_secret_here''',
+  '''test-access-token''',
+  '''\*\*\*''',
+]
+paths = [
+  '''\.env\.example$''',
+  '''docs/.*\.md$''',
+  '''.*_test\.go$''',
+]
