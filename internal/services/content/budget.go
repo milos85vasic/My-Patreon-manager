@@ -23,8 +23,11 @@ func NewTokenBudget(dailyLimit int) *TokenBudget {
 }
 
 func (t *TokenBudget) CheckBudget(tokensNeeded int) error {
+	// Capture decision + callback references under the lock, then release
+	// the lock before invoking callbacks. Running callbacks while holding
+	// the mutex could deadlock if a callback re-enters the budget (e.g.
+	// calls Remaining/Refund/CheckBudget) or blocks on slow I/O.
 	t.mu.Lock()
-	defer t.mu.Unlock()
 
 	if time.Now().After(t.ResetAt) {
 		t.CurrentUsage = 0
@@ -33,20 +36,39 @@ func (t *TokenBudget) CheckBudget(tokensNeeded int) error {
 
 	usedPct := float64(t.CurrentUsage+tokensNeeded) / float64(t.DailyLimit) * 100
 
-	if usedPct >= 80 && usedPct < 100 {
-		if t.OnSoftAlert != nil {
-			t.OnSoftAlert(usedPct)
-		}
-	}
+	fireSoft := usedPct >= 80 && usedPct < 100
+	fireHard := usedPct > 100
 
-	if usedPct > 100 {
-		if t.OnHardStop != nil {
-			t.OnHardStop()
-		}
-		return fmt.Errorf("token budget exceeded: need %d tokens, have %d/%d", tokensNeeded, t.CurrentUsage, t.DailyLimit)
-	}
+	var (
+		exceedErr     error
+		currentUsage  = t.CurrentUsage
+		dailyLimit    = t.DailyLimit
+		onSoftAlert   = t.OnSoftAlert
+		onHardStop    = t.OnHardStop
+	)
 
-	t.CurrentUsage += tokensNeeded
+	if fireHard {
+		exceedErr = fmt.Errorf("token budget exceeded: need %d tokens, have %d/%d", tokensNeeded, currentUsage, dailyLimit)
+	} else {
+		// Only record usage when not exceeding the hard limit, preserving
+		// the original semantics where a failed CheckBudget does not
+		// consume tokens.
+		t.CurrentUsage += tokensNeeded
+	}
+	t.mu.Unlock()
+
+	// Invoke callbacks outside the lock. Hard stop takes precedence over
+	// soft alert, matching the original behaviour where the two branches
+	// were mutually exclusive (usedPct >= 80 && < 100 vs > 100).
+	if fireHard {
+		if onHardStop != nil {
+			onHardStop()
+		}
+		return exceedErr
+	}
+	if fireSoft && onSoftAlert != nil {
+		onSoftAlert(usedPct)
+	}
 	return nil
 }
 

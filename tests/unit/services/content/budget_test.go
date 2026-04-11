@@ -3,6 +3,7 @@ package content_test
 import (
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/milos85vasic/My-Patreon-Manager/internal/services/content"
 	"github.com/stretchr/testify/assert"
@@ -91,4 +92,70 @@ func TestTokenBudget_ConcurrentAccess(t *testing.T) {
 	wg.Wait()
 
 	assert.LessOrEqual(t, budget.CurrentUsage, 100000)
+}
+
+// TestTokenBudget_SoftAlertCallbackDoesNotDeadlock asserts that the soft
+// alert callback is invoked after the internal mutex has been released.
+// A callback that re-enters the budget (via another CheckBudget call) must
+// not deadlock — it should be able to acquire the lock immediately.
+func TestTokenBudget_SoftAlertCallbackDoesNotDeadlock(t *testing.T) {
+	budget := content.NewTokenBudget(10000)
+	reentered := make(chan struct{})
+	budget.OnSoftAlert = func(pct float64) {
+		// Re-enter the budget from within the callback. If CheckBudget still
+		// holds the mutex, this call will block forever.
+		done := make(chan struct{})
+		go func() {
+			_ = budget.Remaining()
+			_ = budget.CurrentUtilization()
+			budget.Refund(0)
+			close(done)
+		}()
+		select {
+		case <-done:
+			close(reentered)
+		case <-time.After(1 * time.Second):
+			t.Error("re-entry from OnSoftAlert deadlocked — budget still holds its mutex")
+		}
+	}
+
+	_ = budget.CheckBudget(8500) // crosses 80% soft threshold
+
+	select {
+	case <-reentered:
+		// ok
+	case <-time.After(2 * time.Second):
+		t.Fatal("OnSoftAlert callback did not run or did not complete")
+	}
+}
+
+// TestTokenBudget_HardStopCallbackDoesNotDeadlock asserts the hard-stop
+// callback is also invoked after releasing the mutex.
+func TestTokenBudget_HardStopCallbackDoesNotDeadlock(t *testing.T) {
+	budget := content.NewTokenBudget(10000)
+	reentered := make(chan struct{})
+	budget.OnHardStop = func() {
+		done := make(chan struct{})
+		go func() {
+			_ = budget.Remaining()
+			_ = budget.CurrentUtilization()
+			budget.Refund(0)
+			close(done)
+		}()
+		select {
+		case <-done:
+			close(reentered)
+		case <-time.After(1 * time.Second):
+			t.Error("re-entry from OnHardStop deadlocked — budget still holds its mutex")
+		}
+	}
+
+	_ = budget.CheckBudget(10001) // exceeds hard limit
+
+	select {
+	case <-reentered:
+		// ok
+	case <-time.After(2 * time.Second):
+		t.Fatal("OnHardStop callback did not run or did not complete")
+	}
 }
