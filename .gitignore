@@ -28,6 +28,18 @@ patreon-manager
 *.prof
 coverage.txt
 
+# Phase 0 coverage artifacts
+/coverage/coverage.html
+/coverage/coverage.func.txt
+/coverage/coverage.out
+/coverage/coverdiff
+/coverage/golangci-lint.out
+/coverage/golangci-lint.err
+/coverage/semgrep.txt
+/coverage/semgrep.err
+/coverage/gitleaks.json
+/coverage/gitleaks.out
+
 # Dependency directories
 /vendor/
 

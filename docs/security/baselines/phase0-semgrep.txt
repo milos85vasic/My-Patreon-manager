@@ -1,0 +1,887 @@
+                    
+                    
+┌──────────────────┐
+│ 95 Code Findings │
+└──────────────────┘
+                                     
+    internal/providers/git/gitflic.go
+   ❯❯❱ semgrep.missing-body-close
+          ❰❰ Blocking ❱❱
+          HTTP response body must be closed via defer.
+                                                      
+           47┆ resp, err := p.client.Do(req)
+            ⋮┆----------------------------------------
+           47┆ resp, err := p.client.Do(req)
+           48┆ if err != nil {
+           49┆    return errors.NetworkTimeout(fmt.Sprintf("gitflic auth: %v", err))
+           50┆ }
+            ⋮┆----------------------------------------
+           47┆ resp, err := p.client.Do(req)
+           48┆ if err != nil {
+           49┆    return errors.NetworkTimeout(fmt.Sprintf("gitflic auth: %v", err))
+           50┆ }
+           51┆ defer resp.Body.Close()
+            ⋮┆----------------------------------------
+           47┆ resp, err := p.client.Do(req)
+           48┆ if err != nil {
+           49┆    return errors.NetworkTimeout(fmt.Sprintf("gitflic auth: %v", err))
+           50┆ }
+           51┆ defer resp.Body.Close()
+           52┆ if resp.StatusCode != 200 {
+           53┆    return errors.InvalidCredentials(fmt.Sprintf("gitflic auth failed: %d",
+               resp.StatusCode))                                                         
+           54┆ }
+            ⋮┆----------------------------------------
+           47┆ resp, err := p.client.Do(req)
+           48┆ if err != nil {
+           49┆    return errors.NetworkTimeout(fmt.Sprintf("gitflic auth: %v", err))
+           50┆ }
+           51┆ defer resp.Body.Close()
+           52┆ if resp.StatusCode != 200 {
+           53┆    return errors.InvalidCredentials(fmt.Sprintf("gitflic auth failed: %d",
+               resp.StatusCode))                                                         
+           54┆ }
+           55┆ return nil
+            ⋮┆----------------------------------------
+           77┆ resp, err := p.client.Do(req)
+            ⋮┆----------------------------------------
+           77┆ resp, err := p.client.Do(req)
+           78┆ if err != nil {
+           79┆    return nil, errors.NetworkTimeout(fmt.Sprintf("gitflic list repos: %v", err))
+           80┆ }
+            ⋮┆----------------------------------------
+           77┆ resp, err := p.client.Do(req)
+           78┆ if err != nil {
+           79┆    return nil, errors.NetworkTimeout(fmt.Sprintf("gitflic list repos: %v", err))
+           80┆ }
+           81┆ defer resp.Body.Close()
+            ⋮┆----------------------------------------
+           77┆ resp, err := p.client.Do(req)
+           78┆ if err != nil {
+           79┆    return nil, errors.NetworkTimeout(fmt.Sprintf("gitflic list repos: %v", err))
+           80┆ }
+           81┆ defer resp.Body.Close()
+           82┆
+           83┆ if resp.StatusCode == 403 {
+           84┆    p.tm.Failover()
+           85┆    return nil, errors.RateLimited("gitflic rate limited", time.Now().Add(1*time.Hour))
+           86┆ }
+            ⋮┆----------------------------------------
+           77┆ resp, err := p.client.Do(req)
+           78┆ if err != nil {
+           79┆    return nil, errors.NetworkTimeout(fmt.Sprintf("gitflic list repos: %v", err))
+           80┆ }
+           81┆ defer resp.Body.Close()
+           82┆
+           83┆ if resp.StatusCode == 403 {
+           84┆    p.tm.Failover()
+           85┆    return nil, errors.RateLimited("gitflic rate limited", time.Now().Add(1*time.Hour))
+           86┆ }
+             [hid 3 additional lines, adjust with --max-lines-per-finding] 
+           77┆ resp, err := p.client.Do(req)
+           78┆ if err != nil {
+           79┆    return nil, errors.NetworkTimeout(fmt.Sprintf("gitflic list repos: %v", err))
+           80┆ }
+           81┆ defer resp.Body.Close()
+           82┆
+           83┆ if resp.StatusCode == 403 {
+           84┆    p.tm.Failover()
+           85┆    return nil, errors.RateLimited("gitflic rate limited", time.Now().Add(1*time.Hour))
+           86┆ }
+             [hid 18 additional lines, adjust with --max-lines-per-finding] 
+           77┆ resp, err := p.client.Do(req)
+           78┆ if err != nil {
+           79┆    return nil, errors.NetworkTimeout(fmt.Sprintf("gitflic list repos: %v", err))
+           80┆ }
+           81┆ defer resp.Body.Close()
+           82┆
+           83┆ if resp.StatusCode == 403 {
+           84┆    p.tm.Failover()
+           85┆    return nil, errors.RateLimited("gitflic rate limited", time.Now().Add(1*time.Hour))
+           86┆ }
+             [hid 21 additional lines, adjust with --max-lines-per-finding] 
+           77┆ resp, err := p.client.Do(req)
+           78┆ if err != nil {
+           79┆    return nil, errors.NetworkTimeout(fmt.Sprintf("gitflic list repos: %v", err))
+           80┆ }
+           81┆ defer resp.Body.Close()
+           82┆
+           83┆ if resp.StatusCode == 403 {
+           84┆    p.tm.Failover()
+           85┆    return nil, errors.RateLimited("gitflic rate limited", time.Now().Add(1*time.Hour))
+           86┆ }
+             [hid 40 additional lines, adjust with --max-lines-per-finding] 
+           77┆ resp, err := p.client.Do(req)
+           78┆ if err != nil {
+           79┆    return nil, errors.NetworkTimeout(fmt.Sprintf("gitflic list repos: %v", err))
+           80┆ }
+           81┆ defer resp.Body.Close()
+           82┆
+           83┆ if resp.StatusCode == 403 {
+           84┆    p.tm.Failover()
+           85┆    return nil, errors.RateLimited("gitflic rate limited", time.Now().Add(1*time.Hour))
+           86┆ }
+             [hid 42 additional lines, adjust with --max-lines-per-finding] 
+           77┆ resp, err := p.client.Do(req)
+           78┆ if err != nil {
+           79┆    return nil, errors.NetworkTimeout(fmt.Sprintf("gitflic list repos: %v", err))
+           80┆ }
+           81┆ defer resp.Body.Close()
+           82┆
+           83┆ if resp.StatusCode == 403 {
+           84┆    p.tm.Failover()
+           85┆    return nil, errors.RateLimited("gitflic rate limited", time.Now().Add(1*time.Hour))
+           86┆ }
+             [hid 45 additional lines, adjust with --max-lines-per-finding] 
+           77┆ resp, err := p.client.Do(req)
+           78┆ if err != nil {
+           79┆    return nil, errors.NetworkTimeout(fmt.Sprintf("gitflic list repos: %v", err))
+           80┆ }
+           81┆ defer resp.Body.Close()
+           82┆
+           83┆ if resp.StatusCode == 403 {
+           84┆    p.tm.Failover()
+           85┆    return nil, errors.RateLimited("gitflic rate limited", time.Now().Add(1*time.Hour))
+           86┆ }
+             [hid 46 additional lines, adjust with --max-lines-per-finding] 
+           77┆ resp, err := p.client.Do(req)
+           78┆ if err != nil {
+           79┆    return nil, errors.NetworkTimeout(fmt.Sprintf("gitflic list repos: %v", err))
+           80┆ }
+           81┆ defer resp.Body.Close()
+           82┆
+           83┆ if resp.StatusCode == 403 {
+           84┆    p.tm.Failover()
+           85┆    return nil, errors.RateLimited("gitflic rate limited", time.Now().Add(1*time.Hour))
+           86┆ }
+             [hid 49 additional lines, adjust with --max-lines-per-finding] 
+           77┆ resp, err := p.client.Do(req)
+           78┆ if err != nil {
+           79┆    return nil, errors.NetworkTimeout(fmt.Sprintf("gitflic list repos: %v", err))
+           80┆ }
+           81┆ defer resp.Body.Close()
+           82┆
+           83┆ if resp.StatusCode == 403 {
+           84┆    p.tm.Failover()
+           85┆    return nil, errors.RateLimited("gitflic rate limited", time.Now().Add(1*time.Hour))
+           86┆ }
+             [hid 50 additional lines, adjust with --max-lines-per-finding] 
+          149┆ resp, err := p.client.Do(req)
+            ⋮┆----------------------------------------
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitflic get metadata: %v", err))
+          152┆ }
+            ⋮┆----------------------------------------
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitflic get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+            ⋮┆----------------------------------------
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitflic get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆ if resp.StatusCode != 200 {
+          155┆    return repo, fmt.Errorf("gitflic get metadata: status %d", resp.StatusCode)
+          156┆ }
+            ⋮┆----------------------------------------
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitflic get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆ if resp.StatusCode != 200 {
+          155┆    return repo, fmt.Errorf("gitflic get metadata: status %d", resp.StatusCode)
+          156┆ }
+          157┆
+          158┆ var gfRepo struct {
+             [hid 9 additional lines, adjust with --max-lines-per-finding] 
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitflic get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆ if resp.StatusCode != 200 {
+          155┆    return repo, fmt.Errorf("gitflic get metadata: status %d", resp.StatusCode)
+          156┆ }
+          157┆
+          158┆ var gfRepo struct {
+             [hid 12 additional lines, adjust with --max-lines-per-finding] 
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitflic get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆ if resp.StatusCode != 200 {
+          155┆    return repo, fmt.Errorf("gitflic get metadata: status %d", resp.StatusCode)
+          156┆ }
+          157┆
+          158┆ var gfRepo struct {
+             [hid 14 additional lines, adjust with --max-lines-per-finding] 
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitflic get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆ if resp.StatusCode != 200 {
+          155┆    return repo, fmt.Errorf("gitflic get metadata: status %d", resp.StatusCode)
+          156┆ }
+          157┆
+          158┆ var gfRepo struct {
+             [hid 15 additional lines, adjust with --max-lines-per-finding] 
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitflic get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆ if resp.StatusCode != 200 {
+          155┆    return repo, fmt.Errorf("gitflic get metadata: status %d", resp.StatusCode)
+          156┆ }
+          157┆
+          158┆ var gfRepo struct {
+             [hid 16 additional lines, adjust with --max-lines-per-finding] 
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitflic get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆ if resp.StatusCode != 200 {
+          155┆    return repo, fmt.Errorf("gitflic get metadata: status %d", resp.StatusCode)
+          156┆ }
+          157┆
+          158┆ var gfRepo struct {
+             [hid 17 additional lines, adjust with --max-lines-per-finding] 
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitflic get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆ if resp.StatusCode != 200 {
+          155┆    return repo, fmt.Errorf("gitflic get metadata: status %d", resp.StatusCode)
+          156┆ }
+          157┆
+          158┆ var gfRepo struct {
+             [hid 20 additional lines, adjust with --max-lines-per-finding] 
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitflic get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆ if resp.StatusCode != 200 {
+          155┆    return repo, fmt.Errorf("gitflic get metadata: status %d", resp.StatusCode)
+          156┆ }
+          157┆
+          158┆ var gfRepo struct {
+             [hid 21 additional lines, adjust with --max-lines-per-finding] 
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitflic get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆ if resp.StatusCode != 200 {
+          155┆    return repo, fmt.Errorf("gitflic get metadata: status %d", resp.StatusCode)
+          156┆ }
+          157┆
+          158┆ var gfRepo struct {
+             [hid 36 additional lines, adjust with --max-lines-per-finding] 
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitflic get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆ if resp.StatusCode != 200 {
+          155┆    return repo, fmt.Errorf("gitflic get metadata: status %d", resp.StatusCode)
+          156┆ }
+          157┆
+          158┆ var gfRepo struct {
+             [hid 38 additional lines, adjust with --max-lines-per-finding] 
+          182┆ resp2, err := p.client.Do(req2)
+            ⋮┆----------------------------------------
+          182┆ resp2, err := p.client.Do(req2)
+          183┆ if err == nil {
+          184┆    defer resp2.Body.Close()
+          185┆    if resp2.StatusCode == 200 {
+          186┆            var commits []struct {
+          187┆                    Sha string `json:"sha"`
+          188┆            }
+          189┆            if json.NewDecoder(resp2.Body).Decode(&commits) == nil && len(commits) > 0 {
+          190┆                    repo.LastCommitSHA = commits[0].Sha
+          191┆            }
+             [hid 2 additional lines, adjust with --max-lines-per-finding] 
+                                      
+    internal/providers/git/gitverse.go
+   ❯❯❱ semgrep.missing-body-close
+          ❰❰ Blocking ❱❱
+          HTTP response body must be closed via defer.
+                                                      
+           55┆ resp, err := p.client.Do(req)
+            ⋮┆----------------------------------------
+           55┆ resp, err := p.client.Do(req)
+           56┆ if err == nil {
+           57┆    resp.Body.Close()
+           58┆    p.capabilities[name] = resp.StatusCode == 200
+           59┆ }
+            ⋮┆----------------------------------------
+           80┆ resp, err := p.client.Do(req)
+            ⋮┆----------------------------------------
+           80┆ resp, err := p.client.Do(req)
+           81┆ if err != nil {
+           82┆    return nil, errors.NetworkTimeout(fmt.Sprintf("gitverse list repos: %v", err))
+           83┆ }
+            ⋮┆----------------------------------------
+           80┆ resp, err := p.client.Do(req)
+           81┆ if err != nil {
+           82┆    return nil, errors.NetworkTimeout(fmt.Sprintf("gitverse list repos: %v", err))
+           83┆ }
+           84┆ defer resp.Body.Close()
+            ⋮┆----------------------------------------
+           80┆ resp, err := p.client.Do(req)
+           81┆ if err != nil {
+           82┆    return nil, errors.NetworkTimeout(fmt.Sprintf("gitverse list repos: %v", err))
+           83┆ }
+           84┆ defer resp.Body.Close()
+           85┆
+           86┆ if resp.StatusCode == 403 {
+           87┆    p.tm.Failover()
+           88┆    return nil, errors.RateLimited("gitverse rate limited", time.Now().Add(1*time.Hour))
+           89┆ }
+            ⋮┆----------------------------------------
+           80┆ resp, err := p.client.Do(req)
+           81┆ if err != nil {
+           82┆    return nil, errors.NetworkTimeout(fmt.Sprintf("gitverse list repos: %v", err))
+           83┆ }
+           84┆ defer resp.Body.Close()
+           85┆
+           86┆ if resp.StatusCode == 403 {
+           87┆    p.tm.Failover()
+           88┆    return nil, errors.RateLimited("gitverse rate limited", time.Now().Add(1*time.Hour))
+           89┆ }
+             [hid 3 additional lines, adjust with --max-lines-per-finding] 
+           80┆ resp, err := p.client.Do(req)
+           81┆ if err != nil {
+           82┆    return nil, errors.NetworkTimeout(fmt.Sprintf("gitverse list repos: %v", err))
+           83┆ }
+           84┆ defer resp.Body.Close()
+           85┆
+           86┆ if resp.StatusCode == 403 {
+           87┆    p.tm.Failover()
+           88┆    return nil, errors.RateLimited("gitverse rate limited", time.Now().Add(1*time.Hour))
+           89┆ }
+             [hid 17 additional lines, adjust with --max-lines-per-finding] 
+           80┆ resp, err := p.client.Do(req)
+           81┆ if err != nil {
+           82┆    return nil, errors.NetworkTimeout(fmt.Sprintf("gitverse list repos: %v", err))
+           83┆ }
+           84┆ defer resp.Body.Close()
+           85┆
+           86┆ if resp.StatusCode == 403 {
+           87┆    p.tm.Failover()
+           88┆    return nil, errors.RateLimited("gitverse rate limited", time.Now().Add(1*time.Hour))
+           89┆ }
+             [hid 20 additional lines, adjust with --max-lines-per-finding] 
+           80┆ resp, err := p.client.Do(req)
+           81┆ if err != nil {
+           82┆    return nil, errors.NetworkTimeout(fmt.Sprintf("gitverse list repos: %v", err))
+           83┆ }
+           84┆ defer resp.Body.Close()
+           85┆
+           86┆ if resp.StatusCode == 403 {
+           87┆    p.tm.Failover()
+           88┆    return nil, errors.RateLimited("gitverse rate limited", time.Now().Add(1*time.Hour))
+           89┆ }
+             [hid 22 additional lines, adjust with --max-lines-per-finding] 
+           80┆ resp, err := p.client.Do(req)
+           81┆ if err != nil {
+           82┆    return nil, errors.NetworkTimeout(fmt.Sprintf("gitverse list repos: %v", err))
+           83┆ }
+           84┆ defer resp.Body.Close()
+           85┆
+           86┆ if resp.StatusCode == 403 {
+           87┆    p.tm.Failover()
+           88┆    return nil, errors.RateLimited("gitverse rate limited", time.Now().Add(1*time.Hour))
+           89┆ }
+             [hid 48 additional lines, adjust with --max-lines-per-finding] 
+           80┆ resp, err := p.client.Do(req)
+           81┆ if err != nil {
+           82┆    return nil, errors.NetworkTimeout(fmt.Sprintf("gitverse list repos: %v", err))
+           83┆ }
+           84┆ defer resp.Body.Close()
+           85┆
+           86┆ if resp.StatusCode == 403 {
+           87┆    p.tm.Failover()
+           88┆    return nil, errors.RateLimited("gitverse rate limited", time.Now().Add(1*time.Hour))
+           89┆ }
+             [hid 49 additional lines, adjust with --max-lines-per-finding] 
+          149┆ resp, err := p.client.Do(req)
+            ⋮┆----------------------------------------
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitverse get metadata: %v", err))
+          152┆ }
+            ⋮┆----------------------------------------
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitverse get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+            ⋮┆----------------------------------------
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitverse get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆
+          155┆ if resp.StatusCode == 404 {
+          156┆    repo.IsArchived = true
+          157┆    return repo, nil
+          158┆ }
+            ⋮┆----------------------------------------
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitverse get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆
+          155┆ if resp.StatusCode == 404 {
+          156┆    repo.IsArchived = true
+          157┆    return repo, nil
+          158┆ }
+             [hid 3 additional lines, adjust with --max-lines-per-finding] 
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitverse get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆
+          155┆ if resp.StatusCode == 404 {
+          156┆    repo.IsArchived = true
+          157┆    return repo, nil
+          158┆ }
+             [hid 12 additional lines, adjust with --max-lines-per-finding] 
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitverse get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆
+          155┆ if resp.StatusCode == 404 {
+          156┆    repo.IsArchived = true
+          157┆    return repo, nil
+          158┆ }
+             [hid 15 additional lines, adjust with --max-lines-per-finding] 
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitverse get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆
+          155┆ if resp.StatusCode == 404 {
+          156┆    repo.IsArchived = true
+          157┆    return repo, nil
+          158┆ }
+             [hid 17 additional lines, adjust with --max-lines-per-finding] 
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitverse get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆
+          155┆ if resp.StatusCode == 404 {
+          156┆    repo.IsArchived = true
+          157┆    return repo, nil
+          158┆ }
+             [hid 18 additional lines, adjust with --max-lines-per-finding] 
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitverse get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆
+          155┆ if resp.StatusCode == 404 {
+          156┆    repo.IsArchived = true
+          157┆    return repo, nil
+          158┆ }
+             [hid 19 additional lines, adjust with --max-lines-per-finding] 
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitverse get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆
+          155┆ if resp.StatusCode == 404 {
+          156┆    repo.IsArchived = true
+          157┆    return repo, nil
+          158┆ }
+             [hid 20 additional lines, adjust with --max-lines-per-finding] 
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitverse get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆
+          155┆ if resp.StatusCode == 404 {
+          156┆    repo.IsArchived = true
+          157┆    return repo, nil
+          158┆ }
+             [hid 21 additional lines, adjust with --max-lines-per-finding] 
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitverse get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆
+          155┆ if resp.StatusCode == 404 {
+          156┆    repo.IsArchived = true
+          157┆    return repo, nil
+          158┆ }
+             [hid 24 additional lines, adjust with --max-lines-per-finding] 
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitverse get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆
+          155┆ if resp.StatusCode == 404 {
+          156┆    repo.IsArchived = true
+          157┆    return repo, nil
+          158┆ }
+             [hid 27 additional lines, adjust with --max-lines-per-finding] 
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitverse get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆
+          155┆ if resp.StatusCode == 404 {
+          156┆    repo.IsArchived = true
+          157┆    return repo, nil
+          158┆ }
+             [hid 28 additional lines, adjust with --max-lines-per-finding] 
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitverse get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆
+          155┆ if resp.StatusCode == 404 {
+          156┆    repo.IsArchived = true
+          157┆    return repo, nil
+          158┆ }
+             [hid 43 additional lines, adjust with --max-lines-per-finding] 
+          149┆ resp, err := p.client.Do(req)
+          150┆ if err != nil {
+          151┆    return repo, errors.NetworkTimeout(fmt.Sprintf("gitverse get metadata: %v", err))
+          152┆ }
+          153┆ defer resp.Body.Close()
+          154┆
+          155┆ if resp.StatusCode == 404 {
+          156┆    repo.IsArchived = true
+          157┆    return repo, nil
+          158┆ }
+             [hid 45 additional lines, adjust with --max-lines-per-finding] 
+          189┆ resp2, err := p.client.Do(req2)
+            ⋮┆----------------------------------------
+          189┆ resp2, err := p.client.Do(req2)
+          190┆ if err == nil {
+          191┆    defer resp2.Body.Close()
+          192┆    if resp2.StatusCode == 200 {
+          193┆            var commits []struct {
+          194┆                    Sha string `json:"sha"`
+          195┆            }
+          196┆            if json.NewDecoder(resp2.Body).Decode(&commits) == nil && len(commits) > 0 {
+          197┆                    repo.LastCommitSHA = commits[0].Sha
+          198┆            }
+             [hid 2 additional lines, adjust with --max-lines-per-finding] 
+                                            
+    internal/providers/git/token_failover.go
+   ❯❯❱ semgrep.missing-body-close
+          ❰❰ Blocking ❱❱
+          HTTP response body must be closed via defer.
+                                                      
+          150┆ resp, err := m.client.Do(req)
+            ⋮┆----------------------------------------
+          150┆ resp, err := m.client.Do(req)
+          151┆ if err != nil {
+          152┆    return errors.NetworkTimeout(fmt.Sprintf("token refresh failed: %v", err))
+          153┆ }
+            ⋮┆----------------------------------------
+          150┆ resp, err := m.client.Do(req)
+          151┆ if err != nil {
+          152┆    return errors.NetworkTimeout(fmt.Sprintf("token refresh failed: %v", err))
+          153┆ }
+          154┆ defer resp.Body.Close()
+            ⋮┆----------------------------------------
+          150┆ resp, err := m.client.Do(req)
+          151┆ if err != nil {
+          152┆    return errors.NetworkTimeout(fmt.Sprintf("token refresh failed: %v", err))
+          153┆ }
+          154┆ defer resp.Body.Close()
+          155┆
+          156┆ if resp.StatusCode != http.StatusOK {
+          157┆    return errors.InvalidCredentials(fmt.Sprintf("token refresh returned %d",
+               resp.StatusCode))                                                           
+          158┆ }
+            ⋮┆----------------------------------------
+          150┆ resp, err := m.client.Do(req)
+          151┆ if err != nil {
+          152┆    return errors.NetworkTimeout(fmt.Sprintf("token refresh failed: %v", err))
+          153┆ }
+          154┆ defer resp.Body.Close()
+          155┆
+          156┆ if resp.StatusCode != http.StatusOK {
+          157┆    return errors.InvalidCredentials(fmt.Sprintf("token refresh returned %d",
+               resp.StatusCode))                                                           
+          158┆ }
+          159┆
+             [hid 1 additional lines, adjust with --max-lines-per-finding] 
+          150┆ resp, err := m.client.Do(req)
+          151┆ if err != nil {
+          152┆    return errors.NetworkTimeout(fmt.Sprintf("token refresh failed: %v", err))
+          153┆ }
+          154┆ defer resp.Body.Close()
+          155┆
+          156┆ if resp.StatusCode != http.StatusOK {
+          157┆    return errors.InvalidCredentials(fmt.Sprintf("token refresh returned %d",
+               resp.StatusCode))                                                           
+          158┆ }
+          159┆
+             [hid 2 additional lines, adjust with --max-lines-per-finding] 
+          150┆ resp, err := m.client.Do(req)
+          151┆ if err != nil {
+          152┆    return errors.NetworkTimeout(fmt.Sprintf("token refresh failed: %v", err))
+          153┆ }
+          154┆ defer resp.Body.Close()
+          155┆
+          156┆ if resp.StatusCode != http.StatusOK {
+          157┆    return errors.InvalidCredentials(fmt.Sprintf("token refresh returned %d",
+               resp.StatusCode))                                                           
+          158┆ }
+          159┆
+             [hid 5 additional lines, adjust with --max-lines-per-finding] 
+          150┆ resp, err := m.client.Do(req)
+          151┆ if err != nil {
+          152┆    return errors.NetworkTimeout(fmt.Sprintf("token refresh failed: %v", err))
+          153┆ }
+          154┆ defer resp.Body.Close()
+          155┆
+          156┆ if resp.StatusCode != http.StatusOK {
+          157┆    return errors.InvalidCredentials(fmt.Sprintf("token refresh returned %d",
+               resp.StatusCode))                                                           
+          158┆ }
+          159┆
+             [hid 6 additional lines, adjust with --max-lines-per-finding] 
+          150┆ resp, err := m.client.Do(req)
+          151┆ if err != nil {
+          152┆    return errors.NetworkTimeout(fmt.Sprintf("token refresh failed: %v", err))
+          153┆ }
+          154┆ defer resp.Body.Close()
+          155┆
+          156┆ if resp.StatusCode != http.StatusOK {
+          157┆    return errors.InvalidCredentials(fmt.Sprintf("token refresh returned %d",
+               resp.StatusCode))                                                           
+          158┆ }
+          159┆
+             [hid 8 additional lines, adjust with --max-lines-per-finding] 
+                                      
+    internal/providers/llm/verifier.go
+   ❯❯❱ semgrep.missing-body-close
+          ❰❰ Blocking ❱❱
+          HTTP response body must be closed via defer.
+                                                      
+          166┆ resp, err := v.client.Do(req)
+            ⋮┆----------------------------------------
+          166┆ resp, err := v.client.Do(req)
+          167┆ if err != nil {
+          168┆    return nil, errors.Timeout(fmt.Sprintf("llm request failed: %v", err))
+          169┆ }
+            ⋮┆----------------------------------------
+          166┆ resp, err := v.client.Do(req)
+          167┆ if err != nil {
+          168┆    return nil, errors.Timeout(fmt.Sprintf("llm request failed: %v", err))
+          169┆ }
+          170┆ if resp.StatusCode >= 500 {
+          171┆    resp.Body.Close()
+          172┆    return nil, errors.Timeout(fmt.Sprintf("llm server error: %d", resp.StatusCode))
+          173┆ }
+            ⋮┆----------------------------------------
+          166┆ resp, err := v.client.Do(req)
+          167┆ if err != nil {
+          168┆    return nil, errors.Timeout(fmt.Sprintf("llm request failed: %v", err))
+          169┆ }
+          170┆ if resp.StatusCode >= 500 {
+          171┆    resp.Body.Close()
+          172┆    return nil, errors.Timeout(fmt.Sprintf("llm server error: %d", resp.StatusCode))
+          173┆ }
+          174┆ if resp.StatusCode == 429 {
+          175┆    resp.Body.Close()
+             [hid 2 additional lines, adjust with --max-lines-per-finding] 
+          166┆ resp, err := v.client.Do(req)
+          167┆ if err != nil {
+          168┆    return nil, errors.Timeout(fmt.Sprintf("llm request failed: %v", err))
+          169┆ }
+          170┆ if resp.StatusCode >= 500 {
+          171┆    resp.Body.Close()
+          172┆    return nil, errors.Timeout(fmt.Sprintf("llm server error: %d", resp.StatusCode))
+          173┆ }
+          174┆ if resp.StatusCode == 429 {
+          175┆    resp.Body.Close()
+             [hid 3 additional lines, adjust with --max-lines-per-finding] 
+                                        
+    internal/providers/patreon/client.go
+   ❯❯❱ semgrep.missing-body-close
+          ❰❰ Blocking ❱❱
+          HTTP response body must be closed via defer.
+                                                      
+           90┆ resp, err := c.client.Do(req)
+            ⋮┆----------------------------------------
+           90┆ resp, err := c.client.Do(req)
+           91┆ if err != nil {
+           92┆    return nil, errors.NetworkTimeout(fmt.Sprintf("patreon request failed: %v", err))
+           93┆ }
+            ⋮┆----------------------------------------
+           90┆ resp, err := c.client.Do(req)
+           91┆ if err != nil {
+           92┆    return nil, errors.NetworkTimeout(fmt.Sprintf("patreon request failed: %v", err))
+           93┆ }
+           94┆
+           95┆ if resp.StatusCode == 401 {
+           96┆    resp.Body.Close()
+           97┆    if refreshErr := c.oauth.Refresh(ctx); refreshErr != nil {
+           98┆            return nil, errors.InvalidCredentials("token refresh failed")
+           99┆    }
+             [hid 10 additional lines, adjust with --max-lines-per-finding] 
+           90┆ resp, err := c.client.Do(req)
+           91┆ if err != nil {
+           92┆    return nil, errors.NetworkTimeout(fmt.Sprintf("patreon request failed: %v", err))
+           93┆ }
+           94┆
+           95┆ if resp.StatusCode == 401 {
+           96┆    resp.Body.Close()
+           97┆    if refreshErr := c.oauth.Refresh(ctx); refreshErr != nil {
+           98┆            return nil, errors.InvalidCredentials("token refresh failed")
+           99┆    }
+             [hid 16 additional lines, adjust with --max-lines-per-finding] 
+           90┆ resp, err := c.client.Do(req)
+           91┆ if err != nil {
+           92┆    return nil, errors.NetworkTimeout(fmt.Sprintf("patreon request failed: %v", err))
+           93┆ }
+           94┆
+           95┆ if resp.StatusCode == 401 {
+           96┆    resp.Body.Close()
+           97┆    if refreshErr := c.oauth.Refresh(ctx); refreshErr != nil {
+           98┆            return nil, errors.InvalidCredentials("token refresh failed")
+           99┆    }
+             [hid 18 additional lines, adjust with --max-lines-per-finding] 
+                                       
+    internal/providers/patreon/oauth.go
+   ❯❯❱ semgrep.missing-body-close
+          ❰❰ Blocking ❱❱
+          HTTP response body must be closed via defer.
+                                                      
+           57┆ resp, err := m.client.Do(req)
+            ⋮┆----------------------------------------
+           57┆ resp, err := m.client.Do(req)
+           58┆ if err != nil {
+           59┆    return errors.NetworkTimeout(fmt.Sprintf("token refresh failed: %v", err))
+           60┆ }
+            ⋮┆----------------------------------------
+           57┆ resp, err := m.client.Do(req)
+           58┆ if err != nil {
+           59┆    return errors.NetworkTimeout(fmt.Sprintf("token refresh failed: %v", err))
+           60┆ }
+           61┆ defer resp.Body.Close()
+            ⋮┆----------------------------------------
+           57┆ resp, err := m.client.Do(req)
+           58┆ if err != nil {
+           59┆    return errors.NetworkTimeout(fmt.Sprintf("token refresh failed: %v", err))
+           60┆ }
+           61┆ defer resp.Body.Close()
+           62┆
+           63┆ if resp.StatusCode != http.StatusOK {
+           64┆    return errors.InvalidCredentials(fmt.Sprintf("token refresh returned %d",
+               resp.StatusCode))                                                           
+           65┆ }
+            ⋮┆----------------------------------------
+           57┆ resp, err := m.client.Do(req)
+           58┆ if err != nil {
+           59┆    return errors.NetworkTimeout(fmt.Sprintf("token refresh failed: %v", err))
+           60┆ }
+           61┆ defer resp.Body.Close()
+           62┆
+           63┆ if resp.StatusCode != http.StatusOK {
+           64┆    return errors.InvalidCredentials(fmt.Sprintf("token refresh returned %d",
+               resp.StatusCode))                                                           
+           65┆ }
+           66┆
+             [hid 7 additional lines, adjust with --max-lines-per-finding] 
+           57┆ resp, err := m.client.Do(req)
+           58┆ if err != nil {
+           59┆    return errors.NetworkTimeout(fmt.Sprintf("token refresh failed: %v", err))
+           60┆ }
+           61┆ defer resp.Body.Close()
+           62┆
+           63┆ if resp.StatusCode != http.StatusOK {
+           64┆    return errors.InvalidCredentials(fmt.Sprintf("token refresh returned %d",
+               resp.StatusCode))                                                           
+           65┆ }
+           66┆
+             [hid 10 additional lines, adjust with --max-lines-per-finding] 
+           57┆ resp, err := m.client.Do(req)
+           58┆ if err != nil {
+           59┆    return errors.NetworkTimeout(fmt.Sprintf("token refresh failed: %v", err))
+           60┆ }
+           61┆ defer resp.Body.Close()
+           62┆
+           63┆ if resp.StatusCode != http.StatusOK {
+           64┆    return errors.InvalidCredentials(fmt.Sprintf("token refresh returned %d",
+               resp.StatusCode))                                                           
+           65┆ }
+           66┆
+             [hid 13 additional lines, adjust with --max-lines-per-finding] 
+           57┆ resp, err := m.client.Do(req)
+           58┆ if err != nil {
+           59┆    return errors.NetworkTimeout(fmt.Sprintf("token refresh failed: %v", err))
+           60┆ }
+           61┆ defer resp.Body.Close()
+           62┆
+           63┆ if resp.StatusCode != http.StatusOK {
+           64┆    return errors.InvalidCredentials(fmt.Sprintf("token refresh returned %d",
+               resp.StatusCode))                                                           
+           65┆ }
+           66┆
+             [hid 16 additional lines, adjust with --max-lines-per-finding] 
+           57┆ resp, err := m.client.Do(req)
+           58┆ if err != nil {
+           59┆    return errors.NetworkTimeout(fmt.Sprintf("token refresh failed: %v", err))
+           60┆ }
+           61┆ defer resp.Body.Close()
+           62┆
+           63┆ if resp.StatusCode != http.StatusOK {
+           64┆    return errors.InvalidCredentials(fmt.Sprintf("token refresh returned %d",
+               resp.StatusCode))                                                           
+           65┆ }
+           66┆
+             [hid 21 additional lines, adjust with --max-lines-per-finding] 
+           57┆ resp, err := m.client.Do(req)
+           58┆ if err != nil {
+           59┆    return errors.NetworkTimeout(fmt.Sprintf("token refresh failed: %v", err))
+           60┆ }
+           61┆ defer resp.Body.Close()
+           62┆
+           63┆ if resp.StatusCode != http.StatusOK {
+           64┆    return errors.InvalidCredentials(fmt.Sprintf("token refresh returned %d",
+               resp.StatusCode))                                                           
+           65┆ }
+           66┆
+             [hid 22 additional lines, adjust with --max-lines-per-finding] 
+                                       
+    internal/services/sync/scheduler.go
+   ❯❯❱ semgrep.no-context-background-in-handler
+          ❰❰ Blocking ❱❱
+          Use the request/parent context; context.Background() hides cancellation.
+                                                                                  
+           36┆ ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
+

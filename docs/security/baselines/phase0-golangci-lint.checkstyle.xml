@@ -1,0 +1,394 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<checkstyle version="5.0">
+  <file name="cmd/cli/main.go">
+    <error column="25" line="181" message="Non-inherited new context, use function like `context.WithXXX` instead" severity="error" source="contextcheck"></error>
+    <error column="27" line="196" message="Function `Start-&gt;Start$1` should pass the context parameter" severity="error" source="contextcheck"></error>
+    <error column="1" line="24" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="2" line="118" message="shadow: declaration of &#34;orchestrator&#34; shadows declaration at line 35" severity="error" source="govet"></error>
+    <error column="14" line="169" message="SA4009: argument ctx is overwritten before first use" severity="error" source="staticcheck"></error>
+    <error column="2" line="170" message="SA4009(related information): assignment to ctx" severity="error" source="staticcheck"></error>
+  </file>
+  <file name="cmd/cli/main_test.go">
+    <error column="6" line="104" message="type `mockMetricsCollector` is unused" severity="error" source="unused"></error>
+    <error column="32" line="106" message="func `(*mockMetricsCollector).RecordSyncDuration` is unused" severity="error" source="unused"></error>
+    <error column="32" line="107" message="func `(*mockMetricsCollector).RecordReposProcessed` is unused" severity="error" source="unused"></error>
+    <error column="32" line="108" message="func `(*mockMetricsCollector).RecordAPIError` is unused" severity="error" source="unused"></error>
+    <error column="32" line="109" message="func `(*mockMetricsCollector).RecordLLMLatency` is unused" severity="error" source="unused"></error>
+    <error column="32" line="110" message="func `(*mockMetricsCollector).RecordLLMTokens` is unused" severity="error" source="unused"></error>
+    <error column="32" line="111" message="func `(*mockMetricsCollector).RecordLLMQualityScore` is unused" severity="error" source="unused"></error>
+    <error column="32" line="112" message="func `(*mockMetricsCollector).RecordContentGenerated` is unused" severity="error" source="unused"></error>
+    <error column="32" line="113" message="func `(*mockMetricsCollector).RecordPostCreated` is unused" severity="error" source="unused"></error>
+    <error column="32" line="114" message="func `(*mockMetricsCollector).RecordPostUpdated` is unused" severity="error" source="unused"></error>
+    <error column="32" line="115" message="func `(*mockMetricsCollector).RecordWebhookEvent` is unused" severity="error" source="unused"></error>
+    <error column="32" line="116" message="func `(*mockMetricsCollector).SetActiveSyncs` is unused" severity="error" source="unused"></error>
+    <error column="32" line="117" message="func `(*mockMetricsCollector).SetBudgetUtilization` is unused" severity="error" source="unused"></error>
+    <error column="33" line="120" message="`withMockPrometheusRegistry` - `t` is unused" severity="error" source="unparam"></error>
+    <error column="19" line="159" message="`withMockExit` - `t` is unused" severity="error" source="unparam"></error>
+  </file>
+  <file name="cmd/server/main.go">
+    <error column="14" line="40" message="Error return value is not checked" severity="error" source="errcheck"></error>
+    <error column="10" line="57" message="G112: Potential Slowloris Attack because ReadHeaderTimeout is not configured in the http.Server" severity="error" source="gosec"></error>
+    <error column="24" line="75" message="Non-inherited new context, use function like `context.WithXXX` instead" severity="error" source="contextcheck"></error>
+  </file>
+  <file name="cmd/server/main_test.go">
+    <error column="1" line="6" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="18" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="12" message="File is not properly formatted" severity="error" source="goimports"></error>
+    <error column="29" line="69" message="should rewrite http.NewRequestWithContext or add (*Request).WithContext" severity="error" source="noctx"></error>
+  </file>
+  <file name="internal/config/config_test.go">
+    <error column="1" line="331" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="379" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+  </file>
+  <file name="internal/config/env.go">
+    <error column="16" line="15" message="type assertion on error will fail on wrapped errors. Use errors.As to check for specific errors" severity="error" source="errorlint"></error>
+    <error column="16" line="30" message="type assertion on error will fail on wrapped errors. Use errors.As to check for specific errors" severity="error" source="errorlint"></error>
+  </file>
+  <file name="internal/database/postgres.go">
+    <error column="16" line="270" message="Error return value of `json.Unmarshal` is not checked" severity="error" source="errcheck"></error>
+    <error column="16" line="271" message="Error return value of `json.Unmarshal` is not checked" severity="error" source="errcheck"></error>
+    <error column="16" line="285" message="Error return value of `json.Unmarshal` is not checked" severity="error" source="errcheck"></error>
+    <error column="16" line="286" message="Error return value of `json.Unmarshal` is not checked" severity="error" source="errcheck"></error>
+    <error column="1" line="203" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="244" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="315" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="318" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="321" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="324" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="327" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="338" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="352" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="355" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="358" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="361" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="372" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="375" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="378" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="387" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="390" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="393" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="406" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="409" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="412" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+  </file>
+  <file name="internal/database/sqlite.go">
+    <error column="19" line="268" message="Error return value of `tx.Rollback` is not checked" severity="error" source="errcheck"></error>
+    <error column="76" line="276" message="Error return value of `(*database/sql.Row).Scan` is not checked" severity="error" source="errcheck"></error>
+  </file>
+  <file name="internal/database/sqlite_stores.go">
+    <error column="16" line="33" message="Error return value of `json.Unmarshal` is not checked" severity="error" source="errcheck"></error>
+    <error column="16" line="34" message="Error return value of `json.Unmarshal` is not checked" severity="error" source="errcheck"></error>
+    <error column="16" line="48" message="Error return value of `json.Unmarshal` is not checked" severity="error" source="errcheck"></error>
+    <error column="16" line="49" message="Error return value of `json.Unmarshal` is not checked" severity="error" source="errcheck"></error>
+    <error column="17" line="80" message="Error return value of `json.Unmarshal` is not checked" severity="error" source="errcheck"></error>
+    <error column="17" line="81" message="Error return value of `json.Unmarshal` is not checked" severity="error" source="errcheck"></error>
+    <error column="16" line="335" message="Error return value of `json.Unmarshal` is not checked" severity="error" source="errcheck"></error>
+    <error column="17" line="352" message="Error return value of `json.Unmarshal` is not checked" severity="error" source="errcheck"></error>
+    <error column="16" line="391" message="Error return value of `json.Unmarshal` is not checked" severity="error" source="errcheck"></error>
+    <error column="16" line="405" message="Error return value of `json.Unmarshal` is not checked" severity="error" source="errcheck"></error>
+    <error column="17" line="439" message="Error return value of `json.Unmarshal` is not checked" severity="error" source="errcheck"></error>
+  </file>
+  <file name="internal/errors/errors.go">
+    <error column="15" line="61" message="type assertion on error will fail on wrapped errors. Use errors.As to check for specific errors" severity="error" source="errorlint"></error>
+    <error column="15" line="68" message="type assertion on error will fail on wrapped errors. Use errors.As to check for specific errors" severity="error" source="errorlint"></error>
+    <error column="15" line="75" message="type assertion on error will fail on wrapped errors. Use errors.As to check for specific errors" severity="error" source="errorlint"></error>
+  </file>
+  <file name="internal/handlers/health_test.go">
+    <error column="27" line="18" message="should rewrite http.NewRequestWithContext or add (*Request).WithContext" severity="error" source="noctx"></error>
+  </file>
+  <file name="internal/handlers/webhook_test.go">
+    <error column="27" line="194" message="should rewrite http.NewRequestWithContext or add (*Request).WithContext" severity="error" source="noctx"></error>
+    <error column="28" line="164" message="should rewrite http.NewRequestWithContext or add (*Request).WithContext" severity="error" source="noctx"></error>
+    <error column="28" line="173" message="should rewrite http.NewRequestWithContext or add (*Request).WithContext" severity="error" source="noctx"></error>
+    <error column="27" line="79" message="should rewrite http.NewRequestWithContext or add (*Request).WithContext" severity="error" source="noctx"></error>
+    <error column="27" line="102" message="should rewrite http.NewRequestWithContext or add (*Request).WithContext" severity="error" source="noctx"></error>
+    <error column="27" line="140" message="should rewrite http.NewRequestWithContext or add (*Request).WithContext" severity="error" source="noctx"></error>
+  </file>
+  <file name="internal/metrics/circuitbreaker.go">
+    <error column="17" line="36" message="unnecessary conversion" severity="error" source="unconvert"></error>
+  </file>
+  <file name="internal/metrics/collector.go">
+    <error column="6" line="3" message="exported: type name will be used as metrics.MetricsCollector by other packages, and that stutters; consider calling this Collector" severity="warning" source="revive"></error>
+  </file>
+  <file name="internal/providers/git/gitflic.go">
+    <error column="17" line="84" message="Error return value of `p.tm.Failover` is not checked" severity="error" source="errcheck"></error>
+    <error column="6" line="16" message="exported: type name will be used as git.GitFlicProvider by other packages, and that stutters; consider calling this FlicProvider" severity="warning" source="revive"></error>
+    <error column="5" line="168" message="shadow: declaration of &#34;err&#34; shadows declaration at line 143" severity="error" source="govet"></error>
+  </file>
+  <file name="internal/providers/git/github.go">
+    <error column="18" line="69" message="Error return value of `p.tm.Failover` is not checked" severity="error" source="errcheck"></error>
+    <error column="6" line="15" message="exported: type name will be used as git.GitHubProvider by other packages, and that stutters; consider calling this HubProvider" severity="warning" source="revive"></error>
+    <error column="15" line="42" message="SA1019: p.client.Repositories.List is deprecated: Use RepositoriesService.ListByUser or RepositoriesService.ListByAuthenticatedUser instead." severity="error" source="staticcheck"></error>
+  </file>
+  <file name="internal/providers/git/gitlab.go">
+    <error column="18" line="75" message="Error return value of `p.tm.Failover` is not checked" severity="error" source="errcheck"></error>
+    <error column="6" line="14" message="exported: type name will be used as git.GitLabProvider by other packages, and that stutters; consider calling this LabProvider" severity="warning" source="revive"></error>
+    <error column="2" line="175" message="S1001: should use copy(to, from) instead of a loop" severity="error" source="gosimple"></error>
+    <error column="11" line="15" message="SA1019: gitlab.Client is deprecated: use gitlab.com/gitlab-org/api/client-go instead. See https://gitlab.com/gitlab-org/api/client-go" severity="error" source="staticcheck"></error>
+    <error column="19" line="26" message="SA1019: gitlab.NewClient is deprecated: This module has been migrated to gitlab.com/gitlab-org/api/client-go. See https://gitlab.com/gitlab-org/api/client-go" severity="error" source="staticcheck"></error>
+    <error column="19" line="28" message="SA1019: gitlab.NewClient is deprecated: This module has been migrated to gitlab.com/gitlab-org/api/client-go. See https://gitlab.com/gitlab-org/api/client-go" severity="error" source="staticcheck"></error>
+    <error column="19" line="47" message="SA1019: gitlab.NewClient is deprecated: This module has been migrated to gitlab.com/gitlab-org/api/client-go. See https://gitlab.com/gitlab-org/api/client-go" severity="error" source="staticcheck"></error>
+    <error column="19" line="49" message="SA1019: gitlab.NewClient is deprecated: This module has been migrated to gitlab.com/gitlab-org/api/client-go. See https://gitlab.com/gitlab-org/api/client-go" severity="error" source="staticcheck"></error>
+    <error column="19" line="148" message="SA1019: gitlab.NewClient is deprecated: This module has been migrated to gitlab.com/gitlab-org/api/client-go. See https://gitlab.com/gitlab-org/api/client-go" severity="error" source="staticcheck"></error>
+    <error column="19" line="150" message="SA1019: gitlab.NewClient is deprecated: This module has been migrated to gitlab.com/gitlab-org/api/client-go. See https://gitlab.com/gitlab-org/api/client-go" severity="error" source="staticcheck"></error>
+  </file>
+  <file name="internal/providers/git/gitverse.go">
+    <error column="16" line="87" message="Error return value of `p.tm.Failover` is not checked" severity="error" source="errcheck"></error>
+    <error column="6" line="15" message="exported: type name will be used as git.GitVerseProvider by other packages, and that stutters; consider calling this VerseProvider" severity="warning" source="revive"></error>
+    <error column="5" line="171" message="shadow: declaration of &#34;err&#34; shadows declaration at line 143" severity="error" source="govet"></error>
+    <error column="2" line="111" message="Consider pre-allocating `allRepos`" severity="error" source="prealloc"></error>
+  </file>
+  <file name="internal/providers/git/mirror.go">
+    <error column="5" line="77" message="SA6005: should use strings.EqualFold instead" severity="error" source="staticcheck"></error>
+    <error column="5" line="81" message="SA6005: should use strings.EqualFold instead" severity="error" source="staticcheck"></error>
+  </file>
+  <file name="internal/providers/git/token_failover.go">
+    <error column="26" line="96" message="Error return value of `c.tokenManager.Failover` is not checked" severity="error" source="errcheck"></error>
+    <error column="26" line="100" message="Error return value of `c.tokenManager.Failover` is not checked" severity="error" source="errcheck"></error>
+    <error column="4" line="94" message="ineffectual assignment to retryAfter" severity="error" source="ineffassign"></error>
+  </file>
+  <file name="internal/providers/git/token_failover_test.go">
+    <error column="22" line="75" message="response body must be closed" severity="error" source="bodyclose"></error>
+    <error column="30" line="90" message="should rewrite http.NewRequestWithContext or add (*Request).WithContext" severity="error" source="noctx"></error>
+  </file>
+  <file name="internal/providers/llm/provider.go">
+    <error column="6" line="9" message="exported: type name will be used as llm.LLMProvider by other packages, and that stutters; consider calling this Provider" severity="warning" source="revive"></error>
+  </file>
+  <file name="internal/providers/llm/verifier.go">
+    <error column="1" line="80" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="103" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="126" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+  </file>
+  <file name="internal/providers/llm/verifier_test.go">
+    <error column="1" line="44" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="47" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+  </file>
+  <file name="internal/providers/patreon/client.go">
+    <error column="34" line="113" message="G404: Use of weak random number generator (math/rand or math/rand/v2 instead of crypto/rand)" severity="error" source="gosec"></error>
+    <error column="29" line="127" message="G404: Use of weak random number generator (math/rand or math/rand/v2 instead of crypto/rand)" severity="error" source="gosec"></error>
+    <error column="91" line="120" message="`(*Client).doWithBackoff` - `maxRetries` always receives `3`" severity="error" source="unparam"></error>
+  </file>
+  <file name="internal/providers/patreon/oauth_test.go">
+    <error column="15" line="35" message="type assertion on error will fail on wrapped errors. Use errors.As to check for specific errors" severity="error" source="errorlint"></error>
+    <error column="1" line="1" message="File is not properly formatted" severity="error" source="gofmt"></error>
+  </file>
+  <file name="internal/providers/renderer/html.go">
+    <error column="4" line="74" message="ifElseChain: rewrite if-else to switch statement" severity="error" source="gocritic"></error>
+  </file>
+  <file name="internal/providers/renderer/pdf.go">
+    <error column="12" line="55" message="G306: Expect WriteFile permissions to be 0600 or less" severity="error" source="gosec"></error>
+    <error column="11" line="35" message="shadow: declaration of &#34;err&#34; shadows declaration at line 28" severity="error" source="govet"></error>
+    <error column="5" line="82" message="shadow: declaration of &#34;err&#34; shadows declaration at line 28" severity="error" source="govet"></error>
+    <error column="2" line="61" message="ineffectual assignment to cmd" severity="error" source="ineffassign"></error>
+  </file>
+  <file name="internal/providers/renderer/pdf_test.go">
+    <error column="1" line="47" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="68" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+  </file>
+  <file name="internal/providers/renderer/video_pipeline.go">
+    <error column="9" line="45" message="G204: Subprocess launched with a potential tainted input or cmd arguments" severity="error" source="gosec"></error>
+    <error column="40" line="98" message="G115: integer overflow conversion int64 -&gt; uint64" severity="error" source="gosec"></error>
+    <error column="25" line="99" message="G115: integer overflow conversion int -&gt; uint64" severity="error" source="gosec"></error>
+    <error column="3" line="114" message="ifElseChain: rewrite if-else to switch statement" severity="error" source="gocritic"></error>
+    <error column="5" line="58" message="shadow: declaration of &#34;err&#34; shadows declaration at line 35" severity="error" source="govet"></error>
+    <error column="7" line="72" message="shadow: declaration of &#34;err&#34; shadows declaration at line 35" severity="error" source="govet"></error>
+  </file>
+  <file name="internal/services/access/gating.go">
+    <error column="6" line="9" message="exported: type name will be used as access.AccessCache by other packages, and that stutters; consider calling this Cache" severity="warning" source="revive"></error>
+  </file>
+  <file name="internal/services/content/generator.go">
+    <error column="1" line="49" message="cyclomatic complexity 22 of func `(*Generator).GenerateForRepository` is high (&gt; 15)" severity="error" source="gocyclo"></error>
+    <error column="1" line="55" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+  </file>
+  <file name="internal/services/filter/repoignore.go">
+    <error column="1" line="14" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="2" line="213" message="Consider pre-allocating `valid`" severity="error" source="prealloc"></error>
+  </file>
+  <file name="internal/services/filter/repoignore_internal_test.go">
+    <error column="1" line="102" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="106" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="126" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+  </file>
+  <file name="internal/services/sync/checkpoint.go">
+    <error column="9" line="44" message="G306: Expect WriteFile permissions to be 0600 or less" severity="error" source="gosec"></error>
+  </file>
+  <file name="internal/services/sync/filter.go">
+    <error column="1" line="10" message="cyclomatic complexity 22 of func `ApplyFilter` is high (&gt; 15)" severity="error" source="gocyclo"></error>
+    <error column="2" line="15" message="Consider pre-allocating `filtered`" severity="error" source="prealloc"></error>
+    <error column="45" line="50" message="matchGlob - result 1 (error) is always nil" severity="error" source="unparam"></error>
+  </file>
+  <file name="internal/services/sync/lock.go">
+    <error column="9" line="83" message="G306: Expect WriteFile permissions to be 0600 or less" severity="error" source="gosec"></error>
+    <error column="15" line="128" message="type assertion on error will fail on wrapped errors. Use errors.As to check for specific errors" severity="error" source="errorlint"></error>
+    <error column="3" line="111" message="error is not nil (line 109) but it returns nil" severity="error" source="nilerr"></error>
+    <error column="3" line="120" message="error is not nil (line 118) but it returns nil" severity="error" source="nilerr"></error>
+  </file>
+  <file name="internal/services/sync/orchestrator.go">
+    <error column="26" line="116" message="Error return value of `o.lock.ReleaseLock` is not checked" severity="error" source="errcheck"></error>
+    <error column="1" line="236" message="cyclomatic complexity 27 of func `(*Orchestrator).processRepo` is high (&gt; 15)" severity="error" source="gocyclo"></error>
+    <error column="1" line="103" message="cyclomatic complexity 26 of func `(*Orchestrator).Run` is high (&gt; 15)" severity="error" source="gocyclo"></error>
+    <error column="1" line="410" message="cyclomatic complexity 19 of func `(*Orchestrator).createOrUpdatePost` is high (&gt; 15)" severity="error" source="gocyclo"></error>
+    <error column="6" line="41" message="exported: type name will be used as sync.SyncFilter by other packages, and that stutters; consider calling this Filter" severity="warning" source="revive"></error>
+    <error column="6" line="49" message="exported: type name will be used as sync.SyncOptions by other packages, and that stutters; consider calling this Options" severity="warning" source="revive"></error>
+    <error column="6" line="54" message="exported: type name will be used as sync.SyncResult by other packages, and that stutters; consider calling this Result" severity="warning" source="revive"></error>
+    <error column="24" line="322" message="func `(*Orchestrator).publishPost` is unused" severity="error" source="unused"></error>
+    <error column="18" line="606" message="type assertion on error will fail on wrapped errors. Use errors.As to check for specific errors" severity="error" source="errorlint"></error>
+    <error column="18" line="610" message="type assertion on error will fail on wrapped errors. Use errors.As to check for specific errors" severity="error" source="errorlint"></error>
+    <error column="9" line="250" message="shadow: declaration of &#34;err&#34; shadows declaration at line 245" severity="error" source="govet"></error>
+    <error column="3" line="381" message="error is not nil (line 378) but it returns nil" severity="error" source="nilerr"></error>
+    <error column="4" line="528" message="SA4006: this value of `canonicalRepoID` is never used" severity="error" source="staticcheck"></error>
+    <error column="91" line="370" message="(*Orchestrator).getExistingPost - result 1 (error) is always nil" severity="error" source="unparam"></error>
+  </file>
+  <file name="internal/services/sync/orchestrator_test.go">
+    <error column="6" line="32" message="type `mockGenerator` is unused" severity="error" source="unused"></error>
+    <error column="25" line="34" message="func `(*mockGenerator).GenerateForRepository` is unused" severity="error" source="unused"></error>
+    <error column="25" line="38" message="func `(*mockGenerator).SetReviewQueue` is unused" severity="error" source="unused"></error>
+  </file>
+  <file name="internal/services/sync/scheduler.go">
+    <error column="6" line="12" message="exported: type name will be used as sync.SyncRunner by other packages, and that stutters; consider calling this Runner" severity="warning" source="revive"></error>
+  </file>
+  <file name="internal/utils/redact.go">
+    <error column="5" line="8" message="var `sensitivePatterns` is unused" severity="error" source="unused"></error>
+  </file>
+  <file name="tests/e2e/full_sync_test.go">
+    <error column="3" line="64" message="shadow: declaration of &#34;err&#34; shadows declaration at line 55" severity="error" source="govet"></error>
+    <error column="11" line="90" message="shadow: declaration of &#34;err&#34; shadows declaration at line 55" severity="error" source="govet"></error>
+  </file>
+  <file name="tests/integration/dryrun_test.go">
+    <error column="1" line="19" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+  </file>
+  <file name="tests/integration/quality_pipeline_test.go">
+    <error column="1" line="45" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="51" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+  </file>
+  <file name="tests/integration/sync_pipeline_test.go">
+    <error column="1" line="18" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+  </file>
+  <file name="tests/unit/config/config_test.go">
+    <error column="20" line="281" message="type assertion on error will fail on wrapped errors. Use errors.As to check for specific errors" severity="error" source="errorlint"></error>
+    <error column="20" line="293" message="type assertion on error will fail on wrapped errors. Use errors.As to check for specific errors" severity="error" source="errorlint"></error>
+    <error column="1" line="197" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="221" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="240" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="256" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="274" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="288" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+  </file>
+  <file name="tests/unit/config/env_test.go">
+    <error column="1" line="24" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="38" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="51" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="80" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="93" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="106" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+  </file>
+  <file name="tests/unit/database/recovery_test.go">
+    <error column="1" line="39" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="64" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+  </file>
+  <file name="tests/unit/filter/repoignore_test.go">
+    <error column="1" line="24" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="35" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="47" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="60" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="74" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="88" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="100" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="115" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="123" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="132" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="142" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="154" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="174" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="188" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="201" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="212" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="227" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="236" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="263" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="278" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="290" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="303" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="311" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="317" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="337" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="360" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="390" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="400" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="416" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="442" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="462" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="516" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+  </file>
+  <file name="tests/unit/providers/git/github_test.go">
+    <error column="18" line="79" message="SA1019: github.Int64 is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="18" line="80" message="SA1019: github.String is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="18" line="81" message="SA1019: github.String is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="18" line="82" message="SA1019: github.String is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="18" line="83" message="SA1019: github.String is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="18" line="84" message="SA1019: github.String is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="18" line="85" message="SA1019: github.String is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="18" line="89" message="SA1019: github.Int is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="18" line="90" message="SA1019: github.String is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="18" line="91" message="SA1019: github.Bool is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="18" line="92" message="SA1019: github.Bool is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="18" line="93" message="SA1019: github.Bool is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="38" line="94" message="SA1019: github.String is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="18" line="119" message="SA1019: github.Int64 is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="18" line="120" message="SA1019: github.String is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="18" line="121" message="SA1019: github.String is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="18" line="122" message="SA1019: github.String is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="18" line="123" message="SA1019: github.String is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="18" line="124" message="SA1019: github.String is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="18" line="125" message="SA1019: github.String is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="18" line="129" message="SA1019: github.Int is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="18" line="130" message="SA1019: github.String is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="18" line="131" message="SA1019: github.Bool is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="18" line="132" message="SA1019: github.Bool is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="18" line="133" message="SA1019: github.Bool is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="14" line="140" message="SA1019: github.String is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+    <error column="15" line="169" message="SA1019: github.Bool is deprecated: use Ptr instead. " severity="error" source="staticcheck"></error>
+  </file>
+  <file name="tests/unit/providers/git/mirror_test.go">
+    <error column="36" line="150" message="SA1012: do not pass a nil Context, even if a function permits it; pass context.TODO if you are unsure about which Context to use" severity="error" source="staticcheck"></error>
+  </file>
+  <file name="tests/unit/providers/llm/fallback_test.go">
+    <error column="12" line="204" message="unusedwrite: unused write to field GenerateContentFunc" severity="error" source="govet"></error>
+    <error column="12" line="218" message="unusedwrite: unused write to field GenerateContentFunc" severity="error" source="govet"></error>
+  </file>
+  <file name="tests/unit/providers/llm/verifier_test.go">
+    <error column="15" line="104" message="type assertion on error will fail on wrapped errors. Use errors.As to check for specific errors" severity="error" source="errorlint"></error>
+    <error column="1" line="52" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="55" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="58" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="64" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="70" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="76" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="79" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="82" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="85" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="88" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="91" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+  </file>
+  <file name="tests/unit/providers/patreon/client_test.go">
+    <error column="1" line="1" message="File is not properly formatted" severity="error" source="gofmt"></error>
+  </file>
+  <file name="tests/unit/providers/patreon/oauth_test.go">
+    <error column="15" line="36" message="type assertion on error will fail on wrapped errors. Use errors.As to check for specific errors" severity="error" source="errorlint"></error>
+    <error column="1" line="1" message="File is not properly formatted" severity="error" source="gofmt"></error>
+  </file>
+  <file name="tests/unit/services/access/gating_test.go">
+    <error column="2" line="59" message="ineffectual assignment to got" severity="error" source="ineffassign"></error>
+  </file>
+  <file name="tests/unit/services/content/review_test.go">
+    <error column="1" line="19" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="27" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="30" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="39" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+    <error column="1" line="42" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+  </file>
+  <file name="tests/unit/sync/lock_test.go">
+    <error column="1" line="74" message="File is not properly formatted" severity="error" source="gofumpt"></error>
+  </file>
+</checkstyle>
