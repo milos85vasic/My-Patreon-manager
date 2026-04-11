@@ -36,6 +36,35 @@ func NewGitLabProvider(tokenManager *TokenManager, baseURL string) *GitLabProvid
 
 func (p *GitLabProvider) Name() string { return "gitlab" }
 
+// execute routes a GitLab SDK call through the TokenManager circuit
+// breaker. Only 5xx responses and transport errors count as failures
+// — 4xx responses are surfaced to callers without tripping the breaker.
+func (p *GitLabProvider) execute(fn func() (*gitlab.Response, error)) (*gitlab.Response, error) {
+	var (
+		outResp *gitlab.Response
+		outErr  error
+	)
+	_, bErr := p.tm.Execute(func() (interface{}, error) {
+		resp, err := fn()
+		outResp = resp
+		outErr = err
+		if err != nil {
+			if resp == nil || resp.StatusCode == 0 || resp.StatusCode >= 500 {
+				return nil, err
+			}
+			return nil, nil
+		}
+		if resp != nil && resp.StatusCode >= 500 {
+			return nil, fmt.Errorf("gitlab upstream %d", resp.StatusCode)
+		}
+		return nil, nil
+	})
+	if bErr != nil && outErr == nil {
+		return outResp, bErr
+	}
+	return outResp, outErr
+}
+
 func (p *GitLabProvider) Authenticate(ctx context.Context, credentials Credentials) error {
 	if credentials.PrimaryToken == "" {
 		return errors.InvalidCredentials("GitLab token is required")
@@ -66,9 +95,14 @@ func (p *GitLabProvider) ListRepositories(ctx context.Context, group string, opt
 
 	var allRepos []models.Repository
 	for {
-		projects, resp, err := p.client.Groups.ListGroupProjects(group, &gitlab.ListGroupProjectsOptions{
-			ListOptions:      gitlab.ListOptions{Page: page, PerPage: perPage},
-			IncludeSubGroups: gitlab.Ptr(true),
+		var projects []*gitlab.Project
+		resp, err := p.execute(func() (*gitlab.Response, error) {
+			ps, rr, e := p.client.Groups.ListGroupProjects(group, &gitlab.ListGroupProjectsOptions{
+				ListOptions:      gitlab.ListOptions{Page: page, PerPage: perPage},
+				IncludeSubGroups: gitlab.Ptr(true),
+			})
+			projects = ps
+			return rr, e
 		})
 		if err != nil {
 			if resp != nil && resp.StatusCode == 403 {
@@ -91,8 +125,13 @@ func (p *GitLabProvider) ListRepositories(ctx context.Context, group string, opt
 }
 
 func (p *GitLabProvider) GetRepositoryMetadata(ctx context.Context, repo models.Repository) (models.Repository, error) {
-	proj, _, err := p.client.Projects.GetProject(fmt.Sprintf("%s/%s", repo.Owner, repo.Name), &gitlab.GetProjectOptions{
-		Statistics: gitlab.Ptr(true),
+	var proj *gitlab.Project
+	_, err := p.execute(func() (*gitlab.Response, error) {
+		pr, rr, e := p.client.Projects.GetProject(fmt.Sprintf("%s/%s", repo.Owner, repo.Name), &gitlab.GetProjectOptions{
+			Statistics: gitlab.Ptr(true),
+		})
+		proj = pr
+		return rr, e
 	})
 	if err != nil {
 		return repo, fmt.Errorf("gitlab get metadata: %w", err)
@@ -101,8 +140,13 @@ func (p *GitLabProvider) GetRepositoryMetadata(ctx context.Context, repo models.
 	result.ID = repo.ID
 
 	// fetch latest commit SHA
-	commits, _, err := p.client.Commits.ListCommits(fmt.Sprintf("%s/%s", repo.Owner, repo.Name), &gitlab.ListCommitsOptions{
-		ListOptions: gitlab.ListOptions{PerPage: 1},
+	var commits []*gitlab.Commit
+	_, err = p.execute(func() (*gitlab.Response, error) {
+		cs, rr, e := p.client.Commits.ListCommits(fmt.Sprintf("%s/%s", repo.Owner, repo.Name), &gitlab.ListCommitsOptions{
+			ListOptions: gitlab.ListOptions{PerPage: 1},
+		})
+		commits = cs
+		return rr, e
 	})
 	if err == nil && len(commits) > 0 {
 		result.LastCommitSHA = commits[0].ID
@@ -116,7 +160,12 @@ func (p *GitLabProvider) DetectMirrors(ctx context.Context, repos []models.Repos
 }
 
 func (p *GitLabProvider) CheckRepositoryState(ctx context.Context, repo models.Repository) (models.SyncState, error) {
-	proj, _, err := p.client.Projects.GetProject(fmt.Sprintf("%s/%s", repo.Owner, repo.Name), nil)
+	var proj *gitlab.Project
+	_, err := p.execute(func() (*gitlab.Response, error) {
+		pr, rr, e := p.client.Projects.GetProject(fmt.Sprintf("%s/%s", repo.Owner, repo.Name), nil)
+		proj = pr
+		return rr, e
+	})
 	if err != nil {
 		return models.SyncState{}, fmt.Errorf("gitlab check state: %w", err)
 	}

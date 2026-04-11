@@ -25,6 +25,41 @@ func NewGitHubProvider(tokenManager *TokenManager) *GitHubProvider {
 
 func (p *GitHubProvider) Name() string { return "github" }
 
+// execute routes an SDK call through the TokenManager circuit breaker.
+// The breaker only counts 5xx responses and transport errors as
+// failures; 4xx responses (and any other client-side errors) are
+// surfaced unchanged without tripping the breaker. fn must return the
+// SDK response and error so execute can distinguish transport-level
+// failures from HTTP status codes.
+func (p *GitHubProvider) execute(fn func() (*github.Response, error)) (*github.Response, error) {
+	var (
+		outResp *github.Response
+		outErr  error
+	)
+	_, bErr := p.tm.Execute(func() (interface{}, error) {
+		resp, err := fn()
+		outResp = resp
+		outErr = err
+		if err != nil {
+			// Transport / client error — always count as failure.
+			if resp == nil || resp.StatusCode == 0 || resp.StatusCode >= 500 {
+				return nil, err
+			}
+			// 4xx: surface without tripping.
+			return nil, nil
+		}
+		if resp != nil && resp.StatusCode >= 500 {
+			return nil, fmt.Errorf("github upstream %d", resp.StatusCode)
+		}
+		return nil, nil
+	})
+	if bErr != nil && outErr == nil {
+		// Breaker is open (or synthesized a 5xx error for us).
+		return outResp, bErr
+	}
+	return outResp, outErr
+}
+
 func (p *GitHubProvider) Authenticate(ctx context.Context, credentials Credentials) error {
 	if credentials.PrimaryToken == "" {
 		return errors.InvalidCredentials("GitHub token is required")
@@ -39,7 +74,10 @@ func (p *GitHubProvider) Authenticate(ctx context.Context, credentials Credentia
 	if existingBaseURL != nil {
 		p.client.BaseURL = existingBaseURL
 	}
-	_, _, err := p.client.Repositories.List(ctx, "", &github.RepositoryListOptions{ListOptions: github.ListOptions{PerPage: 1}})
+	_, err := p.execute(func() (*github.Response, error) {
+		_, resp, err := p.client.Repositories.List(ctx, "", &github.RepositoryListOptions{ListOptions: github.ListOptions{PerPage: 1}})
+		return resp, err
+	})
 	if err != nil {
 		return errors.InvalidCredentials(fmt.Sprintf("GitHub auth failed: %v", err))
 	}
@@ -61,8 +99,13 @@ func (p *GitHubProvider) ListRepositories(ctx context.Context, org string, opts 
 
 	var allRepos []models.Repository
 	for {
-		ghRepos, resp, err := p.client.Repositories.ListByOrg(ctx, org, &github.RepositoryListByOrgOptions{
-			ListOptions: github.ListOptions{Page: page, PerPage: perPage},
+		var ghRepos []*github.Repository
+		resp, err := p.execute(func() (*github.Response, error) {
+			r, rr, e := p.client.Repositories.ListByOrg(ctx, org, &github.RepositoryListByOrgOptions{
+				ListOptions: github.ListOptions{Page: page, PerPage: perPage},
+			})
+			ghRepos = r
+			return rr, e
 		})
 		if err != nil {
 			if resp != nil && resp.StatusCode == 403 {
@@ -86,14 +129,24 @@ func (p *GitHubProvider) ListRepositories(ctx context.Context, org string, opts 
 }
 
 func (p *GitHubProvider) GetRepositoryMetadata(ctx context.Context, repo models.Repository) (models.Repository, error) {
-	ghRepo, _, err := p.client.Repositories.Get(ctx, repo.Owner, repo.Name)
+	var ghRepo *github.Repository
+	_, err := p.execute(func() (*github.Response, error) {
+		r, rr, e := p.client.Repositories.Get(ctx, repo.Owner, repo.Name)
+		ghRepo = r
+		return rr, e
+	})
 	if err != nil {
 		return repo, fmt.Errorf("github get metadata: %w", err)
 	}
 	result := p.toRepository(ghRepo)
 	result.ID = repo.ID
 
-	readme, _, err := p.client.Repositories.GetReadme(ctx, repo.Owner, repo.Name, nil)
+	var readme *github.RepositoryContent
+	_, err = p.execute(func() (*github.Response, error) {
+		r, rr, e := p.client.Repositories.GetReadme(ctx, repo.Owner, repo.Name, nil)
+		readme = r
+		return rr, e
+	})
 	if err == nil && readme != nil {
 		content, decodeErr := readme.GetContent()
 		if decodeErr == nil {
@@ -103,7 +156,12 @@ func (p *GitHubProvider) GetRepositoryMetadata(ctx context.Context, repo models.
 	}
 
 	// fetch latest commit SHA
-	commits, _, err := p.client.Repositories.ListCommits(ctx, repo.Owner, repo.Name, &github.CommitsListOptions{ListOptions: github.ListOptions{PerPage: 1}})
+	var commits []*github.RepositoryCommit
+	_, err = p.execute(func() (*github.Response, error) {
+		c, rr, e := p.client.Repositories.ListCommits(ctx, repo.Owner, repo.Name, &github.CommitsListOptions{ListOptions: github.ListOptions{PerPage: 1}})
+		commits = c
+		return rr, e
+	})
 	if err == nil && len(commits) > 0 {
 		result.LastCommitSHA = commits[0].GetSHA()
 	}
@@ -116,7 +174,12 @@ func (p *GitHubProvider) DetectMirrors(ctx context.Context, repos []models.Repos
 }
 
 func (p *GitHubProvider) CheckRepositoryState(ctx context.Context, repo models.Repository) (models.SyncState, error) {
-	ghRepo, _, err := p.client.Repositories.Get(ctx, repo.Owner, repo.Name)
+	var ghRepo *github.Repository
+	_, err := p.execute(func() (*github.Response, error) {
+		r, rr, e := p.client.Repositories.Get(ctx, repo.Owner, repo.Name)
+		ghRepo = r
+		return rr, e
+	})
 	if err != nil {
 		return models.SyncState{}, fmt.Errorf("github check state: %w", err)
 	}

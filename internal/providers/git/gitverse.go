@@ -30,6 +30,41 @@ func NewGitVerseProvider(tokenManager *TokenManager) *GitVerseProvider {
 
 func (p *GitVerseProvider) Name() string { return "gitverse" }
 
+// doRequest sends req through the HTTP client while routing the call
+// through the TokenManager circuit breaker. Network errors and 5xx
+// responses count as upstream failures and can trip the breaker; 4xx
+// responses are returned to the caller without tripping it.
+func (p *GitVerseProvider) doRequest(req *http.Request) (*http.Response, error) {
+	var (
+		resp   *http.Response
+		cliErr error
+	)
+	_, bErr := p.tm.Execute(func() (interface{}, error) {
+		r, err := p.client.Do(req)
+		if err != nil {
+			cliErr = err
+			return nil, err
+		}
+		if r.StatusCode >= 500 {
+			r.Body.Close()
+			resp = &http.Response{StatusCode: r.StatusCode, Header: r.Header}
+			return nil, fmt.Errorf("gitverse upstream %d", r.StatusCode)
+		}
+		resp = r
+		return r, nil
+	})
+	if bErr != nil {
+		if cliErr != nil {
+			return nil, cliErr
+		}
+		if resp != nil {
+			return resp, bErr
+		}
+		return nil, bErr
+	}
+	return resp, nil
+}
+
 func (p *GitVerseProvider) SetBaseURL(baseURL string) error {
 	p.baseURL = baseURL
 	return nil
@@ -52,7 +87,7 @@ func (p *GitVerseProvider) detectCapabilities(ctx context.Context) {
 	for name, url := range endpoints {
 		req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
 		req.Header.Set("Authorization", "Bearer "+p.tm.GetCurrentToken())
-		resp, err := p.client.Do(req)
+		resp, err := p.doRequest(req)
 		if err == nil {
 			resp.Body.Close()
 			p.capabilities[name] = resp.StatusCode == 200
@@ -77,7 +112,7 @@ func (p *GitVerseProvider) ListRepositories(ctx context.Context, org string, opt
 	}
 	req.Header.Set("Authorization", "Bearer "+p.tm.GetCurrentToken())
 
-	resp, err := p.client.Do(req)
+	resp, err := p.doRequest(req)
 	if err != nil {
 		return nil, errors.NetworkTimeout(fmt.Sprintf("gitverse list repos: %v", err))
 	}
@@ -146,7 +181,7 @@ func (p *GitVerseProvider) GetRepositoryMetadata(ctx context.Context, repo model
 	}
 	req.Header.Set("Authorization", "Bearer "+p.tm.GetCurrentToken())
 
-	resp, err := p.client.Do(req)
+	resp, err := p.doRequest(req)
 	if err != nil {
 		return repo, errors.NetworkTimeout(fmt.Sprintf("gitverse get metadata: %v", err))
 	}
@@ -186,7 +221,7 @@ func (p *GitVerseProvider) GetRepositoryMetadata(ctx context.Context, repo model
 	req2, err := http.NewRequestWithContext(ctx, "GET", commitsURL, nil)
 	if err == nil {
 		req2.Header.Set("Authorization", "Bearer "+p.tm.GetCurrentToken())
-		resp2, err := p.client.Do(req2)
+		resp2, err := p.doRequest(req2)
 		if err == nil {
 			defer resp2.Body.Close()
 			if resp2.StatusCode == 200 {

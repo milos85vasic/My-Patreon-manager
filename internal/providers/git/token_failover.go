@@ -65,6 +65,19 @@ func (tm *TokenManager) IsFailedOver() bool {
 	return tm.CurrentToken != tm.PrimaryToken
 }
 
+// Execute runs fn through the TokenManager's circuit breaker. Callers
+// should return a non-nil error from fn only on conditions that should
+// count as upstream failures (network errors, 5xx responses). 4xx
+// responses and other client-side errors should be surfaced to the
+// caller without tripping the breaker — typically by stashing the
+// error in a closure-captured variable and returning nil.
+func (tm *TokenManager) Execute(fn func() (interface{}, error)) (interface{}, error) {
+	if tm == nil || tm.cb == nil {
+		return fn()
+	}
+	return tm.cb.Execute(fn)
+}
+
 type RateLimitAwareClient struct {
 	client       *http.Client
 	tokenManager *TokenManager

@@ -29,6 +29,45 @@ func NewGitFlicProvider(tokenManager *TokenManager) *GitFlicProvider {
 
 func (p *GitFlicProvider) Name() string { return "gitflic" }
 
+// doRequest sends req through the HTTP client while routing the call
+// through the TokenManager circuit breaker. Network errors and 5xx
+// responses count as upstream failures and can trip the breaker; 4xx
+// responses are returned to the caller without tripping it.
+func (p *GitFlicProvider) doRequest(req *http.Request) (*http.Response, error) {
+	var (
+		resp    *http.Response
+		cliErr  error
+	)
+	_, bErr := p.tm.Execute(func() (interface{}, error) {
+		r, err := p.client.Do(req)
+		if err != nil {
+			cliErr = err
+			return nil, err
+		}
+		if r.StatusCode >= 500 {
+			body := r
+			// Drain/close the body so the upstream caller can't leak
+			// a connection. We still return the status via a synthesized
+			// response so callers can inspect StatusCode if they wish.
+			body.Body.Close()
+			resp = &http.Response{StatusCode: r.StatusCode, Header: r.Header}
+			return nil, fmt.Errorf("gitflic upstream %d", r.StatusCode)
+		}
+		resp = r
+		return r, nil
+	})
+	if bErr != nil {
+		if cliErr != nil {
+			return nil, cliErr
+		}
+		if resp != nil {
+			return resp, bErr
+		}
+		return nil, bErr
+	}
+	return resp, nil
+}
+
 func (p *GitFlicProvider) SetBaseURL(baseURL string) error {
 	p.baseURL = baseURL
 	return nil
@@ -44,7 +83,7 @@ func (p *GitFlicProvider) Authenticate(ctx context.Context, credentials Credenti
 		return fmt.Errorf("gitflic auth: %w", err)
 	}
 	req.Header.Set("Authorization", "token "+credentials.PrimaryToken)
-	resp, err := p.client.Do(req)
+	resp, err := p.doRequest(req)
 	if err != nil {
 		return errors.NetworkTimeout(fmt.Sprintf("gitflic auth: %v", err))
 	}
@@ -74,7 +113,7 @@ func (p *GitFlicProvider) ListRepositories(ctx context.Context, org string, opts
 		}
 		req.Header.Set("Authorization", "token "+p.tm.GetCurrentToken())
 
-		resp, err := p.client.Do(req)
+		resp, err := p.doRequest(req)
 		if err != nil {
 			return nil, errors.NetworkTimeout(fmt.Sprintf("gitflic list repos: %v", err))
 		}
@@ -146,7 +185,7 @@ func (p *GitFlicProvider) GetRepositoryMetadata(ctx context.Context, repo models
 	}
 	req.Header.Set("Authorization", "token "+p.tm.GetCurrentToken())
 
-	resp, err := p.client.Do(req)
+	resp, err := p.doRequest(req)
 	if err != nil {
 		return repo, errors.NetworkTimeout(fmt.Sprintf("gitflic get metadata: %v", err))
 	}
@@ -179,7 +218,7 @@ func (p *GitFlicProvider) GetRepositoryMetadata(ctx context.Context, repo models
 	req2, err := http.NewRequestWithContext(ctx, "GET", commitsURL, nil)
 	if err == nil {
 		req2.Header.Set("Authorization", "token "+p.tm.GetCurrentToken())
-		resp2, err := p.client.Do(req2)
+		resp2, err := p.doRequest(req2)
 		if err == nil {
 			defer resp2.Body.Close()
 			if resp2.StatusCode == 200 {
