@@ -1,6 +1,3 @@
-//go:build disabled
-
-
 package security
 
 import (
@@ -105,9 +102,13 @@ func TestGenericTokenValidation(t *testing.T) {
 }
 
 func TestWebhookAuthMiddleware_MissingSignature(t *testing.T) {
-	// This test verifies that the middleware rejects requests with missing signature.
-	// Since the middleware is integrated with Gin, we would need to spin up a test server.
-	// For security test we rely on unit tests in handlers package.
-	// We'll keep this as a placeholder to document the requirement.
-	t.Skip("Middleware integration tested in unit/handlers/webhook_test.go")
+	// Verify the middleware rejects requests with missing signature by
+	// exercising the ValidateGitHubSignature path directly (no Gin required).
+	secret := "webhook-secret"
+	body := []byte(`{"ref":"refs/heads/main"}`)
+
+	// Empty signature must be rejected
+	assert.False(t, middleware.ValidateGitHubSignature(body, "", secret))
+	// Completely absent prefix must be rejected
+	assert.False(t, middleware.ValidateGitHubSignature(body, "missing-prefix", secret))
 }

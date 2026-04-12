@@ -2,8 +2,6 @@ package sync_test
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/milos85vasic/My-Patreon-Manager/internal/database"
@@ -11,7 +9,6 @@ import (
 	"github.com/milos85vasic/My-Patreon-Manager/internal/services/sync"
 	"github.com/milos85vasic/My-Patreon-Manager/tests/mocks"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestLockManager_AcquireLock_Success(t *testing.T) {
@@ -66,18 +63,26 @@ func TestLockManager_IsLocked(t *testing.T) {
 }
 
 func TestLockManager_StaleDetection(t *testing.T) {
-	// Create a lock file with a PID that doesn't exist
-	tempDir := t.TempDir()
-	lockFile := filepath.Join(tempDir, "test.lock")
-	// Write lock file with PID 99999 (unlikely to exist)
-	content := "99999:testhost:2024-01-01T00:00:00Z"
-	err := os.WriteFile(lockFile, []byte(content), 0644)
-	require.NoError(t, err)
+	// Test stale-lock detection via the DB path: when the database reports
+	// a lock held by a process that no longer exists (stale), the LockManager
+	// should still report the DB state. The file-based stale detection is
+	// tested within the internal package using ExportedSetLockFile.
+	mockDB := &mocks.MockDatabase{}
+	lm := sync.NewLockManager(mockDB)
 
-	// We need to set the lockManager's lockFile to this temp file.
-	// Since lockFile is private, we cannot set it directly.
-	// Let's skip this test for now.
-	t.Skip("Stale detection test requires access to private lockFile field")
+	// Simulate a DB lock held by a dead PID (99999 is unlikely to exist)
+	mockDB.IsLockedFunc = func(ctx context.Context) (bool, *database.SyncLock, error) {
+		return true, &database.SyncLock{PID: 99999, Hostname: "stalehost"}, nil
+	}
+
+	locked, lockInfo, err := lm.IsLocked(context.Background())
+	assert.NoError(t, err)
+	// The DB says locked, so IsLocked reports true (file-based check may
+	// independently report not-locked, but the DB path takes precedence
+	// when the file lock doesn't exist).
+	assert.True(t, locked)
+	assert.Equal(t, 99999, lockInfo.PID)
+	assert.Equal(t, "stalehost", lockInfo.Hostname)
 }
 
 func TestLockManager_ConcurrentLockContention(t *testing.T) {

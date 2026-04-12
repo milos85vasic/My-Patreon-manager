@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/milos85vasic/My-Patreon-Manager/internal/models"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/providers/llm"
@@ -219,17 +220,29 @@ func TestFallbackChain_GenerateContent_CircuitBreakerResetAfterCooldown(t *testi
 		return models.Content{}, errors.New("provider2 error")
 	}
 
-	// Use a short timeout and half-open timeout to speed up test
-	// We need to modify breaker settings; the chain creates breakers with 60s timeout, 30s half-open.
-	// That's too long for a test. We'll need to inject custom breakers, but the chain doesn't expose them.
-	// We'll simulate the behavior by using a smaller threshold and waiting.
-	// Instead, we'll test the reset functionality by checking the breaker state after timeout.
-	// This is more of an integration test. For unit test, we can verify that after the breaker opens,
-	// the provider is skipped, but we can't easily test reset without waiting.
-	// We'll skip this detailed test and rely on circuit breaker's own tests.
-	// For now, we'll just test that after failures, provider is skipped.
-	// We'll adjust the test to focus on trip after threshold.
-	t.Skip("Circuit breaker reset after cooldown requires time manipulation; skipping for unit test")
+	// Use short breaker timeouts so reset happens quickly in tests.
+	chain := llm.NewFallbackChain(
+		[]llm.LLMProvider{provider1, provider2}, 0.8, mockMetrics,
+		llm.WithBreakerTimeouts(100*time.Millisecond, 50*time.Millisecond),
+	)
+
+	// Trip the breaker: 3 failures from provider1
+	for i := 0; i < 3; i++ {
+		chain.GenerateContent(context.Background(), models.Prompt{}, models.GenerationOptions{})
+	}
+
+	// Breaker is open: provider1 is skipped, provider2 fails => all fail
+	_, err := chain.GenerateContent(context.Background(), models.Prompt{}, models.GenerationOptions{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "all providers failed")
+
+	// Wait for breaker timeout to transition to half-open
+	time.Sleep(150 * time.Millisecond)
+
+	// Provider1 should now be called again (half-open), and callCount > 3 so it succeeds
+	result, err := chain.GenerateContent(context.Background(), models.Prompt{}, models.GenerationOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, "Success after reset", result.Title)
 }
 
 func TestFallbackChain_GetAvailableModels_Fallback(t *testing.T) {

@@ -1,11 +1,16 @@
 package ddos
 
 import (
+	"bytes"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
+	"github.com/milos85vasic/My-Patreon-Manager/internal/handlers"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/middleware"
 	ssync "github.com/milos85vasic/My-Patreon-Manager/internal/services/sync"
 	"github.com/stretchr/testify/assert"
@@ -103,10 +108,49 @@ func TestWebhookFlood_DeduplicationQueueOverflow(t *testing.T) {
 }
 
 func TestWebhookFlood_ServerResponsiveness(t *testing.T) {
-	// This test verifies that under flood, the server remains responsive to legitimate requests.
-	// We'll create a handler with rate limiting and deduplication.
-	// Send a flood of duplicate events (same event ID) and measure response time for a unique event.
-	// Since duplicates are deduplicated, they should be fast.
-	// We'll skip actual HTTP server for simplicity and test the deduplicator + rate limiter behavior.
-	t.Skip("TODO: implement server responsiveness test with real HTTP server")
+	// Verify that under a flood of duplicate events, a unique event is still
+	// handled promptly. Uses an httptest server with the real Gin handler
+	// backed by an EventDeduplicator and IPRateLimiter.
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+
+	dedup := ssync.NewEventDeduplicator(5 * time.Minute)
+	handler := handlers.NewWebhookHandler(dedup, nil, nil)
+	limiter := middleware.NewIPRateLimiter(1000, 500) // generous limit for test
+	router.POST("/webhook/github", limiter.Limit(), handler.GitHubWebhook)
+
+	server := httptest.NewServer(router)
+	defer server.Close()
+
+	payload := []byte(`{"repository":{"full_name":"owner/repo","html_url":"https://github.com/owner/repo"}}`)
+
+	// Send a flood of duplicate events
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			req, _ := http.NewRequest("POST", server.URL+"/webhook/github", bytes.NewReader(payload))
+			req.Header.Set("X-GitHub-Delivery", "duplicate-event-id")
+			req.Header.Set("X-GitHub-Event", "push")
+			resp, err := http.DefaultClient.Do(req)
+			if err == nil {
+				resp.Body.Close()
+			}
+		}()
+	}
+	wg.Wait()
+
+	// Now send a unique event and measure responsiveness
+	start := time.Now()
+	req, _ := http.NewRequest("POST", server.URL+"/webhook/github", bytes.NewReader(payload))
+	req.Header.Set("X-GitHub-Delivery", "unique-event-id")
+	req.Header.Set("X-GitHub-Event", "push")
+	resp, err := http.DefaultClient.Do(req)
+	elapsed := time.Since(start)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
+	assert.Less(t, elapsed, 2*time.Second, "unique event should be handled promptly under flood")
+	t.Logf("Unique event response time under flood: %v", elapsed)
 }

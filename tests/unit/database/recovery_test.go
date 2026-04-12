@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/milos85vasic/My-Patreon-Manager/internal/database"
@@ -57,6 +58,10 @@ func TestRecoverSQLite_CorruptedRecovery(t *testing.T) {
 }
 
 func TestRecoverSQLite_CorruptedBackupFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod-based test not reliable on Windows")
+	}
+
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
@@ -65,6 +70,12 @@ func TestRecoverSQLite_CorruptedBackupFails(t *testing.T) {
 	require.NoError(t, err)
 
 	// Make the directory read-only so rename fails (simulate backup failure)
-	// This is tricky on some filesystems; we'll skip for now.
-	t.Skip("Test requires making directory read-only, which is OS-specific")
+	err = os.Chmod(tmpDir, 0555)
+	require.NoError(t, err)
+	// Restore permissions so t.TempDir cleanup succeeds
+	defer os.Chmod(tmpDir, 0755)
+
+	ctx := context.Background()
+	err = database.RecoverSQLite(ctx, dbPath, nil)
+	assert.Error(t, err, "RecoverSQLite should fail when backup rename is impossible")
 }

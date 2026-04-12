@@ -342,26 +342,20 @@ func TestLoadEnv(t *testing.T) {
 	os.Unsetenv("TEST_VAR")
 
 	// Load with no files (default .env)
-	// We cannot assume .env exists, but we can test that it doesn't error
-	// by calling LoadEnv() with no args. However, we need to ensure .env file exists
-	// in the test directory. Let's create a temporary .env file in current directory
-	// and then remove it after test.
-	curDir, err := os.Getwd()
+	// Use t.TempDir + chdir to isolate from any real .env in the project root.
+	origDir, err := os.Getwd()
 	assert.NoError(t, err)
-	defaultEnv := filepath.Join(curDir, ".env")
-	if _, err := os.Stat(defaultEnv); err == nil {
-		// backup? we'll just skip this part
-		t.Skip("Default .env file exists; skipping test of LoadEnv() without arguments")
-	} else {
-		// create a temporary .env
-		err = os.WriteFile(defaultEnv, []byte("DEFAULT_VAR=default"), 0644)
-		assert.NoError(t, err)
-		defer os.Remove(defaultEnv)
-		err = LoadEnv()
-		assert.NoError(t, err)
-		assert.Equal(t, "default", os.Getenv("DEFAULT_VAR"))
-		os.Unsetenv("DEFAULT_VAR")
-	}
+	tmpDir := t.TempDir()
+	err = os.Chdir(tmpDir)
+	assert.NoError(t, err)
+	defer os.Chdir(origDir)
+
+	err = os.WriteFile(filepath.Join(tmpDir, ".env"), []byte("DEFAULT_VAR=default"), 0644)
+	assert.NoError(t, err)
+	err = LoadEnv()
+	assert.NoError(t, err)
+	assert.Equal(t, "default", os.Getenv("DEFAULT_VAR"))
+	os.Unsetenv("DEFAULT_VAR")
 }
 
 func TestLoadEnvOverride(t *testing.T) {
@@ -396,18 +390,18 @@ func TestLoadEnvOverride(t *testing.T) {
 	os.Unsetenv("SECOND_VAR")
 
 	// Test with no files (default .env override)
-	curDir, err := os.Getwd()
+	// Use t.TempDir + chdir to isolate from any real .env in the project root.
+	origDir, err := os.Getwd()
 	assert.NoError(t, err)
-	defaultEnv := filepath.Join(curDir, ".env")
-	if _, err := os.Stat(defaultEnv); err == nil {
-		t.Skip("Default .env file exists; skipping test of LoadEnvOverride() without arguments")
-	} else {
-		err = os.WriteFile(defaultEnv, []byte("DEFAULT_OVERRIDE=yes"), 0644)
-		assert.NoError(t, err)
-		defer os.Remove(defaultEnv)
-		err = LoadEnvOverride()
-		assert.NoError(t, err)
-		assert.Equal(t, "yes", os.Getenv("DEFAULT_OVERRIDE"))
-		os.Unsetenv("DEFAULT_OVERRIDE")
-	}
+	tmpDir := t.TempDir()
+	err = os.Chdir(tmpDir)
+	assert.NoError(t, err)
+	defer os.Chdir(origDir)
+
+	err = os.WriteFile(filepath.Join(tmpDir, ".env"), []byte("DEFAULT_OVERRIDE=yes"), 0644)
+	assert.NoError(t, err)
+	err = LoadEnvOverride()
+	assert.NoError(t, err)
+	assert.Equal(t, "yes", os.Getenv("DEFAULT_OVERRIDE"))
+	os.Unsetenv("DEFAULT_OVERRIDE")
 }

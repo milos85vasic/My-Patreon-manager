@@ -178,29 +178,47 @@ func TestOAuth2TokenManager_Refresh(t *testing.T) {
 
 	t.Run("successful refresh", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/api/oauth2/token", r.URL.Path)
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(`{}`))
 		}))
 		defer server.Close()
 
-		// Override the default client to use test server
 		m := NewOAuth2TokenManager("client", "secret", "access", "refresh")
-		m.client = server.Client()
-		// We need to override the URL used in Refresh method; cannot without modifying source.
-		// This test is limited because the URL is hardcoded.
-		// We'll skip this test for now.
-		t.Skip("Refresh method uses hardcoded URL; cannot test without modification")
+		m.RefreshURL = server.URL
+		var updatedAccess, updatedRefresh string
+		m.OnTokenUpdate = func(a, r string) { updatedAccess = a; updatedRefresh = r }
+
+		err := m.Refresh(context.Background())
+		assert.NoError(t, err)
+		assert.False(t, m.IsExpired())
+		assert.Equal(t, "access", updatedAccess)
+		assert.Equal(t, "refresh", updatedRefresh)
 	})
 
 	t.Run("network error", func(t *testing.T) {
-		// Cannot easily simulate network error without mocking http.Client.
-		t.Skip("requires http client mocking")
+		m := NewOAuth2TokenManager("client", "secret", "access", "refresh")
+		// Point at a server that immediately closes connections
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+		server.Close() // close immediately to force network error
+		m.RefreshURL = server.URL
+
+		err := m.Refresh(context.Background())
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "token refresh failed")
 	})
 
 	t.Run("non-200 response", func(t *testing.T) {
-		// Similar limitation
-		t.Skip("hardcoded URL")
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusBadRequest)
+		}))
+		defer server.Close()
+
+		m := NewOAuth2TokenManager("client", "secret", "access", "refresh")
+		m.RefreshURL = server.URL
+
+		err := m.Refresh(context.Background())
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "token refresh returned 400")
 	})
 }
 

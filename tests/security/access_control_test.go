@@ -1,6 +1,3 @@
-//go:build disabled
-
-
 package security
 
 import (

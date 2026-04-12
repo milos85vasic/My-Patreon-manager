@@ -1,6 +1,3 @@
-//go:build disabled
-
-
 package security
 
 import (
@@ -68,23 +65,22 @@ func TestCredentialRedaction_LogOutput(t *testing.T) {
 		Level: slog.LevelDebug,
 	}))
 
-	// Log a message containing a secret - redact it before logging
-	secret := "ghp_***"
+	// Use a value that matches the sensitive-pattern regex (key=value form)
+	secret := "token=mysecretvalue123"
 	redactedSecret := utils.RedactString(secret)
 	logger.Info("processing repository", "token", redactedSecret)
 
 	output := buf.String()
-	assert.NotContains(t, output, secret, "secret should not appear in log output")
+	assert.NotContains(t, output, "mysecretvalue123", "secret value should not appear in log output")
 	// Verify redaction occurred (should contain asterisks)
 	assert.Contains(t, output, "***", "redacted token should appear as asterisks")
 }
 
 func TestCredentialRedaction_ErrorMessages(t *testing.T) {
-	// Simulate an error message that includes a secret
-	secret := "glpat_***"
-	errMsg := "authentication failed: token=***" + secret
+	// Simulate an error message that includes a key=value secret
+	errMsg := "authentication failed: token=supersecretvalue42"
 	redacted := utils.RedactString(errMsg)
-	assert.NotContains(t, redacted, secret, "secret should be redacted from error message")
+	assert.NotContains(t, redacted, "supersecretvalue42", "secret should be redacted from error message")
 	assert.Contains(t, redacted, "***", "redacted token should appear as asterisks")
 }
 

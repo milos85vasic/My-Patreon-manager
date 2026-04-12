@@ -125,6 +125,9 @@ type OAuth2TokenManager struct {
 	ExpiresAt     time.Time
 	OnTokenUpdate func(accessToken, refreshToken string)
 	client        *http.Client
+	// RefreshURL is the OAuth2 token endpoint. Defaults to the Patreon
+	// production URL. Tests override this to point at an httptest server.
+	RefreshURL string
 }
 
 func NewOAuth2TokenManager(clientID, clientSecret, accessToken, refreshToken string) *OAuth2TokenManager {
@@ -135,6 +138,7 @@ func NewOAuth2TokenManager(clientID, clientSecret, accessToken, refreshToken str
 		ClientSecret: clientSecret,
 		ExpiresAt:    time.Now().Add(1 * time.Hour),
 		client:       &http.Client{Timeout: 30 * time.Second},
+		RefreshURL:   "https://www.patreon.com/api/oauth2/token",
 	}
 }
 
@@ -149,7 +153,7 @@ func (m *OAuth2TokenManager) Refresh(ctx context.Context) error {
 		return errors.InvalidCredentials("no refresh token available")
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", "https://www.patreon.com/api/oauth2/token", nil)
+	req, err := http.NewRequestWithContext(ctx, "POST", m.RefreshURL, nil)
 	if err != nil {
 		return fmt.Errorf("create refresh request: %w", err)
 	}

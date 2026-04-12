@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/milos85vasic/My-Patreon-Manager/internal/database"
+	"github.com/milos85vasic/My-Patreon-Manager/internal/metrics"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/models"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/providers/git"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/services/content"
@@ -203,8 +204,31 @@ func TestServiceFailure_CheckpointResume_NoDataLoss(t *testing.T) {
 
 // TestServiceFailure_CircuitBreakerTrip verifies that circuit breakers trip correctly after repeated failures.
 func TestServiceFailure_CircuitBreakerTrip(t *testing.T) {
-	// This test requires a provider with circuit breaker, e.g., LLM verifier.
-	// Since we have unit tests for circuit breaker in fallback chain, we can skip here.
-	// But we'll implement a simple test using the metrics.CircuitBreaker directly.
-	t.Skip("TODO: implement circuit breaker trip test")
+	tripCalled := false
+	cb := metrics.NewCircuitBreaker("chaos_test", 3, 200*time.Millisecond, 100*time.Millisecond,
+		func(name string, reason error) { tripCalled = true },
+		func(name string) {},
+	)
+
+	// Initially closed
+	assert.Equal(t, metrics.CircuitClosed, cb.State())
+
+	// Cause 3 consecutive failures to trip the breaker
+	for i := 0; i < 3; i++ {
+		_, err := cb.Execute(func() (interface{}, error) {
+			return nil, errors.New("service unavailable")
+		})
+		assert.Error(t, err)
+	}
+
+	// Breaker should now be open
+	assert.Equal(t, metrics.CircuitOpen, cb.State())
+	assert.True(t, tripCalled, "onTrip callback should have been called")
+
+	// Calls through an open breaker should fail immediately
+	_, err := cb.Execute(func() (interface{}, error) {
+		t.Fatal("function should not be called when breaker is open")
+		return nil, nil
+	})
+	assert.Error(t, err, "open breaker should reject calls")
 }

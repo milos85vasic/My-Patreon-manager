@@ -28,6 +28,21 @@ func WithSemaphore(s *concurrency.Semaphore) Option {
 	return func(fc *FallbackChain) { fc.sem = s }
 }
 
+// WithBreakerTimeouts overrides the circuit-breaker timeout and half-open
+// timeout for every breaker in the chain. Intended for tests that need fast
+// breaker resets without waiting 60 seconds.
+func WithBreakerTimeouts(timeout, halfOpen time.Duration) Option {
+	return func(fc *FallbackChain) {
+		for i := range fc.providers {
+			fc.breakers[i] = metrics.NewCircuitBreaker(
+				fmt.Sprintf("llm_fallback_%d", i),
+				3, timeout, halfOpen,
+				metrics.DefaultOnTrip, metrics.DefaultOnReset,
+			)
+		}
+	}
+}
+
 func NewFallbackChain(providers []LLMProvider, threshold float64, m metrics.MetricsCollector, opts ...Option) *FallbackChain {
 	breakers := make([]*metrics.CircuitBreaker, len(providers))
 	for i := range providers {
