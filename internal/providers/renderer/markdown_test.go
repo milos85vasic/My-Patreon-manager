@@ -94,7 +94,7 @@ func TestMarkdownRenderer_Render_LintMarkdown(t *testing.T) {
 }
 
 func TestMarkdownRenderer_Render_ApplyTemplateVariables(t *testing.T) {
-	// applyTemplateVariables currently does nothing, but we can still test it doesn't break
+	// Unknown function causes parse error; fallback returns raw body
 	renderer := NewMarkdownRenderer()
 	content := models.Content{
 		Title: "Test",
@@ -105,4 +105,46 @@ func TestMarkdownRenderer_Render_ApplyTemplateVariables(t *testing.T) {
 	require.NoError(t, err)
 	output := string(result)
 	assert.Contains(t, output, "{{variable}}")
+}
+
+func TestMarkdownRenderer_Render_TemplateSubstitution(t *testing.T) {
+	renderer := NewMarkdownRenderer()
+	content := models.Content{
+		Title: "My Project",
+		Body:  "Project: {{ .Title }}, model: {{ .ModelUsed }}",
+		ModelUsed: "gpt-4",
+	}
+	opts := RenderOptions{}
+	result, err := renderer.Render(context.Background(), content, opts)
+	require.NoError(t, err)
+	output := string(result)
+	assert.Contains(t, output, "Project: My Project, model: gpt-4")
+}
+
+func TestMarkdownRenderer_Render_TemplateFuncs(t *testing.T) {
+	renderer := NewMarkdownRenderer()
+	content := models.Content{
+		Title: "hello world",
+		Body:  "{{ .Title | upper }}",
+	}
+	opts := RenderOptions{}
+	result, err := renderer.Render(context.Background(), content, opts)
+	require.NoError(t, err)
+	output := string(result)
+	assert.Contains(t, output, "HELLO WORLD")
+}
+
+func TestMarkdownRenderer_Render_TemplateMissingField(t *testing.T) {
+	// missingkey=error causes execution error; falls back to raw body
+	renderer := NewMarkdownRenderer()
+	content := models.Content{
+		Title: "Test",
+		Body:  "{{ .NonExistent }}",
+	}
+	opts := RenderOptions{}
+	result, err := renderer.Render(context.Background(), content, opts)
+	require.NoError(t, err)
+	output := string(result)
+	// Should fall back to the raw body
+	assert.Contains(t, output, "{{ .NonExistent }}")
 }

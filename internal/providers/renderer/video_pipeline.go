@@ -11,12 +11,33 @@ import (
 	"github.com/milos85vasic/My-Patreon-Manager/internal/models"
 )
 
+// videoMkdirTemp, videoGetwd, and videoStatfs are indirection points for
+// testing OS error paths.
+var videoMkdirTemp = os.MkdirTemp
+var videoGetwd = os.Getwd
+var videoStatfs = syscall.Statfs
+
+// CommandRunner is the signature for executing an external command.
+// The default uses exec.CommandContext; tests inject a mock.
+type CommandRunner func(ctx context.Context, name string, args ...string) error
+
 type VideoPipeline struct {
-	enabled bool
+	enabled    bool
+	RunnerFn   CommandRunner
+	LookPathFn func(file string) (string, error)
 }
 
 func NewVideoPipeline(enabled bool) *VideoPipeline {
-	return &VideoPipeline{enabled: enabled}
+	return &VideoPipeline{
+		enabled: enabled,
+		RunnerFn: func(ctx context.Context, name string, args ...string) error {
+			cmd := exec.CommandContext(ctx, name, args...)
+			cmd.Stdout = nil
+			cmd.Stderr = nil
+			return cmd.Run()
+		},
+		LookPathFn: exec.LookPath,
+	}
 }
 
 func (p *VideoPipeline) IsEnabled() bool { return p.enabled }
@@ -38,12 +59,12 @@ func (p *VideoPipeline) Render(ctx context.Context, content models.Content, opts
 	}
 
 	// Check if ffmpeg is available
-	if _, err := exec.LookPath("ffmpeg"); err != nil {
+	if _, err := p.LookPathFn("ffmpeg"); err != nil {
 		return nil, fmt.Errorf("ffmpeg not found: video generation requires ffmpeg installed")
 	}
 
 	// Create temporary directory for video generation
-	tmpDir, err := os.MkdirTemp("", "patreon-video-*")
+	tmpDir, err := videoMkdirTemp("", "patreon-video-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
 	}
@@ -53,37 +74,18 @@ func (p *VideoPipeline) Render(ctx context.Context, content models.Content, opts
 
 	// Generate a simple video with ffmpeg: blue background with title text
 	duration := 5 // seconds
-	cmd := exec.CommandContext(ctx, "ffmpeg",
+	args := []string{
 		"-f", "lavfi",
 		"-i", fmt.Sprintf("color=c=blue:s=1280x720:d=%d", duration),
 		"-vf", fmt.Sprintf("drawtext=text='%s':fontcolor=white:fontsize=24:x=(w-text_w)/2:y=(h-text_h)/2", escapeFFmpegText(content.Title)),
 		"-c:v", "libx264",
 		"-t", fmt.Sprintf("%d", duration),
-		"-y", // overwrite output
+		"-y",
 		outputPath,
-	)
-
-	// Run ffmpeg with timeout
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("start ffmpeg: %w", err)
 	}
 
-	done := make(chan error, 1)
-	go func() {
-		done <- cmd.Wait()
-	}()
-
-	select {
-	case <-ctx.Done():
-		_ = cmd.Process.Kill()
-		<-done
-		return nil, ctx.Err()
-	case err := <-done:
-		if err != nil {
-			return nil, fmt.Errorf("ffmpeg failed: %w", err)
-		}
+	if err := p.RunnerFn(ctx, "ffmpeg", args...); err != nil {
+		return nil, fmt.Errorf("ffmpeg failed: %w", err)
 	}
 
 	// Read generated video
@@ -97,11 +99,11 @@ func (p *VideoPipeline) Render(ctx context.Context, content models.Content, opts
 
 func (p *VideoPipeline) CheckDiskSpace(requiredMB int) error {
 	var stat syscall.Statfs_t
-	wd, err := os.Getwd()
+	wd, err := videoGetwd()
 	if err != nil {
 		return fmt.Errorf("get working dir: %w", err)
 	}
-	if err := syscall.Statfs(wd, &stat); err != nil {
+	if err := videoStatfs(wd, &stat); err != nil {
 		return fmt.Errorf("statfs: %w", err)
 	}
 

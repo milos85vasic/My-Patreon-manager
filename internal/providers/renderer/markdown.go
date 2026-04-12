@@ -1,10 +1,12 @@
 package renderer
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"regexp"
 	"strings"
+	"text/template"
 
 	"github.com/milos85vasic/My-Patreon-Manager/internal/models"
 )
@@ -52,7 +54,15 @@ func (r *MarkdownRenderer) Render(ctx context.Context, content models.Content, o
 }
 
 func applyTemplateVariables(body string, content models.Content) string {
-	return body
+	tmpl, err := template.New("md").Option("missingkey=error").Funcs(SafeFuncs()).Parse(body)
+	if err != nil {
+		return body // fallback to raw on parse error
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, content); err != nil {
+		return body // fallback to raw on execution error
+	}
+	return buf.String()
 }
 
 func lintMarkdown(content string) string {
