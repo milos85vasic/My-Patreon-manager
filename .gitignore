@@ -62,3 +62,4 @@ Thumbs.db
 *.log
 logs/
 /patreon_manager.db
+*/patreon_manager.db
