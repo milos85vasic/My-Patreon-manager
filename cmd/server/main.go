@@ -212,15 +212,19 @@ func setupRouter(cfg *config.Config, metricsCollector metrics.MetricsCollector, 
 	r.GET("/health", handlers.HealthCheck)
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
-	// Webhook routes: rate limit + provider-aware auth. Real per-provider
-	// signature verification is Phase 2 Task 6; WebhookAuth today wraps the
-	// legacy HMAC/bearer checks.
+	// Webhook routes: rate limit + per-provider HMAC/token auth.
 	wh := r.Group("/webhook")
 	wh.Use(limiter.Limit())
-	wh.Use(middleware.WebhookAuth(cfg.WebhookHMACSecret))
-	wh.POST("/github", webhookHandler.GitHubWebhook)
-	wh.POST("/gitlab", webhookHandler.GitLabWebhook)
-	wh.POST("/:service", webhookHandler.GenericWebhook)
+	wh.POST("/:service", middleware.WebhookAuth(cfg.WebhookHMACSecret), func(c *gin.Context) {
+		switch c.Param("service") {
+		case "github":
+			webhookHandler.GitHubWebhook(c)
+		case "gitlab":
+			webhookHandler.GitLabWebhook(c)
+		default:
+			webhookHandler.GenericWebhook(c)
+		}
+	})
 
 	// Admin routes: rate limit + X-Admin-Key auth.
 	admin := r.Group("/admin")

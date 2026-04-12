@@ -4,65 +4,75 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"io"
+	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
 func ValidateGitHubSignature(body []byte, signature string, secret string) bool {
-	if !strings.HasPrefix(signature, "sha256=") {
+	return verifyHMACSignature(signature, secret, body)
+}
+
+func ValidateGitLabToken(token, expected string) bool {
+	return token != "" && subtle.ConstantTimeCompare([]byte(token), []byte(expected)) == 1
+}
+
+func ValidateGenericSignature(body []byte, signature string, secret string) bool {
+	return verifyHMACSignature(signature, secret, body)
+}
+
+// ValidateGenericToken is the legacy token-based validator. Kept for backward
+// compatibility; new code should use ValidateGenericSignature for HMAC checks.
+func ValidateGenericToken(token, expected string) bool {
+	return token != "" && subtle.ConstantTimeCompare([]byte(token), []byte(expected)) == 1
+}
+
+func verifyHMACSignature(header, secret string, body []byte) bool {
+	if secret == "" || header == "" {
 		return false
 	}
-	sig, err := hex.DecodeString(signature[7:])
+	const prefix = "sha256="
+	if !strings.HasPrefix(header, prefix) {
+		return false
+	}
+	given, err := hex.DecodeString(header[len(prefix):])
 	if err != nil {
 		return false
 	}
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write(body)
-	expected := mac.Sum(nil)
-	return hmac.Equal(sig, expected)
-}
-
-func ValidateGitLabToken(token, expected string) bool {
-	return token != "" && token == expected
-}
-
-func ValidateGenericToken(token, expected string) bool {
-	return token != "" && token == expected
+	return subtle.ConstantTimeCompare(given, mac.Sum(nil)) == 1
 }
 
 func WebhookAuth(secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		service := c.Param("service")
+		body, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+			return
+		}
+		c.Request.Body = io.NopCloser(bytes.NewReader(body))
+
+		var ok bool
 		switch service {
 		case "github":
-			// Read the request body for signature validation
-			body, err := io.ReadAll(c.Request.Body)
-			if err != nil {
-				c.AbortWithStatusJSON(401, gin.H{"error": "invalid request body"})
-				return
-			}
-			// Restore the body for subsequent handlers
-			c.Request.Body = io.NopCloser(bytes.NewBuffer(body))
-			signature := c.GetHeader("X-Hub-Signature-256")
-			if !ValidateGitHubSignature(body, signature, secret) {
-				c.AbortWithStatusJSON(401, gin.H{"error": "invalid signature"})
-				return
-			}
+			ok = ValidateGitHubSignature(body, c.GetHeader("X-Hub-Signature-256"), secret)
 		case "gitlab":
-			token := c.GetHeader("X-Gitlab-Token")
-			if !ValidateGitLabToken(token, secret) {
-				c.AbortWithStatusJSON(401, gin.H{"error": "invalid token"})
-				return
-			}
+			ok = ValidateGitLabToken(c.GetHeader("X-Gitlab-Token"), secret)
+		case "gitflic", "gitverse":
+			ok = ValidateGenericSignature(body, c.GetHeader("X-Webhook-Signature"), secret)
 		default:
-			token := c.GetHeader("X-Webhook-Token")
-			if !ValidateGenericToken(token, secret) {
-				c.AbortWithStatusJSON(401, gin.H{"error": "invalid token"})
-				return
-			}
+			ok = false
+		}
+
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid signature"})
+			return
 		}
 		c.Next()
 	}

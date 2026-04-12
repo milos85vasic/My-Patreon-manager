@@ -299,16 +299,33 @@ func TestWebhookAuth(t *testing.T) {
 	engine.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 
-	// Generic webhook with valid token
-	req = httptest.NewRequest("POST", "/webhook/other", nil)
+	// Unknown provider -> 401 (only github/gitlab/gitflic/gitverse accepted)
+	req = httptest.NewRequest("POST", "/webhook/other", bytes.NewReader(body))
 	req.Header.Set("X-Webhook-Token", secret)
+	w = httptest.NewRecorder()
+	engine.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+	// GitFlic webhook with valid HMAC signature
+	mac = hmac.New(sha256.New, []byte(secret))
+	mac.Write(body)
+	gitflicSig := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+	req = httptest.NewRequest("POST", "/webhook/gitflic", bytes.NewReader(body))
+	req.Header.Set("X-Webhook-Signature", gitflicSig)
 	w = httptest.NewRecorder()
 	engine.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	// Generic webhook with invalid token -> 401
-	req = httptest.NewRequest("POST", "/webhook/other", nil)
-	req.Header.Set("X-Webhook-Token", "wrong")
+	// GitVerse webhook with valid HMAC signature
+	req = httptest.NewRequest("POST", "/webhook/gitverse", bytes.NewReader(body))
+	req.Header.Set("X-Webhook-Signature", gitflicSig)
+	w = httptest.NewRecorder()
+	engine.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// GitFlic with wrong signature -> 401
+	req = httptest.NewRequest("POST", "/webhook/gitflic", bytes.NewReader(body))
+	req.Header.Set("X-Webhook-Signature", "sha256=deadbeef")
 	w = httptest.NewRecorder()
 	engine.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
@@ -356,8 +373,8 @@ func TestWebhookAuth_ErrorReadingBody(t *testing.T) {
 	// Call the middleware directly
 	handler := WebhookAuth("secret")
 	handler(c)
-	// Should have aborted with 401
-	assert.Equal(t, 401, c.Writer.Status())
+	// Should have aborted with 400 (bad request — body unreadable)
+	assert.Equal(t, 400, c.Writer.Status())
 }
 
 type errorReader struct{}
