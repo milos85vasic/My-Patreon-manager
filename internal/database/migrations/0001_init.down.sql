@@ -1,0 +1,14 @@
+BEGIN;
+
+DROP TABLE IF EXISTS audit_entries;
+DROP TABLE IF EXISTS sync_locks;
+DROP TABLE IF EXISTS posts;
+DROP TABLE IF EXISTS tiers;
+DROP TABLE IF EXISTS campaigns;
+DROP TABLE IF EXISTS content_templates;
+DROP TABLE IF EXISTS generated_contents;
+DROP TABLE IF EXISTS mirror_maps;
+DROP TABLE IF EXISTS sync_states;
+DROP TABLE IF EXISTS repositories;
+
+COMMIT;
