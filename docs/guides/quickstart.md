@@ -167,6 +167,13 @@ Quick reference:
 | `LLMSVERIFIER_API_KEY` | Your [LLMsVerifier](https://github.com/vasic-digital/LLMsVerifier) instance |
 | `HMAC_SECRET` | Self-generated: `openssl rand -hex 32` |
 
+## Further Reading
+
+- [LLMsVerifier Integration](llms-verifier.md) — architecture, scoring algorithm, health monitoring, caching
+- [Patreon Tiers](patreon-tiers.md) — check, create, and configure tier-gated content publishing
+- [Obtaining Credentials](obtaining-credentials.md) — step-by-step for every token and secret
+- [Configuration Reference](configuration.md) — full variable list and per-command requirements
+
 ## Troubleshooting
 
 - **"PATREON_CLIENT_ID is required"**: Fill in all Patreon credentials in `.env` — they are validated even for `--dry-run`
