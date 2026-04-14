@@ -22,6 +22,7 @@ type Repository struct {
 	Forks           int                `json:"forks" db:"forks"`
 	LastCommitSHA   string             `json:"last_commit_sha" db:"last_commit_sha"`
 	LastCommitAt    time.Time          `json:"last_commit_at" db:"last_commit_at"`
+	IsPrivate       bool               `json:"is_private" db:"is_private"`
 	IsArchived      bool               `json:"is_archived" db:"is_archived"`
 	CreatedAt       time.Time          `json:"created_at" db:"created_at"`
 	UpdatedAt       time.Time          `json:"updated_at" db:"updated_at"`

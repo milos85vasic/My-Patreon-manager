@@ -73,8 +73,10 @@ type SyncFilter struct {
 }
 
 type SyncOptions struct {
-	DryRun bool
-	Filter SyncFilter
+	DryRun                bool
+	Filter                SyncFilter
+	ProcessPrivateRepos   bool
+	RepoMaxInactivityDays int
 }
 
 type SyncResult struct {
@@ -232,7 +234,8 @@ func (o *Orchestrator) DrainRepoWork(ctx context.Context, fn func(context.Contex
 // .repoignore filtering, and returns the resulting repository slice. Errors
 // from individual providers are appended to errsOut (never returned) so the
 // caller can continue with a partial view — matching the contract of Run().
-func (o *Orchestrator) discoverRepositories(ctx context.Context, filter SyncFilter, errsOut *[]string) []models.Repository {
+func (o *Orchestrator) discoverRepositories(ctx context.Context, opts SyncOptions, errsOut *[]string) []models.Repository {
+	filter := opts.Filter
 	var allRepos []models.Repository
 	for _, p := range o.providers {
 		org := filter.Org
@@ -263,6 +266,41 @@ func (o *Orchestrator) discoverRepositories(ctx context.Context, filter SyncFilt
 		}
 		allRepos = filtered
 	}
+
+	// Filter private repositories unless explicitly enabled.
+	if !opts.ProcessPrivateRepos {
+		before := len(allRepos)
+		var publicOnly []models.Repository
+		for _, r := range allRepos {
+			if !r.IsPrivate {
+				publicOnly = append(publicOnly, r)
+			}
+		}
+		allRepos = publicOnly
+		if o.logger != nil && before != len(allRepos) {
+			o.logger.Info("private repos filtered",
+				slog.Int("before", before), slog.Int("after", len(allRepos)))
+		}
+	}
+
+	// Filter repositories with no commits within the inactivity window.
+	if opts.RepoMaxInactivityDays > 0 {
+		before := len(allRepos)
+		cutoff := time.Now().AddDate(0, 0, -opts.RepoMaxInactivityDays)
+		var active []models.Repository
+		for _, r := range allRepos {
+			if r.LastCommitAt.IsZero() || r.LastCommitAt.After(cutoff) {
+				active = append(active, r)
+			}
+		}
+		allRepos = active
+		if o.logger != nil && before != len(allRepos) {
+			o.logger.Info("inactive repos filtered",
+				slog.Int("before", before), slog.Int("after", len(allRepos)),
+				slog.Int("maxInactivityDays", opts.RepoMaxInactivityDays))
+		}
+	}
+
 	return allRepos
 }
 
@@ -283,7 +321,7 @@ func (o *Orchestrator) ScanOnly(ctx context.Context, opts SyncOptions) ([]models
 	}
 
 	var errs []string
-	repos := o.discoverRepositories(ctx, opts.Filter, &errs)
+	repos := o.discoverRepositories(ctx, opts, &errs)
 	for _, e := range errs {
 		o.emitAudit(ctx, audit.Entry{
 			Actor:    "orchestrator",
@@ -335,7 +373,7 @@ func (o *Orchestrator) GenerateOnly(ctx context.Context, opts SyncOptions) (*Syn
 		o.logger.Info("generate started")
 	}
 
-	allRepos := o.discoverRepositories(ctx, opts.Filter, &result.Errors)
+	allRepos := o.discoverRepositories(ctx, opts, &result.Errors)
 
 	for _, repo := range allRepos {
 		if err := ctx.Err(); err != nil {

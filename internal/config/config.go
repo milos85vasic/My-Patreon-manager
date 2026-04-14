@@ -61,6 +61,13 @@ type Config struct {
 	// RateLimitBurst is the burst budget the IPRateLimiter allows a single
 	// IP before throttling kicks in. Defaults to 200.
 	RateLimitBurst int
+	// ProcessPrivateRepos controls whether private repositories are included
+	// in sync/scan/generate. Defaults to false (public repos only).
+	ProcessPrivateRepos bool
+	// RepoMaxInactivityDays is the maximum number of days since the last
+	// commit for a repository to be considered active. Repositories with no
+	// commits within this window are skipped. Defaults to 548 (≈18 months).
+	RepoMaxInactivityDays int
 	// LLMsVerifierEndpoint is the base URL of the LLMsVerifier service
 	// (e.g. "http://localhost:9099" or "https://llmsverifier.internal:8443").
 	// All LLM calls route through this service for model scoring and selection.
@@ -88,6 +95,8 @@ func NewConfig() *Config {
 		ContentTierMappingStrategy: "linear",
 		GracePeriodHours:           24,
 		AuditStore:                 "ring",
+		ProcessPrivateRepos:        false,
+		RepoMaxInactivityDays:      548, // ~18 months
 		RateLimitRPS:               100,
 		RateLimitBurst:             200,
 	}
@@ -200,6 +209,8 @@ func (c *Config) LoadFromEnv() {
 	c.WebhookHMACSecret = getEnv("WEBHOOK_HMAC_SECRET", c.WebhookHMACSecret)
 	c.RateLimitRPS = getEnvFloat("RATE_LIMIT_RPS", c.RateLimitRPS)
 	c.RateLimitBurst = getEnvInt("RATE_LIMIT_BURST", c.RateLimitBurst)
+	c.ProcessPrivateRepos = getEnvBool("PROCESS_PRIVATE_REPOS", c.ProcessPrivateRepos)
+	c.RepoMaxInactivityDays = getEnvInt("REPO_MAX_INACTIVITY_DAYS", c.RepoMaxInactivityDays)
 	c.LLMsVerifierEndpoint = getEnv("LLMSVERIFIER_ENDPOINT", c.LLMsVerifierEndpoint)
 	c.LLMsVerifierAPIKey = getEnv("LLMSVERIFIER_API_KEY", c.LLMsVerifierAPIKey)
 }
