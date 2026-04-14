@@ -68,6 +68,8 @@ All LLM calls route through the [LLMsVerifier](https://github.com/vasic-digital/
 | `LLMSVERIFIER_ENDPOINT` | string | *none* | **Required for `sync`, `generate`, `verify`.** Base URL of the LLMsVerifier service (e.g. `http://localhost:9090`). Validated at startup — the CLI exits if empty for these commands. |
 | `LLMSVERIFIER_API_KEY` | string | *none* | Authentication token for the LLMsVerifier service. Optional if your instance allows unauthenticated access (Bearer header is omitted when empty). |
 
+**Automated management:** Run `bash scripts/llmsverifier.sh` to start the LLMsVerifier container, wait for health, and automatically refresh both `LLMSVERIFIER_ENDPOINT` and `LLMSVERIFIER_API_KEY` in `.env` with a freshly generated key. The API key is **rotated on every boot**. See the [Obtaining Credentials](obtaining-credentials.md#llmsverifier-api-key) guide for details.
+
 **Important:** Even `sync --dry-run` validates that `LLMSVERIFIER_ENDPOINT` is set (though no LLM calls are actually made). The `validate` command does **not** require it.
 
 ### HMAC Secret (Signed URLs)
@@ -165,15 +167,19 @@ go run ./cmd/cli validate
 
 **Requires:** `PATREON_CLIENT_ID`, `PATREON_CLIENT_SECRET`, `PATREON_ACCESS_TOKEN`, `PATREON_CAMPAIGN_ID`, `HMAC_SECRET`.
 
-### Step 2: Verify LLMsVerifier Connectivity
+### Step 2: Start LLMsVerifier
 
-Confirms the LLMsVerifier service is reachable and shows available models ranked by quality:
+The bootstrap script starts the container, waits for health, and refreshes `.env` with a fresh API key:
+
+```sh
+bash scripts/llmsverifier.sh
+```
+
+Then verify connectivity and see ranked models:
 
 ```sh
 go run ./cmd/cli verify
 ```
-
-**Requires:** `LLMSVERIFIER_ENDPOINT`. Make sure your LLMsVerifier instance is running.
 
 ### Step 3: Dry-Run Sync
 

@@ -5,7 +5,7 @@
 - Go 1.26.1+
 - A Patreon account with API access
 - Git hosting accounts (GitHub, GitLab, GitFlic, GitVerse) — you only need accounts for the providers you want to scan
-- A running [LLMsVerifier](https://github.com/vasic-digital/LLMsVerifier) instance (required for content generation)
+- Docker (or Podman) for running the [LLMsVerifier](https://github.com/vasic-digital/LLMsVerifier) container (started automatically by `scripts/llmsverifier.sh`)
 
 ## Setup
 
@@ -51,9 +51,15 @@ Checks that all required environment variables are set:
 go run ./cmd/cli validate
 ```
 
-### 2. Verify LLMsVerifier
+### 2. Start LLMsVerifier
 
-Confirms the LLMsVerifier service is reachable and shows ranked models:
+The bootstrap script starts the container, waits for health, and refreshes `.env` with a fresh API key:
+
+```sh
+bash scripts/llmsverifier.sh
+```
+
+Then verify connectivity and see ranked models:
 
 ```sh
 go run ./cmd/cli verify

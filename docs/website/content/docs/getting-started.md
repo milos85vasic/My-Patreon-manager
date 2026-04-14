@@ -14,7 +14,7 @@ This guide walks you through installing, configuring, and running your first syn
 *   **Go 1.26.1+** — if you plan to build from source.
 *   **A Patreon creator account** with [API access](https://www.patreon.com/portal/registration/register-clients).
 *   **Git hosting accounts** (at least one of GitHub, GitLab, GitFlic, GitVerse) with a personal access token.
-*   **A running [LLMsVerifier](https://github.com/vasic-digital/LLMsVerifier) instance** — all LLM calls route through this service for model scoring and selection.
+*   **Docker (or Podman)** — used to run the [LLMsVerifier](https://github.com/vasic-digital/LLMsVerifier) container (started automatically by `scripts/llmsverifier.sh`).
 
 ## Installation
 
@@ -95,9 +95,15 @@ Always validate locally before publishing to Patreon. Follow these steps in orde
 go run ./cmd/cli validate
 ```
 
-### Step 2: Verify LLMsVerifier Connectivity
+### Step 2: Start LLMsVerifier
 
-Confirms the service is reachable and shows available models ranked by quality:
+The bootstrap script starts the container, waits for health, and refreshes `.env` with a fresh API key:
+
+```bash
+bash scripts/llmsverifier.sh
+```
+
+Then verify connectivity and see ranked models:
 
 ```bash
 go run ./cmd/cli verify
