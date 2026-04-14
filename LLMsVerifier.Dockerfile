@@ -24,6 +24,10 @@ RUN sed -i 's|=> ../../LLMProvider|=> ../LLMProvider|g' go.mod
 RUN go mod tidy || true
 RUN CGO_ENABLED=1 GOOS=linux go build -o /llm-verifier ./cmd
 
+# Build a tiny init binary that just creates/migrates the DB schema.
+RUN printf 'package main\nimport (\n\t"fmt"\n\t"os"\n\t_ "github.com/mattn/go-sqlite3"\n\t"digital.vasic.llmsverifier/database"\n)\nfunc main() {\n\tpath := "llm-verifier.db"\n\tif v := os.Getenv("LLM_DB_PATH"); v != "" { path = v }\n\tdb, err := database.New(path)\n\tif err != nil { fmt.Fprintf(os.Stderr, "db init: %%v\\n", err); os.Exit(1) }\n\tdb.Close()\n\tfmt.Println("DB initialized:", path)\n}\n' > /tmp/dbinit.go && \
+    CGO_ENABLED=1 GOOS=linux go build -o /dbinit /tmp/dbinit.go
+
 # Runtime stage
 FROM alpine:3.20
 
@@ -33,13 +37,17 @@ RUN apk add --no-cache ca-certificates tzdata wget libc6-compat && \
 
 WORKDIR /app
 COPY --from=builder /llm-verifier .
+COPY --from=builder /dbinit .
 COPY --from=builder /src/llm-verifier/config.yaml.example ./config.yaml
 RUN mkdir -p /app/data && chown -R appuser:appgroup /app
+
+# Entrypoint: init DB schema (idempotent), then start the API server.
+RUN printf '#!/bin/sh\n./dbinit\nexec ./llm-verifier server "$@"\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 USER appuser
 
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=40s \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/api/health || exit 1
 
-ENTRYPOINT ["./llm-verifier", "server"]
+ENTRYPOINT ["/app/entrypoint.sh"]
