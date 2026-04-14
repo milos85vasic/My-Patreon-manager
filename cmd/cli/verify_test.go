@@ -28,7 +28,7 @@ func TestRunVerifyMissingEndpoint(t *testing.T) {
 func TestRunVerifySuccessfulConnection(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/v1/models":
+		case "/api/models":
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"data": []map[string]interface{}{
 					{"id": "gpt-4", "name": "GPT-4", "quality_score": 0.95, "latency_p95_ms": 1200, "cost_per_1k_tokens": 0.03},
@@ -36,7 +36,7 @@ func TestRunVerifySuccessfulConnection(t *testing.T) {
 					{"id": "llama-3", "name": "Llama 3", "quality_score": 0.60, "latency_p95_ms": 200, "cost_per_1k_tokens": 0.001},
 				},
 			})
-		case "/v1/usage":
+		case "/api/usage":
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"total_tokens": 5000, "estimated_cost": 0.15,
 			})

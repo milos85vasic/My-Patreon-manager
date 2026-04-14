@@ -32,7 +32,7 @@ func verifierReachableImpl(endpoint string) bool {
 		return false
 	}
 	client := &http.Client{Timeout: 3 * time.Second}
-	resp, err := client.Get(endpoint + "/v1/models")
+	resp, err := client.Get(endpoint + "/api/health")
 	if err != nil {
 		return false
 	}

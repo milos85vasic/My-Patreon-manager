@@ -57,7 +57,7 @@ func (m *mockMetricsCollector) SetBudgetUtilization(percent float64)            
 
 func TestVerifierClient_GenerateContent_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v1/completions", r.URL.Path)
+		assert.Equal(t, "/api/completions", r.URL.Path)
 		assert.Equal(t, "Bearer dummy-api-key", r.Header.Get("Authorization"))
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
@@ -157,7 +157,7 @@ func TestVerifierClient_GenerateContent_RateLimited(t *testing.T) {
 
 func TestVerifierClient_GetAvailableModels_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v1/models", r.URL.Path)
+		assert.Equal(t, "/api/models", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -196,7 +196,7 @@ func TestVerifierClient_GetAvailableModels_Success(t *testing.T) {
 
 func TestVerifierClient_GetModelQualityScore_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v1/models/model-123/score", r.URL.Path)
+		assert.Equal(t, "/api/models/model-123/score", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -214,7 +214,7 @@ func TestVerifierClient_GetModelQualityScore_Success(t *testing.T) {
 
 func TestVerifierClient_GetTokenUsage_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v1/usage", r.URL.Path)
+		assert.Equal(t, "/api/usage", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(models.UsageStats{

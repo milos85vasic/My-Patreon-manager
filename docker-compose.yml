@@ -18,8 +18,8 @@ services:
 
   llmsverifier:
     build:
-      context: ./LLMsVerifier
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: LLMsVerifier.Dockerfile
     ports:
       - "${LLMSVERIFIER_PORT:-9099}:8080"
     environment:
@@ -27,7 +27,7 @@ services:
     volumes:
       - llmsverifier-data:/app/data
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/health"]
       interval: 10s
       timeout: 5s
       retries: 12

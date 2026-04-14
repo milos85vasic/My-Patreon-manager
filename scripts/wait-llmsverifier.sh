@@ -9,7 +9,7 @@ TIMEOUT="${2:-120}"
 deadline=$((SECONDS + TIMEOUT))
 
 echo "Waiting for LLMsVerifier at ${ENDPOINT} (timeout: ${TIMEOUT}s)..."
-until curl -sf "${ENDPOINT}/v1/models" >/dev/null 2>&1; do
+until curl -sf "${ENDPOINT}/api/health" >/dev/null 2>&1; do
   if [ "$SECONDS" -ge "$deadline" ]; then
     echo "ERROR: LLMsVerifier did not come up within ${TIMEOUT} seconds" >&2
     exit 1

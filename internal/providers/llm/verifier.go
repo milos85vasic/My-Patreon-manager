@@ -48,7 +48,7 @@ func (v *VerifierClient) GenerateContent(ctx context.Context, prompt models.Prom
 			"max_tokens":   opts.MaxTokens,
 			"quality_tier": opts.QualityTier,
 		}
-		resp, err := v.doRequest(ctx, "POST", v.baseURL+"/v1/completions", body)
+		resp, err := v.doRequest(ctx, "POST", v.baseURL+"/api/completions", body)
 		if err != nil {
 			return nil, err
 		}
@@ -86,7 +86,7 @@ func (v *VerifierClient) GenerateContent(ctx context.Context, prompt models.Prom
 
 func (v *VerifierClient) GetAvailableModels(ctx context.Context) ([]models.ModelInfo, error) {
 	result, err := v.cb.Execute(func() (interface{}, error) {
-		resp, err := v.doRequest(ctx, "GET", v.baseURL+"/v1/models", nil)
+		resp, err := v.doRequest(ctx, "GET", v.baseURL+"/api/models", nil)
 		if err != nil {
 			return nil, err
 		}
@@ -109,7 +109,7 @@ func (v *VerifierClient) GetAvailableModels(ctx context.Context) ([]models.Model
 
 func (v *VerifierClient) GetModelQualityScore(ctx context.Context, modelID string) (float64, error) {
 	result, err := v.cb.Execute(func() (interface{}, error) {
-		resp, err := v.doRequest(ctx, "GET", v.baseURL+"/v1/models/"+modelID+"/score", nil)
+		resp, err := v.doRequest(ctx, "GET", v.baseURL+"/api/models/"+modelID+"/score", nil)
 		if err != nil {
 			return nil, err
 		}
@@ -131,7 +131,7 @@ func (v *VerifierClient) GetModelQualityScore(ctx context.Context, modelID strin
 }
 
 func (v *VerifierClient) GetTokenUsage(ctx context.Context) (models.UsageStats, error) {
-	resp, err := v.doRequest(ctx, "GET", v.baseURL+"/v1/usage", nil)
+	resp, err := v.doRequest(ctx, "GET", v.baseURL+"/api/usage", nil)
 	if err != nil {
 		return models.UsageStats{}, err
 	}
