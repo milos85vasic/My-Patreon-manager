@@ -65,7 +65,7 @@ docker-compose up -d
     DB_PATH=patreon_manager.db
 
     # LLMsVerifier (required for sync/generate/verify)
-    LLMSVERIFIER_ENDPOINT=http://localhost:9090
+    LLMSVERIFIER_ENDPOINT=http://localhost:9099
     LLMSVERIFIER_API_KEY=
 
     # Git providers — add tokens for the ones you use, rest are skipped

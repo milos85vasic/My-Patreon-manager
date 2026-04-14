@@ -62,7 +62,7 @@ type Config struct {
 	// IP before throttling kicks in. Defaults to 200.
 	RateLimitBurst int
 	// LLMsVerifierEndpoint is the base URL of the LLMsVerifier service
-	// (e.g. "http://localhost:9090" or "https://llmsverifier.internal:8443").
+	// (e.g. "http://localhost:9099" or "https://llmsverifier.internal:8443").
 	// All LLM calls route through this service for model scoring and selection.
 	LLMsVerifierEndpoint string
 	// LLMsVerifierAPIKey is the authentication token for the LLMsVerifier service.

@@ -89,6 +89,13 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
+	// Load .env file (or --config override) into environment.
+	if configFile != "" {
+		_ = config.LoadEnv(configFile)
+	} else {
+		_ = config.LoadEnv() // loads .env from cwd, ignores if missing
+	}
+
 	cfg := newConfig()
 	cfg.LoadFromEnv()
 

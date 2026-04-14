@@ -1,0 +1,6 @@
+[submodule "Challenges"]
+	path = Challenges
+	url = git@github.com:vasic-digital/Challenges.git
+[submodule "LLMsVerifier"]
+	path = LLMsVerifier
+	url = git@github.com:vasic-digital/LLMsVerifier.git

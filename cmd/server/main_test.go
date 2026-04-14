@@ -681,7 +681,7 @@ func TestBuildOrchestrator_WithLLMsVerifier(t *testing.T) {
 	cfg := &config.Config{
 		GitHubToken:             "test-token",
 		DBDriver:                "sqlite",
-		LLMsVerifierEndpoint:    "http://localhost:9090",
+		LLMsVerifierEndpoint:    "http://localhost:9099",
 		ContentQualityThreshold: 0.75,
 		LLMDailyTokenBudget:     100000,
 	}

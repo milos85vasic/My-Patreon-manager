@@ -20,7 +20,7 @@ func TestEnsureLLMsVerifier_AlreadyRunning(t *testing.T) {
 
 	verifierReachable = func(endpoint string) bool { return true }
 
-	cfg := &config.Config{LLMsVerifierEndpoint: "http://localhost:9090"}
+	cfg := &config.Config{LLMsVerifierEndpoint: "http://localhost:9099"}
 	err := ensureLLMsVerifierImpl(cfg, testLogger())
 	assert.NoError(t, err)
 }
@@ -48,7 +48,7 @@ func TestEnsureLLMsVerifier_BootstrapSuccess(t *testing.T) {
 		return nil
 	}
 
-	cfg := &config.Config{LLMsVerifierEndpoint: "http://localhost:9090"}
+	cfg := &config.Config{LLMsVerifierEndpoint: "http://localhost:9099"}
 	err := ensureLLMsVerifierImpl(cfg, testLogger())
 	assert.NoError(t, err)
 	assert.True(t, execCalled)
@@ -66,7 +66,7 @@ func TestEnsureLLMsVerifier_BootstrapScriptNotFound(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpDir))
 	defer func() { require.NoError(t, os.Chdir(origDir)) }()
 
-	cfg := &config.Config{LLMsVerifierEndpoint: "http://localhost:9090"}
+	cfg := &config.Config{LLMsVerifierEndpoint: "http://localhost:9099"}
 	err := ensureLLMsVerifierImpl(cfg, testLogger())
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "bootstrap script")
@@ -86,7 +86,7 @@ func TestEnsureLLMsVerifier_BootstrapFails(t *testing.T) {
 		return assert.AnError
 	}
 
-	cfg := &config.Config{LLMsVerifierEndpoint: "http://localhost:9090"}
+	cfg := &config.Config{LLMsVerifierEndpoint: "http://localhost:9099"}
 	err := ensureLLMsVerifierImpl(cfg, testLogger())
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "bootstrap failed")
@@ -104,7 +104,7 @@ func TestEnsureLLMsVerifier_StillUnreachableAfterBootstrap(t *testing.T) {
 	verifierReachable = func(endpoint string) bool { return false }
 	execCommand = func(name string, args ...string) error { return nil }
 
-	cfg := &config.Config{LLMsVerifierEndpoint: "http://localhost:9090"}
+	cfg := &config.Config{LLMsVerifierEndpoint: "http://localhost:9099"}
 	err := ensureLLMsVerifierImpl(cfg, testLogger())
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "still not reachable")

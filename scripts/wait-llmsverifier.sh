@@ -4,7 +4,7 @@
 # Defaults: endpoint=http://localhost:9090, timeout=120
 set -euo pipefail
 
-ENDPOINT="${1:-http://localhost:9090}"
+ENDPOINT="${1:-http://localhost:9099}"
 TIMEOUT="${2:-120}"
 deadline=$((SECONDS + TIMEOUT))
 

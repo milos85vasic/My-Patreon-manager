@@ -72,7 +72,7 @@ All LLM calls route through the [LLMsVerifier](https://github.com/vasic-digital/
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `LLMSVERIFIER_ENDPOINT` | string | *none* | **Required for `sync`, `generate`, `verify`.** Base URL of the LLMsVerifier service (e.g. `http://localhost:9090`). Validated at startup — the CLI exits if empty for these commands. |
+| `LLMSVERIFIER_ENDPOINT` | string | *none* | **Required for `sync`, `generate`, `verify`.** Base URL of the LLMsVerifier service (e.g. `http://localhost:9099`). Validated at startup — the CLI exits if empty for these commands. |
 | `LLMSVERIFIER_API_KEY` | string | *none* | Authentication token for the LLMsVerifier service. Optional if your instance allows unauthenticated access (Bearer header is omitted when empty). |
 
 **Automated management:** Run `bash scripts/llmsverifier.sh` to start the LLMsVerifier container, wait for health, and automatically refresh both `LLMSVERIFIER_ENDPOINT` and `LLMSVERIFIER_API_KEY` in `.env` with a freshly generated key. The API key is **rotated on every boot**. See the [Obtaining Credentials](/docs/obtaining-credentials/#llmsverifier-api-key) guide for details.
@@ -294,7 +294,7 @@ GITFLIC_TOKEN=
 GITVERSE_TOKEN=
 
 # LLMsVerifier (required for sync/generate/verify)
-LLMSVERIFIER_ENDPOINT=http://localhost:9090
+LLMSVERIFIER_ENDPOINT=http://localhost:9099
 LLMSVERIFIER_API_KEY=
 
 # Content Generation

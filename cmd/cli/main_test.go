@@ -488,7 +488,7 @@ func TestMain_SyncWithSchedule(t *testing.T) {
 	os.Setenv("PATREON_REFRESH_TOKEN", "dummy")
 	os.Setenv("PATREON_CAMPAIGN_ID", "dummy")
 	os.Setenv("HMAC_SECRET", "dummy")
-	os.Setenv("LLMSVERIFIER_ENDPOINT", "http://localhost:9090")
+	os.Setenv("LLMSVERIFIER_ENDPOINT", "http://localhost:9099")
 	// mock LLMsVerifier auto-start (skip real network check)
 	oldEnsure := ensureLLMsVerifier
 	defer func() { ensureLLMsVerifier = oldEnsure }()
@@ -563,7 +563,7 @@ func TestMain_SyncCommand(t *testing.T) {
 	os.Setenv("PATREON_REFRESH_TOKEN", "dummy")
 	os.Setenv("PATREON_CAMPAIGN_ID", "dummy")
 	os.Setenv("HMAC_SECRET", "dummy")
-	os.Setenv("LLMSVERIFIER_ENDPOINT", "http://localhost:9090")
+	os.Setenv("LLMSVERIFIER_ENDPOINT", "http://localhost:9099")
 	// mock LLMsVerifier auto-start (skip real network check)
 	oldEnsureSync := ensureLLMsVerifier
 	defer func() { ensureLLMsVerifier = oldEnsureSync }()
@@ -626,7 +626,7 @@ func TestMain_GenerateCommand(t *testing.T) {
 	os.Setenv("PATREON_REFRESH_TOKEN", "dummy")
 	os.Setenv("PATREON_CAMPAIGN_ID", "dummy")
 	os.Setenv("HMAC_SECRET", "dummy")
-	os.Setenv("LLMSVERIFIER_ENDPOINT", "http://localhost:9090")
+	os.Setenv("LLMSVERIFIER_ENDPOINT", "http://localhost:9099")
 	// mock LLMsVerifier auto-start (skip real network check)
 	oldEnsureGen := ensureLLMsVerifier
 	defer func() { ensureLLMsVerifier = oldEnsureGen }()

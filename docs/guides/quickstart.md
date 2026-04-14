@@ -28,7 +28,7 @@
    DB_PATH=patreon_manager.db
 
    # LLMsVerifier (required for sync/generate/verify)
-   LLMSVERIFIER_ENDPOINT=http://localhost:9090
+   LLMSVERIFIER_ENDPOINT=http://localhost:9099
 
    # Git provider tokens — only add the ones you use
    GITHUB_TOKEN=your_github_token

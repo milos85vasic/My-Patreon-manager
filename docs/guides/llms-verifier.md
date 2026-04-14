@@ -236,7 +236,7 @@ See the [Obtaining Credentials](obtaining-credentials.md#llmsverifier-api-key) g
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `LLMSVERIFIER_ENDPOINT` | *none* | Base URL (e.g. `http://localhost:9090`). Required for `sync`, `generate`, `verify`. |
+| `LLMSVERIFIER_ENDPOINT` | *none* | Base URL (e.g. `http://localhost:9099`). Required for `sync`, `generate`, `verify`. |
 | `LLMSVERIFIER_API_KEY` | *none* | Bearer token. Optional if instance allows unauthenticated access. |
 | `CONTENT_QUALITY_THRESHOLD` | `0.75` | Minimum quality score for content to pass the quality gate. |
 | `LLM_DAILY_TOKEN_BUDGET` | `100000` | Daily token budget — generation pauses when exhausted. |

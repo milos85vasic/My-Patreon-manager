@@ -22,7 +22,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 ENV_FILE="${ROOT}/.env"
-PORT="${LLMSVERIFIER_PORT:-9090}"
+PORT="${LLMSVERIFIER_PORT:-9099}"
 TIMEOUT="${LLMSVERIFIER_TIMEOUT:-120}"
 ENDPOINT="http://localhost:${PORT}"
 COMPOSE_FILE="${ROOT}/docker-compose.yml"
