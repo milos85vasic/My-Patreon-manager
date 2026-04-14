@@ -17,12 +17,12 @@ import (
 var runVerifyFn = runVerify
 
 func runVerify(ctx context.Context, cfg *config.Config, m metrics.MetricsCollector, logger *slog.Logger) {
+	// ensureLLMsVerifier in main.go already guarantees the endpoint is set
+	// and reachable before we reach this point. Guard against direct calls
+	// with an empty endpoint just in case.
 	if cfg.LLMsVerifierEndpoint == "" {
-		fmt.Fprintln(os.Stderr, "ERROR: LLMSVERIFIER_ENDPOINT is not set in .env")
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "The LLMsVerifier service must be running and accessible.")
-		fmt.Fprintln(os.Stderr, "Set LLMSVERIFIER_ENDPOINT to the base URL (e.g. http://localhost:9090)")
-		fmt.Fprintln(os.Stderr, "and LLMSVERIFIER_API_KEY to your authentication token.")
+		fmt.Fprintln(os.Stderr, "ERROR: LLMSVERIFIER_ENDPOINT is not set")
+		fmt.Fprintln(os.Stderr, "Run any LLM command (sync, generate, verify) — the CLI auto-starts LLMsVerifier.")
 		osExit(1)
 		return
 	}

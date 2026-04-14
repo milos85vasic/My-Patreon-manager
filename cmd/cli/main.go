@@ -120,11 +120,12 @@ func main() {
 	oauth := patreon.NewOAuth2Manager(cfg.PatreonClientID, cfg.PatreonClientSecret, cfg.PatreonAccessToken, cfg.PatreonRefreshToken)
 	patreonClient := patreon.NewClient(oauth, cfg.PatreonCampaignID)
 
-	// Validate LLMsVerifier endpoint for commands that use LLM generation.
-	if (args[0] == "sync" || args[0] == "generate") && cfg.LLMsVerifierEndpoint == "" {
-		logger.Error("LLMSVERIFIER_ENDPOINT required for content generation")
-		logger.Error("set LLMSVERIFIER_ENDPOINT or run 'patreon-manager verify' to test the connection")
-		osExit(1)
+	// Auto-start LLMsVerifier for commands that need it.
+	if args[0] == "sync" || args[0] == "generate" || args[0] == "verify" {
+		if err := ensureLLMsVerifier(cfg, logger); err != nil {
+			logger.Error("LLMsVerifier not available", slog.String("error", err.Error()))
+			osExit(1)
+		}
 	}
 
 	budget := content.NewTokenBudget(cfg.LLMDailyTokenBudget)

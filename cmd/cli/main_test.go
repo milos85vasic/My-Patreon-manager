@@ -489,6 +489,10 @@ func TestMain_SyncWithSchedule(t *testing.T) {
 	os.Setenv("PATREON_CAMPAIGN_ID", "dummy")
 	os.Setenv("HMAC_SECRET", "dummy")
 	os.Setenv("LLMSVERIFIER_ENDPOINT", "http://localhost:9090")
+	// mock LLMsVerifier auto-start (skip real network check)
+	oldEnsure := ensureLLMsVerifier
+	defer func() { ensureLLMsVerifier = oldEnsure }()
+	ensureLLMsVerifier = func(cfg *config.Config, logger *slog.Logger) error { return nil }
 	// mock database to succeed
 	oldNewDatabase := newDatabase
 	defer func() { newDatabase = oldNewDatabase }()
@@ -560,6 +564,10 @@ func TestMain_SyncCommand(t *testing.T) {
 	os.Setenv("PATREON_CAMPAIGN_ID", "dummy")
 	os.Setenv("HMAC_SECRET", "dummy")
 	os.Setenv("LLMSVERIFIER_ENDPOINT", "http://localhost:9090")
+	// mock LLMsVerifier auto-start (skip real network check)
+	oldEnsureSync := ensureLLMsVerifier
+	defer func() { ensureLLMsVerifier = oldEnsureSync }()
+	ensureLLMsVerifier = func(cfg *config.Config, logger *slog.Logger) error { return nil }
 	// mock database
 	oldNewDatabase := newDatabase
 	defer func() { newDatabase = oldNewDatabase }()
@@ -619,6 +627,10 @@ func TestMain_GenerateCommand(t *testing.T) {
 	os.Setenv("PATREON_CAMPAIGN_ID", "dummy")
 	os.Setenv("HMAC_SECRET", "dummy")
 	os.Setenv("LLMSVERIFIER_ENDPOINT", "http://localhost:9090")
+	// mock LLMsVerifier auto-start (skip real network check)
+	oldEnsureGen := ensureLLMsVerifier
+	defer func() { ensureLLMsVerifier = oldEnsureGen }()
+	ensureLLMsVerifier = func(cfg *config.Config, logger *slog.Logger) error { return nil }
 	// mock database
 	oldNewDatabase := newDatabase
 	defer func() { newDatabase = oldNewDatabase }()
