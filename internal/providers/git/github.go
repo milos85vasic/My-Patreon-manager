@@ -20,6 +20,9 @@ type GitHubProvider struct {
 
 func NewGitHubProvider(tokenManager *TokenManager) *GitHubProvider {
 	client := github.NewClient(nil)
+	if tokenManager != nil && tokenManager.PrimaryToken != "" {
+		client = github.NewClient(nil).WithAuthToken(tokenManager.PrimaryToken)
+	}
 	return &GitHubProvider{client: client, tm: tokenManager}
 }
 
@@ -100,13 +103,27 @@ func (p *GitHubProvider) ListRepositories(ctx context.Context, org string, opts 
 	var allRepos []models.Repository
 	for {
 		var ghRepos []*github.Repository
-		resp, err := p.execute(func() (*github.Response, error) {
-			r, rr, e := p.client.Repositories.ListByOrg(ctx, org, &github.RepositoryListByOrgOptions{
-				ListOptions: github.ListOptions{Page: page, PerPage: perPage},
+		var resp *github.Response
+		var err error
+		if org == "" {
+			// No org specified — list the authenticated user's own repositories.
+			resp, err = p.execute(func() (*github.Response, error) {
+				r, rr, e := p.client.Repositories.List(ctx, "", &github.RepositoryListOptions{
+					Sort:        "pushed",
+					ListOptions: github.ListOptions{Page: page, PerPage: perPage},
+				})
+				ghRepos = r
+				return rr, e
 			})
-			ghRepos = r
-			return rr, e
-		})
+		} else {
+			resp, err = p.execute(func() (*github.Response, error) {
+				r, rr, e := p.client.Repositories.ListByOrg(ctx, org, &github.RepositoryListByOrgOptions{
+					ListOptions: github.ListOptions{Page: page, PerPage: perPage},
+				})
+				ghRepos = r
+				return rr, e
+			})
+		}
 		if err != nil {
 			if resp != nil && resp.StatusCode == 403 {
 				p.tm.Failover()
@@ -208,6 +225,7 @@ func (p *GitHubProvider) toRepository(r *github.Repository) models.Repository {
 		PrimaryLanguage: r.GetLanguage(),
 		Stars:           r.GetStargazersCount(),
 		Forks:           r.GetForksCount(),
+		IsPrivate:       r.GetPrivate(),
 		IsArchived:      r.GetArchived(),
 		Topics:          r.Topics,
 		CreatedAt:       r.GetCreatedAt().Time,

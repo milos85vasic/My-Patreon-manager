@@ -91,9 +91,9 @@ func main() {
 
 	// Load .env file (or --config override) into environment.
 	if configFile != "" {
-		_ = config.LoadEnv(configFile)
+		_ = config.LoadEnvOverride(configFile)
 	} else {
-		_ = config.LoadEnv() // loads .env from cwd, ignores if missing
+		_ = config.LoadEnvOverride() // loads .env from cwd, ignores if missing
 	}
 
 	cfg := newConfig()
