@@ -92,13 +92,18 @@ func (v *VerifierClient) GetAvailableModels(ctx context.Context) ([]models.Model
 		}
 		defer resp.Body.Close()
 
-		var models struct {
-			Data []models.ModelInfo `json:"data"`
+		var modelsResp struct {
+			Data   []models.ModelInfo `json:"data"`
+			Models []models.ModelInfo `json:"models"`
 		}
-		if err := json.NewDecoder(resp.Body).Decode(&models); err != nil {
+		if err := json.NewDecoder(resp.Body).Decode(&modelsResp); err != nil {
 			return nil, fmt.Errorf("decode models response: %w", err)
 		}
-		return models.Data, nil
+		// Support both response formats: {"data": [...]} and {"models": [...]}
+		if len(modelsResp.Data) > 0 {
+			return modelsResp.Data, nil
+		}
+		return modelsResp.Models, nil
 	})
 
 	if err != nil {
@@ -128,6 +133,33 @@ func (v *VerifierClient) GetModelQualityScore(ctx context.Context, modelID strin
 		return 0, err
 	}
 	return result.(float64), nil
+}
+
+// ProviderInfo describes an LLM provider registered with the verifier.
+type ProviderInfo struct {
+	ID       int    `json:"id"`
+	Name     string `json:"name"`
+	Endpoint string `json:"endpoint"`
+	IsActive bool   `json:"is_active"`
+	Models   int    `json:"models"`
+	Status   string `json:"status"`
+}
+
+func (v *VerifierClient) GetProviders(ctx context.Context) ([]ProviderInfo, error) {
+	resp, err := v.doRequest(ctx, "GET", v.baseURL+"/api/providers", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Count     int            `json:"count"`
+		Providers []ProviderInfo `json:"providers"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode providers response: %w", err)
+	}
+	return result.Providers, nil
 }
 
 func (v *VerifierClient) GetTokenUsage(ctx context.Context) (models.UsageStats, error) {

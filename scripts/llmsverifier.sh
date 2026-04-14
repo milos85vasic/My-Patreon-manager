@@ -117,6 +117,12 @@ cmd_start() {
   echo "    LLMSVERIFIER_ENDPOINT=${ENDPOINT}"
   echo "    LLMSVERIFIER_API_KEY=<rotated>"
   echo ""
+
+  # 6. Auto-register LLM providers from environment variables
+  echo "  Registering LLM providers from environment..."
+  bash "${ROOT}/scripts/register-providers.sh" "${ENDPOINT}"
+
+  echo ""
   echo "=== LLMsVerifier is READY ==="
   echo ""
   echo "  Verify:  go run ./cmd/cli verify"
