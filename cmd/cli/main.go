@@ -141,7 +141,9 @@ func main() {
 	renderers := buildRenderers(cfg)
 
 	verifier := llm.NewVerifierClient(cfg.LLMsVerifierEndpoint, cfg.LLMsVerifierAPIKey, promMetrics)
-	gateway := gw.NewFromEnv()
+	gateway := gw.NewFromEnv(
+		gw.WithFallbackOrder("Groq", "Cerebras", "Sambanova", "Deepseek"),
+	)
 	gatewayProvider := llm.NewGatewayProvider(gateway, verifier, promMetrics, "")
 	fallbackChain := buildLLMChain(cfg, []llm.LLMProvider{gatewayProvider}, promMetrics)
 	store := db.GeneratedContents()

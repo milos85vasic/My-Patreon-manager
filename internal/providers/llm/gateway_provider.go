@@ -24,7 +24,7 @@ type GatewayProvider struct {
 // completions and the VerifierClient for model metadata.
 func NewGatewayProvider(gateway *gw.Gateway, verifier *VerifierClient, m metrics.MetricsCollector, defaultModel string) *GatewayProvider {
 	if defaultModel == "" {
-		defaultModel = "deepseek/deepseek-chat"
+		defaultModel = "llama-3.3-70b-versatile"
 	}
 	return &GatewayProvider{
 		gateway:  gateway,
@@ -41,7 +41,7 @@ func (p *GatewayProvider) GenerateContent(ctx context.Context, prompt models.Pro
 	start := time.Now()
 
 	model := opts.ModelID
-	if model == "" {
+	if model == "" || model == "default" {
 		model = p.model
 	}
 
