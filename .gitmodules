@@ -10,3 +10,6 @@
 [submodule "Models"]
 	path = Models
 	url = git@github.com:vasic-digital/Models.git
+[submodule "LLMGateway"]
+	path = LLMGateway
+	url = git@github.com:vasic-digital/LLMGateway.git

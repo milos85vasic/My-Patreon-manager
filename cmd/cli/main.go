@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	gw "digital.vasic.llmgateway"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/config"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/database"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/metrics"
@@ -140,7 +141,9 @@ func main() {
 	renderers := buildRenderers(cfg)
 
 	verifier := llm.NewVerifierClient(cfg.LLMsVerifierEndpoint, cfg.LLMsVerifierAPIKey, promMetrics)
-	fallbackChain := buildLLMChain(cfg, []llm.LLMProvider{verifier}, promMetrics)
+	gateway := gw.NewFromEnv()
+	gatewayProvider := llm.NewGatewayProvider(gateway, verifier, promMetrics, "")
+	fallbackChain := buildLLMChain(cfg, []llm.LLMProvider{gatewayProvider}, promMetrics)
 	store := db.GeneratedContents()
 	generator := content.NewGenerator(fallbackChain, budget, gate, store, promMetrics, renderers)
 	reviewQueue := content.NewReviewQueue(store)

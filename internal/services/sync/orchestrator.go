@@ -604,33 +604,7 @@ func (o *Orchestrator) Run(ctx context.Context, opts SyncOptions) (*SyncResult, 
 		o.logger.Info("sync started")
 	}
 
-	var allRepos []models.Repository
-	for _, p := range o.providers {
-		org := opts.Filter.Org
-		repos, err := p.ListRepositories(ctx, org, git.ListOptions{PerPage: 100})
-		if err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", p.Name(), err))
-			continue
-		}
-		allRepos = append(allRepos, repos...)
-	}
-
-	// Apply .repoignore filtering
-	ri, err := loadRepoignore()
-	if err != nil {
-		result.Errors = append(result.Errors, fmt.Sprintf("failed to load .repoignore: %v", err))
-	} else if ri != nil {
-		var filtered []models.Repository
-		for _, r := range allRepos {
-			if !ri.Match(r.URL) {
-				filtered = append(filtered, r)
-			}
-		}
-		if o.logger != nil {
-			o.logger.Info("repoignore filtered", slog.Int("before", len(allRepos)), slog.Int("after", len(filtered)))
-		}
-		allRepos = filtered
-	}
+	allRepos := o.discoverRepositories(ctx, opts, &result.Errors)
 
 	// Build map of repository ID to repository for mirror detection
 	repoByID := make(map[string]models.Repository, len(allRepos))
