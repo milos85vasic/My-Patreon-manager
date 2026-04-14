@@ -4,7 +4,8 @@
 
 - Go 1.26.1+
 - A Patreon account with API access
-- Git hosting accounts (GitHub, GitLab, GitFlic, GitVerse)
+- Git hosting accounts (GitHub, GitLab, GitFlic, GitVerse) — you only need accounts for the providers you want to scan
+- A running [LLMsVerifier](https://github.com/vasic-digital/LLMsVerifier) instance (required for content generation)
 
 ## Setup
 
@@ -13,14 +14,23 @@
    cp .env.example .env
    ```
 
-2. Fill in your credentials in `.env`:
-   ```
+2. Fill in your credentials in `.env` (see [Configuration Reference](configuration.md) for full details):
+   ```env
+   # Required by config validation (all commands)
    PATREON_CLIENT_ID=your_client_id
    PATREON_CLIENT_SECRET=your_client_secret
    PATREON_ACCESS_TOKEN=your_access_token
-   PATREON_REFRESH_TOKEN=your_refresh_token
    PATREON_CAMPAIGN_ID=your_campaign_id
    HMAC_SECRET=your_hmac_secret
+
+   # Database (SQLite — zero setup for local dev)
+   DB_DRIVER=sqlite
+   DB_PATH=patreon_manager.db
+
+   # LLMsVerifier (required for sync/generate/verify)
+   LLMSVERIFIER_ENDPOINT=http://localhost:9090
+
+   # Git provider tokens — only add the ones you use
    GITHUB_TOKEN=your_github_token
    ```
 
@@ -29,21 +39,83 @@
    go build ./...
    ```
 
+## Local Validation Workflow
+
+Always validate locally before publishing to Patreon. Follow these steps in order:
+
+### 1. Validate Configuration
+
+Checks that all required environment variables are set:
+
+```sh
+go run ./cmd/cli validate
+```
+
+### 2. Verify LLMsVerifier
+
+Confirms the LLMsVerifier service is reachable and shows ranked models:
+
+```sh
+go run ./cmd/cli verify
+```
+
+### 3. Dry-Run
+
+Fetches repo metadata from git providers, estimates costs — **no LLM calls, no Patreon calls**:
+
+```sh
+go run ./cmd/cli sync --dry-run
+```
+
+Narrow scope with filters:
+
+```sh
+go run ./cmd/cli sync --dry-run --org my-org --json
+```
+
+### 4. Generate Content (Without Publishing)
+
+Runs the full LLM pipeline, stores results in the local database. **Does not contact Patreon**:
+
+```sh
+go run ./cmd/cli generate
+```
+
+Inspect the generated content in the database before proceeding.
+
+### 5. Publish (When Ready)
+
+Only after inspecting generated content:
+
+```sh
+go run ./cmd/cli publish
+```
+
+Or run the full pipeline end-to-end:
+
+```sh
+go run ./cmd/cli sync
+```
+
 ## Running
 
 ### CLI Mode
 ```sh
-# Run full sync
+# Full sync (scan + generate + publish)
 go run ./cmd/cli sync
 
-# Dry-run (preview changes)
+# Dry-run (preview changes, no side effects)
 go run ./cmd/cli sync --dry-run
 
 # Validate configuration
 go run ./cmd/cli validate
 
-# Filter to specific org
+# Verify LLMsVerifier connectivity
+go run ./cmd/cli verify
+
+# Filter to specific org or repo
 go run ./cmd/cli sync --org my-org
+go run ./cmd/cli sync --repo my-org/my-repo
 ```
 
 ### Server Mode
@@ -71,8 +143,24 @@ docker-compose up -d
 | `/admin/reload` | POST | Reload config |
 | `/admin/sync/status` | GET | Sync status |
 
+## Where to Get Tokens
+
+| Token | Where to obtain |
+|-------|-----------------|
+| `PATREON_CLIENT_ID` / `SECRET` | [Patreon Platform Portal](https://www.patreon.com/portal/registration/register-clients) |
+| `PATREON_ACCESS_TOKEN` | OAuth flow or Creator's Access Token from portal |
+| `PATREON_CAMPAIGN_ID` | Patreon API: `GET /api/oauth2/v2/campaigns` |
+| `GITHUB_TOKEN` | GitHub > Settings > Developer settings > Personal access tokens |
+| `GITLAB_TOKEN` | GitLab > Preferences > Access Tokens |
+| `GITFLIC_TOKEN` | GitFlic account settings |
+| `GITVERSE_TOKEN` | GitVerse account settings |
+| `LLMSVERIFIER_API_KEY` | Your LLMsVerifier instance |
+
 ## Troubleshooting
 
+- **"PATREON_CLIENT_ID is required"**: Fill in all Patreon credentials in `.env` — they are validated even for `--dry-run`
+- **"LLMSVERIFIER_ENDPOINT" error**: Set the endpoint in `.env` and ensure the service is running
+- **No repos found in dry-run**: Check that you have at least one git provider token set
 - **Database errors**: Delete `patreon_manager.db` and restart
 - **Token errors**: Check your Patreon tokens in `.env`
 - **Rate limiting**: The app handles rate limits automatically with token failover
