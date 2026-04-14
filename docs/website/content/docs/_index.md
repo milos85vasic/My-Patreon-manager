@@ -12,6 +12,7 @@ Comprehensive guides and references for **My Patreon Manager**.
 | Document | Description |
 |----------|-------------|
 | [Getting Started](/docs/getting-started/) | Install, configure, and run your first sync. |
+| [Obtaining Credentials](/docs/obtaining-credentials/) | Step-by-step guide to obtain every API key, token, and secret. |
 | [Configuration](/docs/configuration/) | All environment variables, validation rules, examples. |
 | [CLI Reference](/docs/cli-reference/) | Complete command‑line interface reference. |
 | [API Reference](/docs/api-reference/) | HTTP endpoints, webhooks, admin API. |

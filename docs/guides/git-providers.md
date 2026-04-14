@@ -2,6 +2,8 @@
 
 My Patreon Manager supports multiple Git hosting services: GitHub, GitLab, GitFlic, and GitVerse. This guide explains how to obtain and configure access tokens for each service, the required permissions, and any service‑specific settings.
 
+**Need help obtaining tokens?** See the [Obtaining Credentials](obtaining-credentials.md) guide for detailed step-by-step instructions with links to official documentation.
+
 ## Overview
 
 Each Git provider requires a **personal access token (PAT)** or **API key** with sufficient scopes to read repository metadata, commits, and (optionally) webhook management. The manager uses these tokens to:
@@ -99,11 +101,11 @@ GitFlic is a Russian Git hosting service. The API is similar to GitHub’s.
 ### Configuration
 
 ```env
-GITFIC_TOKEN=your_gitflic_token_here
-GITFIC_TOKEN_SECONDARY=optional_backup_token
+GITFLIC_TOKEN=your_gitflic_token_here
+GITFLIC_TOKEN_SECONDARY=optional_backup_token
 ```
 
-**Note**: The variable name is `GITFIC_TOKEN` (spelled without the “L”).
+> The app sends the token as `Authorization: token {TOKEN}` in API requests.
 
 ### Rate Limits
 
@@ -140,32 +142,52 @@ If you want real‑time updates (Phase 8), you must configure webhooks on each G
 - `https://your‑server/webhook/gitflic`
 - `https://your‑server/webhook/gitverse`
 
+All webhooks are validated using the `WEBHOOK_HMAC_SECRET` environment variable. Generate a secret with `openssl rand -hex 32` and set it in your `.env`:
+
+```env
+WEBHOOK_HMAC_SECRET=your_webhook_secret_here
+```
+
+Then register the same secret on each provider. For detailed step-by-step instructions, see the [Obtaining Credentials — Webhook HMAC Secret](obtaining-credentials.md#webhook-hmac-secret) guide.
+
 ### GitHub Webhook
 
-1. Go to your repository → **Settings** → **Webhooks** → **Add webhook**.
-2. **Payload URL**: `https://your‑server/webhook/github`
+1. Go to your repository > **Settings** > **Webhooks** > **Add webhook**.
+2. **Payload URL**: `https://your-server/webhook/github`
 3. **Content type**: `application/json`
-4. **Secret**: Generate a random secret and store it in your manager’s configuration (not exposed as an environment variable; currently managed via middleware configuration).
-5. Select events: `Push`, `Release`, `Repository` (created, archived, deleted).
+4. **Secret**: paste your `WEBHOOK_HMAC_SECRET` value.
+5. Select events: **Push**, **Release**, **Repository** (created, archived, deleted).
 6. Click **Add webhook**.
+
+> GitHub sends the signature in the `X-Hub-Signature-256` header. [Official docs](https://docs.github.com/en/webhooks/using-webhooks/securing-your-webhooks).
 
 ### GitLab Webhook
 
-1. Go to your project → **Settings** → **Webhooks**.
-2. **URL**: `https://your‑server/webhook/gitlab`
-3. **Secret token**: Generate a random token and store it (managed via middleware).
+1. Go to your project > **Settings** > **Webhooks**.
+2. **URL**: `https://your-server/webhook/gitlab`
+3. **Secret token**: paste your `WEBHOOK_HMAC_SECRET` value.
 4. Trigger events: **Push events**, **Tag push events**, **Repository update events**.
 5. Click **Add webhook**.
 
-### GitFlic & GitVerse
+> GitLab sends the secret in the `X-Gitlab-Token` header. [Official docs](https://docs.gitlab.com/ee/user/project/integrations/webhooks.html).
 
-Both services support generic webhooks with a token query parameter. Use the generic endpoint:
+### GitFlic Webhook
 
-```
-https://your‑server/webhook/gitflic?token=***
-```
+1. Navigate to your repository settings on [GitFlic](https://gitflic.ru).
+2. Find the **Webhooks** section.
+3. Add a webhook pointing to `https://your-server/webhook/gitflic`.
+4. Set the shared secret to your `WEBHOOK_HMAC_SECRET` value.
 
-Configure the token in the manager’s webhook middleware.
+> GitFlic sends the signature in the `X-Webhook-Signature` header.
+
+### GitVerse Webhook
+
+1. Navigate to your repository settings on [GitVerse](https://gitverse.ru).
+2. Find the **Webhooks** section.
+3. Add a webhook pointing to `https://your-server/webhook/gitverse`.
+4. Set the shared secret to your `WEBHOOK_HMAC_SECRET` value.
+
+> GitVerse sends the signature in the `X-Webhook-Signature` header.
 
 ## Token Security Best Practices
 
@@ -197,6 +219,8 @@ Configure the token in the manager’s webhook middleware.
 
 After configuring your Git providers, proceed to:
 
-- [Quickstart Guide](../guides/quickstart.md) – run your first sync.
-- [Content Generation Guide](../guides/content‑generation.md) – customize content templates and quality thresholds.
-- [Deployment Guide](../guides/deployment.md) – run the manager in production.
+- [Obtaining Credentials](obtaining-credentials.md) — step-by-step guides for all tokens and secrets
+- [Quickstart Guide](quickstart.md) — run your first sync
+- [Configuration Reference](configuration.md) — full variable list and per-command requirements
+- [Content Generation Guide](content-generation.md) — customize content templates and quality thresholds
+- [Deployment Guide](deployment.md) — run the manager in production

@@ -145,16 +145,21 @@ docker-compose up -d
 
 ## Where to Get Tokens
 
+For **detailed step-by-step instructions** with links to official documentation for every credential, see the [Obtaining Credentials](obtaining-credentials.md) guide.
+
+Quick reference:
+
 | Token | Where to obtain |
 |-------|-----------------|
 | `PATREON_CLIENT_ID` / `SECRET` | [Patreon Platform Portal](https://www.patreon.com/portal/registration/register-clients) |
 | `PATREON_ACCESS_TOKEN` | OAuth flow or Creator's Access Token from portal |
 | `PATREON_CAMPAIGN_ID` | Patreon API: `GET /api/oauth2/v2/campaigns` |
-| `GITHUB_TOKEN` | GitHub > Settings > Developer settings > Personal access tokens |
-| `GITLAB_TOKEN` | GitLab > Preferences > Access Tokens |
-| `GITFLIC_TOKEN` | GitFlic account settings |
-| `GITVERSE_TOKEN` | GitVerse account settings |
-| `LLMSVERIFIER_API_KEY` | Your LLMsVerifier instance |
+| `GITHUB_TOKEN` | [GitHub PAT settings](https://github.com/settings/tokens) |
+| `GITLAB_TOKEN` | [GitLab Access Tokens](https://gitlab.com/-/user_settings/personal_access_tokens) |
+| `GITFLIC_TOKEN` | [GitFlic](https://gitflic.ru) account settings |
+| `GITVERSE_TOKEN` | [GitVerse](https://gitverse.ru) account settings |
+| `LLMSVERIFIER_API_KEY` | Your [LLMsVerifier](https://github.com/vasic-digital/LLMsVerifier) instance |
+| `HMAC_SECRET` | Self-generated: `openssl rand -hex 32` |
 
 ## Troubleshooting
 

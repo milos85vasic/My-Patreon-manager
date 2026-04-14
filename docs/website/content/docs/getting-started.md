@@ -75,7 +75,7 @@ docker-compose up -d
     GITVERSE_TOKEN=your_gitverse_token
     ```
 
-    See the [Configuration Reference](/docs/configuration/) for all available variables, per-command requirements, and where to obtain each token.
+    See the [Configuration Reference](/docs/configuration/) for all available variables and per-command requirements. For **step-by-step instructions** on obtaining each token, see the [Obtaining Credentials](/docs/obtaining-credentials/) guide.
 
 3.  **Validate your configuration**:
 

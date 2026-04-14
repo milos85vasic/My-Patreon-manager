@@ -217,16 +217,23 @@ go run ./cmd/cli sync
 
 ## Where to Get Each Token
 
+For **detailed step-by-step instructions** with screenshots-style walkthroughs and links to official documentation, see the [Obtaining Credentials](obtaining-credentials.md) guide.
+
+Quick reference:
+
 | Token | Where to obtain |
 |-------|-----------------|
 | `PATREON_CLIENT_ID` / `PATREON_CLIENT_SECRET` | [Patreon Platform Portal](https://www.patreon.com/portal/registration/register-clients) — register an OAuth client |
 | `PATREON_ACCESS_TOKEN` / `PATREON_REFRESH_TOKEN` | OAuth flow, or Creator's Access Token from the portal |
 | `PATREON_CAMPAIGN_ID` | Patreon API: `GET /api/oauth2/v2/campaigns` (returns your campaign IDs) |
-| `GITHUB_TOKEN` | GitHub > Settings > Developer settings > Personal access tokens |
-| `GITLAB_TOKEN` | GitLab > Preferences > Access Tokens |
-| `GITFLIC_TOKEN` | GitFlic account settings |
-| `GITVERSE_TOKEN` | GitVerse account settings |
+| `GITHUB_TOKEN` | [GitHub > Settings > Developer settings > Personal access tokens](https://github.com/settings/tokens) |
+| `GITLAB_TOKEN` | [GitLab > Preferences > Access Tokens](https://gitlab.com/-/user_settings/personal_access_tokens) |
+| `GITFLIC_TOKEN` | [GitFlic](https://gitflic.ru) account settings > Security > API Tokens |
+| `GITVERSE_TOKEN` | [GitVerse](https://gitverse.ru) settings > Applications > API Tokens |
 | `LLMSVERIFIER_API_KEY` | Your [LLMsVerifier](https://github.com/vasic-digital/LLMsVerifier) instance configuration |
+| `HMAC_SECRET` | Self-generated: `openssl rand -hex 32` |
+| `WEBHOOK_HMAC_SECRET` | Self-generated: `openssl rand -hex 32` |
+| `ADMIN_KEY` | Self-generated: `openssl rand -hex 32` |
 | `SNYK_TOKEN` | [Snyk Account Settings](https://app.snyk.io/account) |
 | `SONAR_TOKEN` | [SonarCloud Security](https://sonarcloud.io/account/security/) |
 
