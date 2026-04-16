@@ -1,0 +1,397 @@
+{
+	"Golang errors": {
+		"LLMGateway": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"LLMGateway\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"cmd/cli": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"cmd/cli\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"cmd/server": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"cmd/server\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"examples/module07": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"examples/module07\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"internal/cache": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"internal/cache\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"internal/concurrency": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"internal/concurrency\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"internal/config": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"internal/config\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"internal/database": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"internal/database\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"internal/errors": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"internal/errors\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"internal/handlers": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"internal/handlers\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"internal/lazy": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"internal/lazy\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"internal/metrics": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"internal/metrics\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"internal/middleware": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"internal/middleware\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"internal/models": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"internal/models\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"internal/providers/git": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"internal/providers/git\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"internal/providers/llm": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"internal/providers/llm\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"internal/providers/patreon": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"internal/providers/patreon\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"internal/providers/renderer": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"internal/providers/renderer\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"internal/services/access": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"internal/services/access\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"internal/services/audit": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"internal/services/audit\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"internal/services/content": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"internal/services/content\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"internal/services/filter": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"internal/services/filter\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"internal/services/sync": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"internal/services/sync\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"internal/testhelpers": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"internal/testhelpers\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"internal/utils": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"internal/utils\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"scripts/coverdiff": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"scripts/coverdiff\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/benchmark": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/benchmark\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/chaos": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/chaos\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/contract": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/contract\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/ddos": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/ddos\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/e2e": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/e2e\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/fuzz": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/fuzz\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/integration": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/integration\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/leaks": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/leaks\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/mocks": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/mocks\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/monitoring": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/monitoring\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/security": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/security\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/stress": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/stress\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/unit/config": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/unit/config\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/unit/database": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/unit/database\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/unit/errors": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/unit/errors\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/unit/filter": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/unit/filter\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/unit/handlers": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/unit/handlers\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/unit/metrics": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/unit/metrics\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/unit/models": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/unit/models\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/unit/providers/git": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/unit/providers/git\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/unit/providers/llm": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/unit/providers/llm\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/unit/providers/patreon": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/unit/providers/patreon\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/unit/providers/renderer": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/unit/providers/renderer\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/unit/services/access": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/unit/services/access\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/unit/services/content": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/unit/services/content\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/unit/services/sync": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/unit/services/sync\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/unit/sync": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/unit/sync\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		],
+		"tests/unit/utils": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"tests/unit/utils\": err: exit status 1: stderr: go: go.mod requires go \u003e= 1.26.1 (running go 1.26.0; GOTOOLCHAIN=local)\n"
+			}
+		]
+	},
+	"Issues": [],
+	"Stats": {
+		"files": 0,
+		"lines": 0,
+		"nosec": 0,
+		"found": 0
+	},
+	"GosecVersion": "dev"
+}

@@ -109,7 +109,7 @@ func isTimeout(err error) bool {
 
 func TestVerifierClient_GenerateContent_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v1/completions", r.URL.Path)
+		assert.Equal(t, "/api/completions", r.URL.Path)
 		assert.Equal(t, "Bearer test-api-key", r.Header.Get("Authorization"))
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
@@ -232,7 +232,7 @@ func (e *errorTransport) RoundTrip(*http.Request) (*http.Response, error) {
 
 func TestVerifierClient_GetAvailableModels_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v1/models", r.URL.Path)
+		assert.Equal(t, "/api/models", r.URL.Path)
 		assert.Equal(t, "Bearer test-api-key", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -270,7 +270,7 @@ func TestVerifierClient_GetAvailableModels_Success(t *testing.T) {
 
 func TestVerifierClient_GetModelQualityScore_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v1/models/gpt-4/score", r.URL.Path)
+		assert.Equal(t, "/api/models/gpt-4/score", r.URL.Path)
 		assert.Equal(t, "Bearer test-api-key", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -318,7 +318,7 @@ func TestVerifierClient_CircuitBreakerTrip(t *testing.T) {
 
 func TestVerifierClient_GetTokenUsage_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v1/usage", r.URL.Path)
+		assert.Equal(t, "/api/usage", r.URL.Path)
 		assert.Equal(t, "Bearer test-api-key", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
