@@ -606,6 +606,14 @@ func (o *Orchestrator) Run(ctx context.Context, opts SyncOptions) (*SyncResult, 
 
 	allRepos := o.discoverRepositories(ctx, opts, &result.Errors)
 
+	// Save discovered repositories to database for later publishing
+	if err := o.syncRepositoriesToDB(ctx, allRepos); err != nil {
+		if o.logger != nil {
+			o.logger.Error("sync repositories to DB failed", slog.String("error", err.Error()))
+		}
+		result.Errors = append(result.Errors, fmt.Sprintf("sync repositories: %v", err))
+	}
+
 	// Build map of repository ID to repository for mirror detection
 	repoByID := make(map[string]models.Repository, len(allRepos))
 	for _, r := range allRepos {
@@ -1004,6 +1012,41 @@ func (o *Orchestrator) storeMirrorMaps(ctx context.Context, mirrorMaps []models.
 	for _, m := range mirrorMaps {
 		if err := store.Create(ctx, &m); err != nil {
 			return fmt.Errorf("create mirror map: %w", err)
+		}
+	}
+	return nil
+}
+
+// syncRepositoriesToDB saves discovered repositories to the database.
+// It handles both new repositories and updates to existing ones.
+func (o *Orchestrator) syncRepositoriesToDB(ctx context.Context, repos []models.Repository) error {
+	if o.db == nil {
+		return nil
+	}
+	store := o.db.Repositories()
+	if store == nil {
+		return nil
+	}
+
+	for _, repo := range repos {
+		// Check if repository already exists
+		existing, err := store.GetByServiceOwnerName(ctx, repo.Service, repo.Owner, repo.Name)
+		if err != nil {
+			// Real error (not "not found" - that's nil,nil)
+			return fmt.Errorf("check repository %s/%s: %w", repo.Owner, repo.Name, err)
+		}
+		if existing == nil {
+			// Not found - create new
+			if err := store.Create(ctx, &repo); err != nil {
+				return fmt.Errorf("create repository %s/%s: %w", repo.Owner, repo.Name, err)
+			}
+			continue
+		}
+		// Repository exists, update it with latest metadata
+		repo.ID = existing.ID
+		repo.UpdatedAt = time.Now()
+		if err := store.Update(ctx, &repo); err != nil {
+			return fmt.Errorf("update repository %s/%s: %w", repo.Owner, repo.Name, err)
 		}
 	}
 	return nil
