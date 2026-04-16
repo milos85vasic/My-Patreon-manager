@@ -59,6 +59,7 @@ var (
 	// with a warning when construction is not possible. Tests override this
 	// variable to inject fakes.
 	newOrchestrator     = buildOrchestrator
+	getDatabase         = func() database.Database { return nil }
 	setupRouterFn       = setupRouter
 	runServerFn         = runServer
 	signalNotifyContext = signal.NotifyContext
@@ -94,7 +95,9 @@ func runServer(ctx context.Context, cfg *config.Config, addr string, logger *slo
 
 	metricsCollector := newMetricsCollector()
 	orch := newOrchestrator(cfg)
-	r, dedup, webhookHandler, limiter := setupRouterFn(cfg, metricsCollector, orch, logger)
+	db := getDatabase()
+	logger.Info("setupRouter getting db", "db_nil", db == nil)
+	r, dedup, webhookHandler, limiter := setupRouterFn(cfg, metricsCollector, orch, logger, db)
 
 	// Supervise background goroutines via Lifecycle so shutdown is observed
 	// and none of them can outlive the process.
@@ -193,7 +196,7 @@ var webhookDrainFn = func(logger *slog.Logger, orch Orchestrator) func(models.Re
 // the webhook dedup/queue handles so runServer can drive background work.
 // The returned *middleware.IPRateLimiter is shared between route groups so
 // the background sweeper can evict stale entries across all of them.
-func setupRouter(cfg *config.Config, metricsCollector metrics.MetricsCollector, orch Orchestrator, logger *slog.Logger) (*gin.Engine, *syncsvc.EventDeduplicator, *handlers.WebhookHandler, *middleware.IPRateLimiter) {
+func setupRouter(cfg *config.Config, metricsCollector metrics.MetricsCollector, orch Orchestrator, logger *slog.Logger, db database.Database) (*gin.Engine, *syncsvc.EventDeduplicator, *handlers.WebhookHandler, *middleware.IPRateLimiter) {
 	gin.SetMode(cfg.GinMode)
 	r := gin.New()
 	if logger == nil {
@@ -232,7 +235,7 @@ func setupRouter(cfg *config.Config, metricsCollector metrics.MetricsCollector, 
 	if tmpl, err := template.ParseGlob("internal/handlers/templates/preview/*"); err == nil {
 		r.SetHTMLTemplate(tmpl)
 	}
-	previewHandler := handlers.NewPreviewHandler(nil, cfg)
+	previewHandler := handlers.NewPreviewHandler(db, cfg)
 	previewHandler.RegisterRoutes(r)
 
 	// Webhook routes: rate limit + per-provider HMAC/token auth.
@@ -339,6 +342,9 @@ func buildOrchestrator(cfg *config.Config) Orchestrator {
 		logger.Warn("database migration failed — using noop orchestrator", slog.String("error", err.Error()))
 		return noopOrchestrator{}
 	}
+
+	// Store database for preview handler
+	getDatabase = func() database.Database { return db }
 
 	// Build content generator (optional — orchestrator handles nil generator).
 	var generator *content.Generator
