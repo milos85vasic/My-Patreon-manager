@@ -120,10 +120,12 @@ func (db *SQLiteDB) Migrate(ctx context.Context) error {
 			token_count INTEGER DEFAULT 0,
 			generation_attempts INTEGER DEFAULT 1,
 			passed_quality_gate INTEGER DEFAULT 0,
+			status TEXT DEFAULT 'draft',
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_content_repo ON generated_contents(repository_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_content_quality ON generated_contents(quality_score)`,
+		`CREATE INDEX IF NOT EXISTS idx_content_status ON generated_contents(status)`,
 		`CREATE TABLE IF NOT EXISTS content_templates (
 			id TEXT PRIMARY KEY,
 			name TEXT NOT NULL UNIQUE,

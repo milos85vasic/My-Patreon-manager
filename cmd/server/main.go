@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html/template"
 	"log/slog"
 	"net/http"
 	"net/http/pprof"
@@ -57,7 +58,7 @@ var (
 	// from config when providers are available; falls back to noopOrchestrator
 	// with a warning when construction is not possible. Tests override this
 	// variable to inject fakes.
-	newOrchestrator = buildOrchestrator
+	newOrchestrator     = buildOrchestrator
 	setupRouterFn       = setupRouter
 	runServerFn         = runServer
 	signalNotifyContext = signal.NotifyContext
@@ -226,6 +227,14 @@ func setupRouter(cfg *config.Config, metricsCollector metrics.MetricsCollector, 
 	r.GET("/health", handlers.HealthCheck)
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
+	// Preview routes with HTML templates (gracefully skipped when templates
+	// are not found, e.g. during unit tests running from a different cwd).
+	if tmpl, err := template.ParseGlob("internal/handlers/templates/preview/*"); err == nil {
+		r.SetHTMLTemplate(tmpl)
+	}
+	previewHandler := handlers.NewPreviewHandler(nil, cfg)
+	previewHandler.RegisterRoutes(r)
+
 	// Webhook routes: rate limit + per-provider HMAC/token auth.
 	wh := r.Group("/webhook")
 	wh.Use(limiter.Limit())
@@ -333,8 +342,9 @@ func buildOrchestrator(cfg *config.Config) Orchestrator {
 
 	// Build content generator (optional — orchestrator handles nil generator).
 	var generator *content.Generator
+	var promMetrics metrics.MetricsCollector
 	if cfg.LLMsVerifierEndpoint != "" {
-		promMetrics := metrics.NewPrometheusCollector()
+		promMetrics = newMetricsCollector()
 		verifier := llm.NewVerifierClient(cfg.LLMsVerifierEndpoint, cfg.LLMsVerifierAPIKey, promMetrics)
 		chain := llm.NewFallbackChain([]llm.LLMProvider{verifier}, cfg.ContentQualityThreshold, promMetrics)
 		budget := content.NewTokenBudget(cfg.LLMDailyTokenBudget)

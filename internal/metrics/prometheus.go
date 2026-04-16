@@ -24,7 +24,19 @@ type PrometheusCollector struct {
 	webhookEvents     *prometheus.CounterVec
 }
 
+var (
+	once     sync.Once
+	instance *PrometheusCollector
+)
+
 func NewPrometheusCollector() *PrometheusCollector {
+	once.Do(func() {
+		instance = newPrometheusCollector()
+	})
+	return instance
+}
+
+func newPrometheusCollector() *PrometheusCollector {
 	c := &PrometheusCollector{}
 
 	c.syncDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{

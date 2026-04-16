@@ -1,0 +1,10 @@
+{{define "error.html"}}
+{{template "layout.html" .}}
+{{end}}
+
+{{define "content"}}
+<div style="text-align:center;padding:64px 0;">
+    <h2 style="font-size:20px;margin-bottom:12px;">{{.Error}}</h2>
+    <a href="/preview" class="btn btn-secondary" style="margin-top:16px;">Back to Preview</a>
+</div>
+{{end}}

@@ -1,0 +1,25 @@
+{{define "preview_index.html"}}
+{{template "layout.html" .}}
+{{end}}
+
+{{define "content"}}
+<h2 style="margin-bottom:24px;font-size:22px;">Generated Content</h2>
+{{if .Articles}}
+<div style="display:flex;flex-direction:column;gap:12px;">
+{{range .Articles}}
+<a href="/preview/article/{{.ID}}" style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);text-decoration:none;color:var(--text);transition:border-color .15s;">
+    <div>
+        <div style="font-weight:600;font-size:15px;margin-bottom:4px;">{{.Title}}</div>
+        <div style="font-size:13px;color:var(--text-muted);">{{.CreatedAt}} &middot; Score: {{printf "%.0f" .QualityScore}}%</div>
+    </div>
+    <span class="badge badge-{{.Status}}">{{.Status}}</span>
+</a>
+{{end}}
+</div>
+{{else}}
+<div style="text-align:center;padding:64px 0;color:var(--text-muted);">
+    <p style="font-size:16px;margin-bottom:8px;">No generated content yet</p>
+    <p style="font-size:14px;">Run <code style="background:var(--surface);padding:2px 6px;border-radius:4px;">patreon-manager sync</code> to generate content.</p>
+</div>
+{{end}}
+{{end}}

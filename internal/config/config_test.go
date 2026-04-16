@@ -17,7 +17,7 @@ func TestNewConfigDefaults(t *testing.T) {
 	assert.Equal(t, "sqlite", cfg.DBDriver)
 	assert.Equal(t, "localhost", cfg.DBHost)
 	assert.Equal(t, 5432, cfg.DBPort)
-	assert.Equal(t, "patreon_manager.db", cfg.DBPath)
+	assert.Equal(t, "user/db/patreon_manager.db", cfg.DBPath)
 	assert.Equal(t, 0.75, cfg.ContentQualityThreshold)
 	assert.Equal(t, 100000, cfg.LLMDailyTokenBudget)
 	assert.Equal(t, 8, cfg.LLMConcurrency)
@@ -147,7 +147,7 @@ func TestLoadFromEnv_DefaultValues(t *testing.T) {
 	assert.Equal(t, 8080, cfg.Port)
 	assert.Equal(t, "debug", cfg.GinMode)
 	assert.Equal(t, "sqlite", cfg.DBDriver)
-	assert.Equal(t, "patreon_manager.db", cfg.DBPath)
+	assert.Equal(t, "user/db/patreon_manager.db", cfg.DBPath)
 	assert.Equal(t, 0.75, cfg.ContentQualityThreshold)
 	assert.Equal(t, 100000, cfg.LLMDailyTokenBudget)
 	assert.Equal(t, 8, cfg.LLMConcurrency)
@@ -356,6 +356,36 @@ func TestLoadEnv(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "default", os.Getenv("DEFAULT_VAR"))
 	os.Unsetenv("DEFAULT_VAR")
+}
+
+func TestEnsureUserWorkspace(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &Config{UserWorkspaceDir: filepath.Join(tmpDir, "user")}
+	err := cfg.EnsureUserWorkspace()
+	assert.NoError(t, err)
+
+	for _, sub := range []string{"db", "img", "content", "templates"} {
+		info, err := os.Stat(filepath.Join(tmpDir, "user", sub))
+		assert.NoError(t, err)
+		assert.True(t, info.IsDir())
+	}
+}
+
+func TestUserDBPath(t *testing.T) {
+	t.Run("sqlite with relative path", func(t *testing.T) {
+		cfg := &Config{DBDriver: "sqlite", DBPath: "patreon_manager.db", UserWorkspaceDir: "user"}
+		assert.Equal(t, "user/db/patreon_manager.db", cfg.UserDBPath())
+	})
+
+	t.Run("sqlite with absolute path", func(t *testing.T) {
+		cfg := &Config{DBDriver: "sqlite", DBPath: "/tmp/test.db", UserWorkspaceDir: "user"}
+		assert.Equal(t, "/tmp/test.db", cfg.UserDBPath())
+	})
+
+	t.Run("postgres ignores workspace", func(t *testing.T) {
+		cfg := &Config{DBDriver: "postgres", DBPath: "patreon_manager.db", UserWorkspaceDir: "user"}
+		assert.Equal(t, "patreon_manager.db", cfg.UserDBPath())
+	})
 }
 
 func TestLoadEnvOverride(t *testing.T) {

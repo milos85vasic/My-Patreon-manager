@@ -1,0 +1,37 @@
+{{define "preview_article.html"}}
+{{template "layout.html" .}}
+{{end}}
+
+{{define "content"}}
+{{with .Article}}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">
+    <div>
+        <a href="/preview" style="color:var(--text-muted);text-decoration:none;font-size:14px;">&larr; Back to list</a>
+        <h2 style="font-size:22px;margin-top:8px;">{{.Title}}</h2>
+        <div style="font-size:13px;color:var(--text-muted);margin-top:4px;">
+            {{.CreatedAt}} &middot; Score: {{printf "%.0f" .QualityScore}}%
+            <span class="badge badge-{{.Status}}" style="margin-left:8px;">{{.Status}}</span>
+        </div>
+    </div>
+    <div style="display:flex;gap:8px;">
+        <a href="/preview/edit/{{.ID}}" class="btn btn-secondary btn-sm">Edit</a>
+        {{if eq .Status "published"}}
+        <form method="POST" action="/preview/toggle/{{.ID}}/disable" style="display:inline;">
+            <button type="submit" class="btn btn-secondary btn-sm">Disable</button>
+        </form>
+        {{else}}
+        <form method="POST" action="/preview/toggle/{{.ID}}/enable" style="display:inline;">
+            <button type="submit" class="btn btn-primary btn-sm">Publish</button>
+        </form>
+        {{end}}
+    </div>
+</div>
+<article style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:32px;line-height:1.8;font-size:15px;">
+{{if .Body}}
+{{.Body}}
+{{else}}
+<p style="color:var(--text-muted);">No content body available.</p>
+{{end}}
+</article>
+{{end}}
+{{end}}

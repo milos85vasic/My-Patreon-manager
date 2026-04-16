@@ -65,3 +65,4 @@ logs/
 /patreon_manager.db
 **/patreon_manager.db
 /server
+/user/

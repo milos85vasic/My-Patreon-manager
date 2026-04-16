@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 )
 
@@ -61,13 +62,16 @@ type Config struct {
 	// RateLimitBurst is the burst budget the IPRateLimiter allows a single
 	// IP before throttling kicks in. Defaults to 200.
 	RateLimitBurst int
-	// ProcessPrivateRepos controls whether private repositories are included
+	// ProcessPrivateRepositories controls whether private repositories are included
 	// in sync/scan/generate. Defaults to false (public repos only).
-	ProcessPrivateRepos bool
-	// RepoMaxInactivityDays is the maximum number of days since the last
+	ProcessPrivateRepositories bool
+	// MinMonthsCommitActivity is the maximum number of months since the last
 	// commit for a repository to be considered active. Repositories with no
-	// commits within this window are skipped. Defaults to 548 (≈18 months).
-	RepoMaxInactivityDays int
+	// commits within this window are skipped. Defaults to 18 (≈18 months).
+	MinMonthsCommitActivity int
+	// UserWorkspaceDir is the root directory for all user data.
+	// Defaults to "user". Created automatically on first run.
+	UserWorkspaceDir string
 	// LLMsVerifierEndpoint is the base URL of the LLMsVerifier service
 	// (e.g. "http://localhost:9099" or "https://llmsverifier.internal:8443").
 	// All LLM calls route through this service for model scoring and selection.
@@ -84,7 +88,7 @@ func NewConfig() *Config {
 		DBDriver:                   "sqlite",
 		DBHost:                     "localhost",
 		DBPort:                     5432,
-		DBPath:                     "patreon_manager.db",
+		DBPath:                     "user/db/patreon_manager.db",
 		ContentQualityThreshold:    0.75,
 		LLMDailyTokenBudget:        100000,
 		LLMConcurrency:             8,
@@ -95,8 +99,9 @@ func NewConfig() *Config {
 		ContentTierMappingStrategy: "linear",
 		GracePeriodHours:           24,
 		AuditStore:                 "ring",
-		ProcessPrivateRepos:        false,
-		RepoMaxInactivityDays:      548, // ~18 months
+		ProcessPrivateRepositories: false,
+		MinMonthsCommitActivity:    18,
+		UserWorkspaceDir:           "user",
 		RateLimitRPS:               100,
 		RateLimitBurst:             200,
 	}
@@ -170,6 +175,36 @@ func getEnvBool(key string, defaultVal bool) bool {
 	return defaultVal
 }
 
+func (c *Config) EnsureUserWorkspace() error {
+	userDir := c.UserWorkspaceDir
+	if userDir == "" {
+		userDir = "user"
+	}
+	dirs := []string{
+		userDir,
+		filepath.Join(userDir, "db"),
+		filepath.Join(userDir, "img"),
+		filepath.Join(userDir, "content"),
+		filepath.Join(userDir, "templates"),
+	}
+	for _, dir := range dirs {
+		if err := os.MkdirAll(dir, 0750); err != nil {
+			return fmt.Errorf("failed to create directory %s: %w", dir, err)
+		}
+	}
+	return nil
+}
+
+func (c *Config) UserDBPath() string {
+	if c.DBDriver == "sqlite" && c.DBPath != "" {
+		dbDir := filepath.Dir(c.DBPath)
+		if dbDir == "." {
+			return filepath.Join(c.UserWorkspaceDir, "db", c.DBPath)
+		}
+	}
+	return c.DBPath
+}
+
 func (c *Config) LoadFromEnv() {
 	c.Port = getEnvInt("PORT", c.Port)
 	c.GinMode = getEnv("GIN_MODE", c.GinMode)
@@ -209,8 +244,9 @@ func (c *Config) LoadFromEnv() {
 	c.WebhookHMACSecret = getEnv("WEBHOOK_HMAC_SECRET", c.WebhookHMACSecret)
 	c.RateLimitRPS = getEnvFloat("RATE_LIMIT_RPS", c.RateLimitRPS)
 	c.RateLimitBurst = getEnvInt("RATE_LIMIT_BURST", c.RateLimitBurst)
-	c.ProcessPrivateRepos = getEnvBool("PROCESS_PRIVATE_REPOS", c.ProcessPrivateRepos)
-	c.RepoMaxInactivityDays = getEnvInt("REPO_MAX_INACTIVITY_DAYS", c.RepoMaxInactivityDays)
+	c.ProcessPrivateRepositories = getEnvBool("PROCESS_PRIVATE_REPOSITORIES", c.ProcessPrivateRepositories)
+	c.MinMonthsCommitActivity = getEnvInt("MIN_MONTHS_COMMIT_ACTIVITY", c.MinMonthsCommitActivity)
+	c.UserWorkspaceDir = getEnv("USER_WORKSPACE_DIR", c.UserWorkspaceDir)
 	c.LLMsVerifierEndpoint = getEnv("LLMSVERIFIER_ENDPOINT", c.LLMsVerifierEndpoint)
 	c.LLMsVerifierAPIKey = getEnv("LLMSVERIFIER_API_KEY", c.LLMsVerifierAPIKey)
 }

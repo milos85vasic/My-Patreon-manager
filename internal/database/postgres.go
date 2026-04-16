@@ -110,6 +110,7 @@ func (db *PostgresDB2) Migrate(ctx context.Context) error {
 			token_count INTEGER DEFAULT 0,
 			generation_attempts INTEGER DEFAULT 1,
 			passed_quality_gate BOOLEAN DEFAULT FALSE,
+			status TEXT DEFAULT 'draft',
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_content_repo ON generated_contents(repository_id)`,

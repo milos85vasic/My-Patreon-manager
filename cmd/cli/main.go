@@ -167,8 +167,8 @@ func main() {
 			RepoURL: repo,
 			Pattern: pattern,
 		},
-		ProcessPrivateRepos:   cfg.ProcessPrivateRepos,
-		RepoMaxInactivityDays: cfg.RepoMaxInactivityDays,
+		ProcessPrivateRepos:   cfg.ProcessPrivateRepositories,
+		RepoMaxInactivityDays: cfg.MinMonthsCommitActivity * 30,
 	}
 
 	switch args[0] {

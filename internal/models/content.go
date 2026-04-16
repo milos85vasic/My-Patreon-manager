@@ -18,7 +18,9 @@ type GeneratedContent struct {
 	TokenCount         int       `json:"token_count" db:"token_count"`
 	GenerationAttempts int       `json:"generation_attempts" db:"generation_attempts"`
 	PassedQualityGate  bool      `json:"passed_quality_gate" db:"passed_quality_gate"`
+	Status             string    `json:"status" db:"status"`
 	CreatedAt          time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at" db:"updated_at"`
 }
 
 type ContentTemplate struct {
