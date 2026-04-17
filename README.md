@@ -1,90 +1,199 @@
 # My Patreon Manager
 
-My Patreon Manager is a Go application that automates content creation and publishing for Patreon creators. It scans Git repositories across GitHub, GitLab, GitFlic, and GitVerse, generates tier-gated content via an LLM pipeline with quality gates, and publishes posts to Patreon -- all driven by a CLI-first design that supports cron scheduling, dry-run previews, and idempotent operations.
+**Automate tier-gated content creation for Patreon from your Git repositories.**
+
+My Patreon Manager scans repositories across GitHub, GitLab, GitFlic, and GitVerse, generates quality-scored content through an LLM pipeline, and publishes tier-gated posts to Patreon. CLI-first, idempotent, and safe to re-run.
+
+---
+
+[![Go 1.26.1](https://img.shields.io/badge/Go-1.26.1-00ADD8?logo=go)](https://go.dev/)
+[![Test Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](./scripts/coverage.sh)
+[![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey)](./.goreleaser.yaml)
+[![License](https://img.shields.io/badge/license-See%20LICENSE%20file-blue)](#license)
+
+---
 
 ## Features
 
 - **Multi-platform Git scanning** -- GitHub, GitLab, GitFlic, and GitVerse as first-class, interchangeable sources with mirror detection
+- **Multi-organization support** -- scan repositories across multiple organizations and groups in a single sync run
 - **LLM-powered content generation** -- quality-scored model selection with automatic fallback chains and configurable quality thresholds
 - **Tier-gated Patreon publishing** -- maps repository content to Patreon tiers with deduplication via content fingerprinting
 - **CLI subcommands** -- `sync`, `scan`, `generate`, `validate`, `publish` with `--dry-run`, `--schedule`, `--org`, `--repo`, `--pattern`, `--json`, `--log-level`
-- **HTTP server** -- Gin-based server on `:8080` with health checks, Prometheus metrics, and webhook handlers
-- **Resilience patterns** -- circuit breakers (gobreaker), exponential backoff, rate limiting per provider
-- **Observability** -- structured logging, Prometheus metrics (`sync_duration_seconds`, `repos_processed_total`, `llm_quality_score`, etc.)
+- **HTTP server** -- Gin-based server on `:8080` with health checks, Prometheus metrics, admin endpoints, and webhook handlers
+- **Resilience patterns** -- circuit breakers, exponential backoff, per-provider rate limiting
+- **Observability** -- structured JSON logging, Prometheus metrics, Grafana dashboards
 - **Idempotent operations** -- content fingerprinting and checkpointing ensure safe re-runs after failures
-- **Database flexibility** -- SQLite by default, PostgreSQL for production deployments
-- **Security-first** -- twelve-factor credential management, automatic token refresh, credential redaction in logs
+- **Database flexibility** -- SQLite (default) or PostgreSQL for production
+- **Security-first** -- twelve-factor credential management, HMAC-signed webhooks, credential redaction in all logs
 
-## Quickstart
+## Quick Start
 
-1. **Clone the repository**
-   ```sh
-   git clone https://github.com/milos85vasic/My-Patreon-Manager.git
-   cd My-Patreon-Manager
-   ```
+```sh
+# 1. Clone the repository
+git clone https://github.com/milos85vasic/My-Patreon-Manager.git
+cd My-Patreon-Manager
 
-2. **Configure credentials**
-   ```sh
-   cp .env.example .env
-   # Edit .env with your Patreon API credentials, Git provider tokens, etc.
-   ```
+# 2. Configure environment
+cp .env.example .env
+# Edit .env with your Patreon API credentials, Git provider tokens, etc.
 
-3. **Validate configuration**
-   ```sh
-   go run ./cmd/cli validate
-   ```
+# 3. Validate configuration
+go run ./cmd/cli validate
 
-4. **Dry-run a sync**
-   ```sh
-   go run ./cmd/cli sync --dry-run
-   ```
+# 4. Preview a sync (no changes written)
+go run ./cmd/cli sync --dry-run
 
-5. **Run a full sync**
-   ```sh
-   go run ./cmd/cli sync
-   ```
+# 5. Run a full sync
+go run ./cmd/cli sync
+```
 
-## Architecture
+## Environment Variables Quick Reference
 
-![Overview](docs/architecture/diagrams/overview.svg)
+Full reference: [docs/guides/configuration.md](docs/guides/configuration.md)
 
-The codebase follows a provider/service layering where the CLI and server are thin wrappers around a shared orchestration core. See [docs/architecture/overview.md](docs/architecture/overview.md) for details.
+### Required
 
-**Key layers:**
+#### Patreon API
 
-- **Providers** (`internal/providers/`) -- pluggable external integrations (Git services, LLM, Patreon, renderers) behind Go interfaces
-- **Services** (`internal/services/`) -- orchestration logic (sync, content generation, filtering, access control, audit)
-- **Entrypoints** (`cmd/cli/`, `cmd/server/`) -- thin wrappers with dependency-injection via package-level function variables
+| Variable | Description |
+|----------|-------------|
+| `PATREON_CLIENT_ID` | Patreon API client ID |
+| `PATREON_CLIENT_SECRET` | Patreon API client secret |
+| `PATREON_ACCESS_TOKEN` | Patreon access token |
+| `PATREON_REFRESH_TOKEN` | Patreon refresh token |
+| `PATREON_CAMPAIGN_ID` | Patreon campaign ID |
+
+#### Security
+
+| Variable | Description |
+|----------|-------------|
+| `HMAC_SECRET` | Secret for signed download URLs |
+| `ADMIN_KEY` | Key for admin endpoint access |
+| `WEBHOOK_HMAC_SECRET` | Shared secret for webhook signature validation |
+
+### Recommended
+
+#### Git Provider Tokens
+
+| Variable | Description |
+|----------|-------------|
+| `GITHUB_TOKEN` | GitHub personal access token |
+| `GITLAB_TOKEN` | GitLab personal access token |
+| `GITFLIC_TOKEN` | GitFlic API token |
+| `GITVERSE_TOKEN` | GitVerse API token |
+
+Each provider also supports a `_SECONDARY` token for failover (e.g., `GITHUB_TOKEN_SECONDARY`).
+
+#### Multi-Organization
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GITHUB_ORGS` | *personal repos* | Comma-separated GitHub organization logins |
+| `GITLAB_GROUPS` | *personal repos* | Comma-separated GitLab group paths |
+| `GITFLIC_ORGS` | *personal repos* | Comma-separated GitFlic organization names |
+| `GITVERSE_ORGS` | *personal repos* | Comma-separated GitVerse organization names |
+
+#### LLMsVerifier (required for content generation)
+
+| Variable | Description |
+|----------|-------------|
+| `LLMSVERIFIER_ENDPOINT` | LLMsVerifier service URL (default `http://localhost:9099`) |
+| `LLMSVERIFIER_API_KEY` | LLMsVerifier API key |
+
+### Optional
+
+#### Content Generation
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CONTENT_QUALITY_THRESHOLD` | `0.75` | Minimum quality score for generated content |
+| `LLM_DAILY_TOKEN_BUDGET` | `100000` | Daily token budget across all LLM providers |
+| `LLM_CONCURRENCY` | `8` | Max concurrent in-flight LLM calls |
+| `CONTENT_TIER_MAPPING_STRATEGY` | `linear` | Tier mapping strategy |
+
+#### Database
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DB_DRIVER` | `sqlite` | Database driver (`sqlite` or `postgres`) |
+| `DB_PATH` | `user/db/patreon_manager.db` | SQLite database path |
+| `DB_HOST` | `localhost` | PostgreSQL host |
+| `DB_PORT` | `5432` | PostgreSQL port |
+| `DB_USER` | `postgres` | PostgreSQL user |
+| `DB_PASSWORD` | `password` | PostgreSQL password |
+| `DB_NAME` | `my_patreon_manager` | PostgreSQL database name |
+
+#### Server
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `8080` | HTTP server port |
+| `GIN_MODE` | `debug` | Gin mode (`debug` or `release`) |
+| `LOG_LEVEL` | `info` | Log level (ERROR, WARN, INFO, DEBUG, TRACE) |
+| `RATE_LIMIT_RPS` | `100` | Per-IP rate limit (requests/second) |
+| `RATE_LIMIT_BURST` | `200` | Per-IP burst budget |
+
+## Multi-Org Configuration
+
+Configure multi-organization scanning to discover repositories across multiple GitHub organizations and GitLab groups in a single sync run:
+
+```env
+GITHUB_ORGS=my-company,open-source-team,partner-org
+GITLAB_GROUPS=backend-team,infra
+GITFLIC_ORGS=my-org
+```
+
+When unset, each provider scans the token owner's personal repositories. All organizations are iterated with full pagination, and cross-org deduplication is applied through the existing mirror detection pipeline.
+
+See [Multi-Org Support](docs/website/content/docs/multi-org-support.md) for complete documentation.
 
 ## Documentation
+
+### Getting Started
 
 | Document | Description |
 |----------|-------------|
 | [Quickstart Guide](docs/guides/quickstart.md) | Getting started in 5 minutes |
-| [Configuration](docs/guides/configuration.md) | Environment variables and config file reference |
+| [Configuration Reference](docs/guides/configuration.md) | Complete environment variable and config reference |
+| [Obtaining Credentials](docs/guides/obtaining-credentials.md) | How to obtain Patreon and Git provider tokens |
+| [Multi-Org Support](docs/website/content/docs/multi-org-support.md) | Multi-organization repository scanning setup |
+
+### Architecture
+
+| Document | Description |
+|----------|-------------|
 | [Architecture Overview](docs/architecture/overview.md) | System design and component interactions |
 | [SQL Schema](docs/architecture/sql-schema.md) | Database schema reference |
-| [Git Providers](docs/guides/git-providers.md) | Provider-specific setup and configuration |
-| [Content Generation](docs/guides/content-generation.md) | LLM pipeline and quality gates |
-| [Deployment](docs/guides/deployment.md) | Production deployment guide |
-| [API Reference](docs/api/openapi.yaml) | OpenAPI specification |
-| [CLI Reference](docs/api/cli-reference.md) | CLI subcommands and flags |
 | [ADRs](docs/adr/) | Architecture Decision Records |
-| [Runbooks](docs/runbooks/) | Operational procedures |
-| [Troubleshooting FAQ](docs/troubleshooting/faq.md) | Common issues and solutions |
-| [Security](docs/security/README.md) | Security policies and baselines |
-| [Main Specification](docs/main_specification.md) | Full system specification |
 
-### Tutorials (step-by-step)
+### Guides
+
+| Document | Description |
+|----------|-------------|
+| [Git Providers](docs/guides/git-providers.md) | Provider-specific setup and configuration |
+| [Content Generation](docs/guides/content-generation.md) | LLM pipeline, quality gates, and tier mapping |
+| [Patreon Tiers](docs/guides/patreon-tiers.md) | Tier configuration and access control |
+| [LLMsVerifier Setup](docs/guides/llms-verifier.md) | LLMsVerifier service integration |
+| [Deployment Guide](docs/guides/deployment.md) | Production deployment guide |
+| [Local Verification](docs/guides/local-verification.md) | 15-step pre-publish checklist |
+
+### API Reference
+
+| Document | Description |
+|----------|-------------|
+| [OpenAPI Specification](docs/api/openapi.yaml) | HTTP API specification |
+| [CLI Reference](docs/api/cli-reference.md) | CLI subcommands and flags |
+
+### Tutorials
 
 | Tutorial | Description |
 |----------|-------------|
 | [First Sync](docs/guides/tutorial-first-sync.md) | Zero to first published Patreon post in 12 steps |
-| [Server Setup](docs/guides/tutorial-server-setup.md) | Start the server, configure webhooks, verify every endpoint |
+| [Server Setup](docs/guides/tutorial-server-setup.md) | Start the server, configure webhooks, verify endpoints |
 | [Security Scanning](docs/guides/tutorial-security-scanning.md) | Run every scanner locally, read findings, fix them |
 | [Testing Guide](docs/guides/tutorial-testing.md) | Run and write every test type (unit, fuzz, bench, chaos, leak) |
 | [Content Pipeline](docs/guides/tutorial-content-pipeline.md) | LLM generation, quality gates, tiers, rendering, fingerprints |
-| [Local Verification](docs/guides/local-verification.md) | 15-step pre-publish checklist with expected output |
 
 ### Manuals
 
@@ -98,20 +207,38 @@ The codebase follows a provider/service layering where the CLI and server are th
 | [CLI: generate](docs/manuals/subcommands/generate.md) | Content generation subcommand |
 | [CLI: validate](docs/manuals/subcommands/validate.md) | Configuration validator |
 | [CLI: publish](docs/manuals/subcommands/publish.md) | Publish pre-generated content |
-| [Deploy: Podman](docs/manuals/deployment/podman.md) | Podman + systemd integration |
 | [Deploy: Docker](docs/manuals/deployment/docker.md) | Docker + docker-compose |
+| [Deploy: Podman](docs/manuals/deployment/podman.md) | Podman + systemd integration |
 | [Deploy: systemd](docs/manuals/deployment/systemd.md) | Bare binary + systemd unit |
 | [Deploy: Kubernetes](docs/manuals/deployment/kubernetes.md) | K8s deployment + CronJob |
 | [Deploy: Binary](docs/manuals/deployment/bare-binary.md) | Cross-compile and run |
 
-### Video Course
+### Video Course (11 modules)
 
-| Resource | Description |
+| Module | Script |
+|--------|--------|
+| 1. Introduction & Core Concepts | [Script](docs/video/scripts/module01-intro.md) |
+| 2. Installation & First Sync | [Script](docs/video/scripts/module02-configuration.md) |
+| 3. Configuration Deep-Dive | [Script](docs/video/scripts/module03-sync.md) |
+| 4. Content Templates & Customization | [Script](docs/video/scripts/module04-generate.md) |
+| 5. Filtering & Mirror Detection | [Script](docs/video/scripts/module05-publish.md) |
+| 6. Advanced Features & Integrations | [Script](docs/video/scripts/module06-admin.md) |
+| 7. Deployment & Production Readiness | [Script](docs/video/scripts/module07-extending.md) |
+| 8. Extending the System | [Script](docs/video/scripts/module08-troubleshooting.md) |
+| 9. Concurrency Patterns | [Script](docs/video/scripts/module09-concurrency.md) |
+| 10. Observability | [Script](docs/video/scripts/module10-observability.md) |
+| 11. Multi-Org Scanning | [Script](docs/video/scripts/module11-multi-org.md) |
+
+See also: [Course Outline](docs/video/course-outline.md) | [Recording Checklist](docs/video/recording-checklist.md) | [Distribution Plan](docs/video/distribution.md)
+
+### Operations
+
+| Document | Description |
 |----------|-------------|
-| [Course Outline](docs/video/course-outline.md) | 10-module course structure |
-| [Module Scripts](docs/video/scripts/) | Full voiceover scripts per module |
-| [Recording Checklist](docs/video/recording-checklist.md) | Before/during/after checklist |
-| [Exercise Files](examples/) | Starter files per module |
+| [Security](docs/security/README.md) | Security policies and baselines |
+| [Runbooks](docs/runbooks/) | Operational procedures |
+| [Troubleshooting FAQ](docs/troubleshooting/faq.md) | Common issues and solutions |
+| [Main Specification](docs/main_specification.md) | Full system specification |
 
 ## Development
 
@@ -120,8 +247,8 @@ go build ./...                                  # build all packages
 go test ./internal/... ./cmd/... ./tests/...    # run full test suite
 go test -race ./...                             # race detector
 go vet ./...                                    # static analysis
-bash scripts/coverage.sh                        # coverage (gates at 100%)
-go run ./cmd/server                             # run HTTP server
+bash scripts/coverage.sh                        # full coverage run (gates at 100%)
+go run ./cmd/server                             # run HTTP server on :8080
 ```
 
 ## License

@@ -2,9 +2,9 @@
 
 **Audience**: Developers, content creators, open‑source maintainers who want to automate promotion of their repositories to Patreon.
 
-**Format**: 10 modules, ~12 minutes each, with hands‑on demos and downloadable exercise files in `examples/`.
+**Format**: 11 modules, ~12 minutes each, with hands‑on demos and downloadable exercise files in `examples/`.
 
-**New modules (Phase 1 additions)**: Module 9 — Concurrency Patterns, Module 10 — Observability.
+**New modules (Phase 1 additions)**: Module 9 — Concurrency Patterns, Module 10 — Observability, Module 11 — Multi-Org Scanning.
 
 **Full scripts**: `docs/video/scripts/moduleNN-*.md`
 **Recording checklist**: `docs/video/recording-checklist.md`
@@ -74,6 +74,16 @@
 - Contributing to the open‑source project: code style, testing requirements, pull‑request workflow.
 - Where to get help: GitHub issues, documentation, community Discord.
 
+## Module 11: Multi-Organization Repository Scanning
+
+- What multi-org support is: scanning repositories across multiple GitHub organizations and GitLab groups in a single sync run.
+- New environment variables: `GITHUB_ORGS`, `GITLAB_GROUPS`, `GITFLIC_ORGS`, `GITVERSE_ORGS` (comma-separated lists).
+- Single org vs. multiple orgs: how a single value matches legacy behavior, multiple values trigger sequential iteration.
+- Orchestrator discovery flow: per-org API calls with pagination, shared repository slice, and the mirror detection pipeline.
+- Cross-org deduplication: same mirror detection (name, README hash, commit SHA), audit log entries with both org names.
+- Backward compatibility: unset variables fall back to personal scope, no migration required, incremental adoption.
+- Demo: configuring two GitHub orgs and two GitLab groups, running `sync --dry-run --json`, inspecting the summary.
+
 ---
 
 ## Practical Exercises
@@ -87,6 +97,7 @@ Each module includes a hands‑on exercise:
 5. **Module 6**: Trigger a webhook manually and watch the incremental sync.
 6. **Module 7**: Deploy the manager as a Docker container and run a scheduled sync.
 7. **Module 8**: Write a minimal “debug” renderer that outputs JSON.
+8. **Module 11**: Configure multi-org scanning for two organizations and verify deduplication in the dry-run report.
 
 ---
 
@@ -99,6 +110,6 @@ Each module includes a hands‑on exercise:
 
 ---
 
-**Estimated total runtime**: 90–120 minutes.
+**Estimated total runtime**: 100--130 minutes.
 
 **Next steps**: Record screencasts, edit with captions, upload to YouTube/Vimeo, create companion GitHub repository with exercise files.

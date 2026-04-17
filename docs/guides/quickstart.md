@@ -1,184 +1,289 @@
-# My Patreon Manager - Quickstart Guide
+# Quick Start Guide
+
+This guide walks you through getting My Patreon Manager up and running in under ten minutes. By the end you will have validated your configuration, previewed a dry-run, and understood the full sync workflow.
 
 ## Prerequisites
 
-- Go 1.26.1+
-- A Patreon account with API access
-- Git hosting accounts (GitHub, GitLab, GitFlic, GitVerse) — you only need accounts for the providers you want to scan
-- Docker (or Podman) for running the [LLMsVerifier](https://github.com/vasic-digital/LLMsVerifier) container (started automatically by `scripts/llmsverifier.sh`)
+| Requirement | Version | Notes |
+|-------------|---------|-------|
+| Go | 1.26.1+ | Required for building the CLI and server binaries. |
+| Git | Any recent version | Used internally for repository metadata operations. |
+| CGO compiler | GCC or Clang | Required when using SQLite (`DB_DRIVER=sqlite`). Set `CGO_ENABLED=1`. |
+| Docker or Podman | Any recent version | Required only if running the LLMsVerifier service locally. |
 
-## Setup
+> **SQLite note:** The SQLite driver (`mattn/go-sqlite3`) requires CGO. If you plan to use PostgreSQL instead, CGO is not required and you can build with `CGO_ENABLED=0`.
 
-1. Copy `.env.example` to `.env`:
-   ```sh
-   cp .env.example .env
-   ```
+## Step 1 -- Clone and Build
 
-2. Fill in your credentials in `.env` (see [Configuration Reference](configuration.md) for full details):
-   ```env
-   # Required by config validation (all commands)
-   PATREON_CLIENT_ID=your_client_id
-   PATREON_CLIENT_SECRET=your_client_secret
-   PATREON_ACCESS_TOKEN=your_access_token
-   PATREON_CAMPAIGN_ID=your_campaign_id
-   HMAC_SECRET=your_hmac_secret
+```sh
+git clone https://github.com/milos85vasic/My-Patreon-Manager.git
+cd My-Patreon-Manager
+go build ./...
+```
 
-   # Database (SQLite — zero setup for local dev)
-   DB_DRIVER=sqlite
-   DB_PATH=patreon_manager.db
+Verify the build succeeded:
 
-   # LLMsVerifier (required for sync/generate/verify)
-   LLMSVERIFIER_ENDPOINT=http://localhost:9099
+```sh
+go run ./cmd/cli validate  # will fail until .env is configured (expected)
+```
 
-   # Git provider tokens — only add the ones you use
-   GITHUB_TOKEN=your_github_token
-   ```
+## Step 2 -- Configure Environment
 
-3. Build the application:
-   ```sh
-   go build ./...
-   ```
+Copy the example environment file and populate it with your credentials:
 
-## Local Validation Workflow
+```sh
+cp .env.example .env
+```
 
-Always validate locally before publishing to Patreon. Follow these steps in order:
+Edit `.env` with a text editor. The table below describes every variable. Variables marked **Required** must contain real values for the application to start.
 
-### 1. Validate Configuration
+### Required -- Patreon API
 
-Checks that all required environment variables are set:
+These values are validated at startup for every command, even `--dry-run`. Obtain them from the [Patreon Platform Portal](https://www.patreon.com/portal/registration/register-clients).
+
+| Variable | Description |
+|----------|-------------|
+| `PATREON_CLIENT_ID` | OAuth client ID from your Patreon developer application. |
+| `PATREON_CLIENT_SECRET` | OAuth client secret from your Patreon developer application. |
+| `PATREON_ACCESS_TOKEN` | Access token obtained via the OAuth flow or the Creator's Access Token. |
+| `PATREON_REFRESH_TOKEN` | Refresh token for obtaining new access tokens automatically. |
+| `PATREON_CAMPAIGN_ID` | ID of the campaign to publish content to. Retrieve via `GET /api/oauth2/v2/campaigns`. |
+
+### Required -- Security
+
+| Variable | Description |
+|----------|-------------|
+| `HMAC_SECRET` | Secret key for signing download URLs. Generate with `openssl rand -hex 32`. |
+
+### Recommended -- Git Provider Tokens
+
+Configure tokens for the Git hosting services you want to scan. Providers without tokens are silently skipped. See the [Git Providers Guide](git-providers.md) for token scopes and setup instructions.
+
+| Variable | Description |
+|----------|-------------|
+| `GITHUB_TOKEN` | GitHub personal access token with `repo` read scope. |
+| `GITLAB_TOKEN` | GitLab personal access token with `read_api` and `read_repository` scopes. |
+| `GITFLIC_TOKEN` | GitFlic API token with repository read scope. |
+| `GITVERSE_TOKEN` | GitVerse API token with repository read scope. |
+
+### Recommended -- Multi-Organization Scanning
+
+Specify organizations or groups to scan per provider. When omitted, the provider scans only the authenticated user's personal repositories. Use commas to separate multiple orgs, or `*` to scan all accessible organizations.
+
+| Variable | Description |
+|----------|-------------|
+| `GITHUB_ORGS` | Comma-separated GitHub organization logins. Example: `my-org,partner-org`. Use `*` for all accessible orgs. |
+| `GITLAB_GROUPS` | Comma-separated GitLab group paths. Subgroups are included automatically. Example: `my-group,clients/project-a`. |
+| `GITFLIC_ORGS` | Comma-separated GitFlic organization names. Example: `my-org`. |
+| `GITVERSE_ORGS` | Comma-separated GitVerse organization names. Example: `team-alpha,team-beta`. |
+
+Example multi-org configuration:
+
+```env
+GITHUB_ORGS=acme-corp,open-source-projects
+GITLAB_GROUPS=engineering,consulting/client-a
+GITFLIC_ORGS=acme-ru
+GITVERSE_ORGS=team-alpha,team-beta
+```
+
+### Optional -- Content Generation
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LLMSVERIFIER_ENDPOINT` | *(empty)* | Base URL of the LLMsVerifier service. Required for `sync`, `generate`, and `verify` commands. |
+| `LLMSVERIFIER_API_KEY` | *(empty)* | Authentication token for LLMsVerifier. Auto-populated by `scripts/llmsverifier.sh`. |
+| `CONTENT_QUALITY_THRESHOLD` | `0.75` | Minimum quality score (0.0--1.0) for generated content. Content below this threshold is discarded. |
+| `LLM_DAILY_TOKEN_BUDGET` | `100000` | Daily token budget for LLM API calls. Generation pauses when exceeded. |
+| `LLM_CONCURRENCY` | `8` | Maximum number of concurrent in-flight LLM calls. |
+| `CONTENT_TIER_MAPPING_STRATEGY` | `linear` | Strategy for mapping repositories to Patreon tiers: `linear` or `weighted`. |
+| `VIDEO_GENERATION_ENABLED` | `false` | Enable experimental video script generation. |
+| `PDF_RENDERING_ENABLED` | `false` | Enable PDF rendering. Falls back to HTML if Chromium is not installed. |
+
+### Optional -- Database
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DB_DRIVER` | `sqlite` | Database driver: `sqlite` or `postgres`. |
+| `DB_PATH` | `user/db/patreon_manager.db` | Path to the SQLite database file. |
+| `DB_HOST` | `localhost` | PostgreSQL host. |
+| `DB_PORT` | `5432` | PostgreSQL port. |
+| `DB_USER` | `postgres` | PostgreSQL username. |
+| `DB_PASSWORD` | *(empty)* | PostgreSQL password. |
+| `DB_NAME` | `my_patreon_manager` | PostgreSQL database name. |
+
+### Optional -- Server, Filtering, and Other
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `8080` | HTTP server port. |
+| `GIN_MODE` | `debug` | Gin framework mode: `debug` or `release`. |
+| `LOG_LEVEL` | `info` | Log verbosity: `error`, `warn`, `info`, `debug`, `trace`. |
+| `PROCESS_PRIVATE_REPOSITORIES` | `false` | Set to `true` to include private repositories in scanning. |
+| `MIN_MONTHS_COMMIT_ACTIVITY` | `18` | Repositories with no commits in this many months are skipped. Set `0` to disable. |
+| `USER_WORKSPACE_DIR` | `user` | Root directory for database, images, content, and templates. |
+| `GRACE_PERIOD_HOURS` | `24` | Hours to wait after a repository change before generating new content. |
+| `ADMIN_KEY` | *(empty)* | Shared secret for `/admin/*` endpoints. Generate with `openssl rand -hex 32`. |
+| `WEBHOOK_HMAC_SECRET` | *(empty)* | Shared secret for webhook signature validation. |
+| `AUDIT_STORE` | `ring` | Audit backend: `ring` (in-memory) or `sqlite`. |
+
+For the complete reference with validation rules and per-command requirements, see [Configuration Reference](configuration.md).
+
+## Step 3 -- Validate Configuration
+
+Run the validation command to confirm all required variables are set and well-formed:
 
 ```sh
 go run ./cmd/cli validate
 ```
 
-### 2. Start LLMsVerifier
+Expected output:
 
-The bootstrap script starts the container, waits for health, and refreshes `.env` with a fresh API key:
+```
+Configuration is valid
+```
+
+If validation fails, the output identifies which variable is missing or malformed. Fix the value in `.env` and re-run.
+
+## Step 4 -- Start LLMsVerifier (Optional, for Content Generation)
+
+The LLMsVerifier service is required for `sync`, `generate`, and `verify` commands. If you are only running `validate` or `scan`, you can skip this step.
 
 ```sh
 bash scripts/llmsverifier.sh
 ```
 
-Then verify connectivity and see ranked models:
+This script starts the LLMsVerifier container, waits for it to become healthy, and automatically writes `LLMSVERIFIER_ENDPOINT` and `LLMSVERIFIER_API_KEY` into your `.env` file. The API key is rotated on every boot.
+
+Verify connectivity:
 
 ```sh
 go run ./cmd/cli verify
 ```
 
-### 3. Dry-Run
+This contacts the LLMsVerifier service and displays the ranked list of available LLM models.
 
-Fetches repo metadata from git providers, estimates costs — **no LLM calls, no Patreon calls**:
+## Step 5 -- Dry-Run Sync
+
+Preview what a full sync would do without making any API calls to Patreon or generating any content:
 
 ```sh
 go run ./cmd/cli sync --dry-run
 ```
 
-Narrow scope with filters:
+This fetches repository metadata from all configured Git providers, applies filtering, and reports the number of repositories discovered and estimated content generation costs.
+
+Narrow the scope with filters:
 
 ```sh
-go run ./cmd/cli sync --dry-run --org my-org --json
+# Scan a single organization
+go run ./cmd/cli sync --dry-run --org my-org
+
+# Scan a specific repository
+go run ./cmd/cli sync --dry-run --repo my-org/my-repo
+
+# Machine-readable JSON output
+go run ./cmd/cli sync --dry-run --json
 ```
 
-### 4. Generate Content (Without Publishing)
+Expected output (abridged):
 
-Runs the full LLM pipeline, stores results in the local database. **Does not contact Patreon**:
+```
+[INFO] Discovered 42 repositories across 2 providers
+[INFO] Estimated content generation: 42 items, ~84000 tokens
+[INFO] Dry-run complete. No changes were made.
+```
+
+## Step 6 -- Generate and Review Content
+
+Run the content generation pipeline. This calls LLMs, applies quality gates, and stores results locally. **Patreon is not contacted.**
 
 ```sh
 go run ./cmd/cli generate
 ```
 
-Inspect the generated content in the database before proceeding.
+Review the generated content in your local database before publishing.
 
-### 5. Publish (When Ready)
+## Step 7 -- Publish
 
-Only after inspecting generated content:
+Once you have reviewed the generated content and are satisfied with its quality:
 
 ```sh
 go run ./cmd/cli publish
 ```
 
-Or run the full pipeline end-to-end:
+Or run the full pipeline end-to-end (scan, generate, and publish in one command):
 
 ```sh
 go run ./cmd/cli sync
 ```
 
-## Running
+## Running the HTTP Server
 
-### CLI Mode
-```sh
-# Full sync (scan + generate + publish)
-go run ./cmd/cli sync
-
-# Dry-run (preview changes, no side effects)
-go run ./cmd/cli sync --dry-run
-
-# Validate configuration
-go run ./cmd/cli validate
-
-# Verify LLMsVerifier connectivity
-go run ./cmd/cli verify
-
-# Filter to specific org or repo
-go run ./cmd/cli sync --org my-org
-go run ./cmd/cli sync --repo my-org/my-repo
-```
-
-### Server Mode
 ```sh
 go run ./cmd/server
 # Server starts on http://localhost:8080
 ```
 
-### Docker
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check. |
+| `/metrics` | GET | Prometheus metrics. |
+| `/webhook/github` | POST | GitHub webhook receiver. |
+| `/webhook/gitlab` | POST | GitLab webhook receiver. |
+| `/webhook/:service` | POST | Generic webhook receiver. |
+| `/download/:content_id` | GET | Signed-URL download for premium content. |
+| `/access/:content_id` | GET | Tier access check. |
+| `/admin/reload` | POST | Reload configuration at runtime. |
+| `/admin/sync/status` | GET | Current sync status. |
+
+## Running with Docker
+
 ```sh
 docker-compose up -d
 ```
 
-## API Endpoints
+This starts both the application server and the LLMsVerifier service. For a production stack with PostgreSQL:
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Health check |
-| `/metrics` | GET | Prometheus metrics |
-| `/webhook/github` | POST | GitHub webhook |
-| `/webhook/gitlab` | POST | GitLab webhook |
-| `/webhook/:service` | POST | Generic webhook |
-| `/download/:content_id` | GET | Download premium content |
-| `/access/:content_id` | GET | Check access |
-| `/admin/reload` | POST | Reload config |
-| `/admin/sync/status` | GET | Sync status |
+```sh
+docker-compose --profile production up -d
+```
 
 ## Where to Get Tokens
 
-For **detailed step-by-step instructions** with links to official documentation for every credential, see the [Obtaining Credentials](obtaining-credentials.md) guide.
+See the [Obtaining Credentials](obtaining-credentials.md) guide for detailed step-by-step instructions.
 
 Quick reference:
 
-| Token | Where to obtain |
-|-------|-----------------|
+| Token | Source |
+|-------|--------|
 | `PATREON_CLIENT_ID` / `SECRET` | [Patreon Platform Portal](https://www.patreon.com/portal/registration/register-clients) |
-| `PATREON_ACCESS_TOKEN` | OAuth flow or Creator's Access Token from portal |
+| `PATREON_ACCESS_TOKEN` | OAuth flow or Creator's Access Token |
 | `PATREON_CAMPAIGN_ID` | Patreon API: `GET /api/oauth2/v2/campaigns` |
-| `GITHUB_TOKEN` | [GitHub PAT settings](https://github.com/settings/tokens) |
-| `GITLAB_TOKEN` | [GitLab Access Tokens](https://gitlab.com/-/user_settings/personal_access_tokens) |
+| `GITHUB_TOKEN` | [GitHub Settings > Developer settings > Personal access tokens](https://github.com/settings/tokens) |
+| `GITLAB_TOKEN` | [GitLab Preferences > Access Tokens](https://gitlab.com/-/user_settings/personal_access_tokens) |
 | `GITFLIC_TOKEN` | [GitFlic](https://gitflic.ru) account settings |
 | `GITVERSE_TOKEN` | [GitVerse](https://gitverse.ru) account settings |
-| `LLMSVERIFIER_API_KEY` | Your [LLMsVerifier](https://github.com/vasic-digital/LLMsVerifier) instance |
+| `LLMSVERIFIER_API_KEY` | Auto-generated by `scripts/llmsverifier.sh` |
 | `HMAC_SECRET` | Self-generated: `openssl rand -hex 32` |
-
-## Further Reading
-
-- [LLMsVerifier Integration](llms-verifier.md) — architecture, scoring algorithm, health monitoring, caching
-- [Patreon Tiers](patreon-tiers.md) — check, create, and configure tier-gated content publishing
-- [Obtaining Credentials](obtaining-credentials.md) — step-by-step for every token and secret
-- [Configuration Reference](configuration.md) — full variable list and per-command requirements
 
 ## Troubleshooting
 
-- **"PATREON_CLIENT_ID is required"**: Fill in all Patreon credentials in `.env` — they are validated even for `--dry-run`
-- **"LLMSVERIFIER_ENDPOINT" error**: Set the endpoint in `.env` and ensure the service is running
-- **No repos found in dry-run**: Check that you have at least one git provider token set
-- **Database errors**: Delete `patreon_manager.db` and restart
-- **Token errors**: Check your Patreon tokens in `.env`
-- **Rate limiting**: The app handles rate limits automatically with token failover
+| Symptom | Resolution |
+|---------|------------|
+| `PATREON_CLIENT_ID is required` | Fill in all Patreon credentials in `.env`. They are validated even for `--dry-run`. |
+| `LLMSVERIFIER_ENDPOINT` error | Set the endpoint in `.env` and start the service with `bash scripts/llmsverifier.sh`. |
+| No repositories found in dry-run | Ensure at least one Git provider token is set. Check multi-org variables if you expect org repos. |
+| Database errors with SQLite | Ensure `CGO_ENABLED=1` is set. Delete `patreon_manager.db` to reset. |
+| Rate limiting errors | The application handles rate limits automatically with token failover. Configure `*_TOKEN_SECONDARY` for additional capacity. |
+| Permission denied creating `user/` directory | Ensure write permissions on the working directory, or set `USER_WORKSPACE_DIR` to a writable path. |
+
+## Next Steps
+
+- [Configuration Reference](configuration.md) -- complete variable list, validation rules, and per-command requirements
+- [Git Providers Guide](git-providers.md) -- detailed token setup, scopes, and multi-org scanning
+- [LLMsVerifier Integration](llms-verifier.md) -- architecture, scoring algorithm, and health monitoring
+- [Patreon Tiers](patreon-tiers.md) -- tier-gated content publishing configuration
+- [Obtaining Credentials](obtaining-credentials.md) -- step-by-step instructions for every token and secret
+- [Deployment Guide](deployment.md) -- running in production with PostgreSQL and monitoring

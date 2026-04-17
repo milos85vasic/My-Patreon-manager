@@ -103,6 +103,19 @@ Each Git service requires a personal access token (PAT) with appropriate scopes.
 
 **Note:** If a secondary token is provided, the token manager automatically switches to it when the primary token's rate limit is exhausted. Secondary tokens are purely optional.
 
+### Multi-Organization Scanning
+
+These variables control which organizations or groups each provider scans. When unset, the provider defaults to the token owner's personal scope. All are comma-separated lists trimmed of surrounding whitespace.
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `GITHUB_ORGS` | string | *none* | Comma-separated list of GitHub organization logins to scan (e.g., `acme-corp,open-source-team`). |
+| `GITLAB_GROUPS` | string | *none* | Comma-separated list of GitLab group paths to scan. |
+| `GITFLIC_ORGS` | string | *none* | Comma-separated list of GitFlic organization names to scan. |
+| `GITVERSE_ORGS` | string | *none* | Comma-separated list of GitVerse organization names to scan. |
+
+See the [Multi-Org Support](/docs/multi-org-support/) page for deduplication behavior, per-command details, and configuration examples.
+
 ### Webhook & Rate Limiting
 
 | Variable | Type | Default | Description |
@@ -157,6 +170,10 @@ Not every command needs every variable. This table shows what is **actually used
 | `GITLAB_TOKEN` | | | O | O | O | | O | O |
 | `GITFLIC_TOKEN` | | | O | O | O | | O | O |
 | `GITVERSE_TOKEN` | | | O | O | O | | O | O |
+| `GITHUB_ORGS` | | | O | O | O | | O | O |
+| `GITLAB_GROUPS` | | | O | O | O | | O | O |
+| `GITFLIC_ORGS` | | | O | O | O | | O | O |
+| `GITVERSE_ORGS` | | | O | O | O | | O | O |
 
 **Legend:** **V** = validated at startup (must be non-empty), **U** = used at runtime, **O** = optional (provider skipped if missing), blank = not used.
 
@@ -292,6 +309,12 @@ GITLAB_TOKEN=
 GITLAB_BASE_URL=https://gitlab.com
 GITFLIC_TOKEN=
 GITVERSE_TOKEN=
+
+# Multi-Org Scanning (optional — omit to scan token owner's repos only)
+GITHUB_ORGS=
+GITLAB_GROUPS=
+GITFLIC_ORGS=
+GITVERSE_ORGS=
 
 # LLMsVerifier (required for sync/generate/verify)
 LLMSVERIFIER_ENDPOINT=http://localhost:9099

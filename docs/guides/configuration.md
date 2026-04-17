@@ -1,260 +1,301 @@
 # Configuration Reference
 
-My Patreon Manager can be configured via environment variables (loaded from an `.env` file or system environment). This document describes each variable, its type, default value, validation rules, and usage.
+My Patreon Manager is configured entirely through environment variables, loaded from a `.env` file in the working directory or from the system environment. This document describes every variable, its type, default value, and validation rules.
 
 ## Loading Order
 
-Configuration is loaded in the following order (later values override earlier ones):
+Configuration values are resolved in the following order. Later sources override earlier ones:
 
-1. **Default values** (hard‑coded defaults)
-2. **`.env` file** in the current working directory
-3. **System environment variables**
-4. **Command‑line flags** (where applicable)
+1. **Hard-coded defaults** -- built into the `Config` struct.
+2. **`.env` file** -- parsed by `godotenv` from the current working directory.
+3. **System environment variables** -- override file-based values.
+4. **Command-line flags** -- override environment values where applicable (e.g., `--log-level`, `--org`).
 
 ## Variable Reference
 
-### Server Configuration
+### Server
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `PORT` | integer | `8080` | Port the HTTP server listens on. |
-| `GIN_MODE` | string | `debug` | Gin framework mode: `debug` (development) or `release` (production). |
-| `LOG_LEVEL` | string | `info` | Log verbosity: `error`, `warn`, `info`, `debug`, `trace`. |
-| `REDIRECT_URI` | URL | `http://localhost:8080/callback` | OAuth redirect URI for Patreon authentication. Must match the redirect URI registered with Patreon. |
+| Variable | Required | Default | Description |
+|----------|:--------:|---------|-------------|
+| `PORT` | No | `8080` | TCP port the HTTP server listens on. Must be between 1 and 65535. |
+| `GIN_MODE` | No | `debug` | Gin framework mode. Use `debug` for development, `release` for production. |
+| `LOG_LEVEL` | No | `info` | Log verbosity. One of: `error`, `warn`, `info`, `debug`, `trace`. |
+| `REDIRECT_URI` | No | `http://localhost:8080/callback` | OAuth redirect URI for Patreon authentication. Must match the URI registered in the Patreon developer portal. |
 
 ### Patreon API
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `PATREON_CLIENT_ID` | string | *none* | **Required.** OAuth client ID from your Patreon application. |
-| `PATREON_CLIENT_SECRET` | string | *none* | **Required.** OAuth client secret from your Patreon application. |
-| `PATREON_ACCESS_TOKEN` | string | *none* | **Required.** Access token obtained via OAuth flow. |
-| `PATREON_REFRESH_TOKEN` | string | *none* | Refresh token for obtaining new access tokens. |
-| `PATREON_CAMPAIGN_ID` | string | *none* | **Required.** ID of the Patreon campaign to publish content to. |
+These variables are validated by `Config.Validate()` at startup. They must contain real, non-placeholder values for every command.
 
-These four required variables are validated by `config.Validate()` at startup. They must contain real values (not placeholders) even for `--dry-run`, because validation runs before the command dispatches. However, the Patreon API is **never called** during `--dry-run`, `scan`, `generate`, or `verify` — only the `publish` and full `sync` commands contact Patreon.
+| Variable | Required | Default | Description |
+|----------|:--------:|---------|-------------|
+| `PATREON_CLIENT_ID` | Yes | *(empty)* | OAuth client ID from your Patreon developer application. |
+| `PATREON_CLIENT_SECRET` | Yes | *(empty)* | OAuth client secret from your Patreon developer application. |
+| `PATREON_ACCESS_TOKEN` | Yes | *(empty)* | Access token obtained via the OAuth flow or Creator's Access Token. |
+| `PATREON_REFRESH_TOKEN` | No | *(empty)* | Refresh token for obtaining new access tokens. Used by the Patreon client for automatic token rotation. |
+| `PATREON_CAMPAIGN_ID` | Yes | *(empty)* | ID of the Patreon campaign to publish content to. |
+
+> **Important:** These values are validated at startup for every command, including `--dry-run`. However, the Patreon API is only contacted by the `publish` and full `sync` commands. The `scan`, `generate`, and `verify` commands never call Patreon.
 
 ### Database
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `DB_DRIVER` | string | `sqlite` | Database driver: `sqlite` (default) or `postgres`. |
-| `DB_PATH` | string | `patreon_manager.db` | Path to SQLite database file (used when `DB_DRIVER=sqlite`). |
-| `DB_HOST` | string | `localhost` | PostgreSQL host (used when `DB_DRIVER=postgres`). |
-| `DB_PORT` | integer | `5432` | PostgreSQL port. |
-| `DB_USER` | string | `postgres` | PostgreSQL username. |
-| `DB_PASSWORD` | string | *none* | PostgreSQL password. |
-| `DB_NAME` | string | `my_patreon_manager` | PostgreSQL database name. |
+| Variable | Required | Default | Description |
+|----------|:--------:|---------|-------------|
+| `DB_DRIVER` | No | `sqlite` | Database driver. Accepted values: `sqlite`, `postgres`. |
+| `DB_PATH` | No | `user/db/patreon_manager.db` | Path to the SQLite database file. Used when `DB_DRIVER=sqlite`. Relative paths are resolved from `USER_WORKSPACE_DIR`. |
+| `DB_HOST` | No | `localhost` | PostgreSQL host. Used when `DB_DRIVER=postgres`. |
+| `DB_PORT` | No | `5432` | PostgreSQL port. |
+| `DB_USER` | No | `postgres` | PostgreSQL username. |
+| `DB_PASSWORD` | No | *(empty)* | PostgreSQL password. |
+| `DB_NAME` | No | `my_patreon_manager` | PostgreSQL database name. |
 
-**Note:** For PostgreSQL, the connection string is built as `host=H port=P user=U password=W dbname=D sslmode=disable`. All PostgreSQL variables must be set. For local development, SQLite is the simplest option — zero setup required.
+> **SQLite and CGO:** The SQLite driver requires `CGO_ENABLED=1`. The production Docker image is built with `CGO_ENABLED=0` for PostgreSQL deployments. For local SQLite development, build with `CGO_ENABLED=1`.
 
-### Content Generation
-
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `CONTENT_QUALITY_THRESHOLD` | float | `0.75` | Minimum quality score (0.0–1.0) for content to be published. Content below this threshold is discarded or marked for review. |
-| `LLM_DAILY_TOKEN_BUDGET` | integer | `100000` | Daily token budget for LLM API calls. If exceeded, generation pauses until the next day. |
-| `LLM_CONCURRENCY` | integer | `8` | Global cap on concurrent in-flight LLM calls across all providers. |
-| `CONTENT_TIER_MAPPING_STRATEGY` | string | `linear` | Strategy for mapping repositories to Patreon tiers: `linear` (each repo maps to a tier) or `weighted` (based on repository metrics). |
-| `VIDEO_GENERATION_ENABLED` | boolean | `false` | Enable experimental video script generation. Requires additional video‑generation dependencies. |
-| `PDF_RENDERING_ENABLED` | boolean | `false` | Enable PDF rendering alongside Markdown/HTML. Falls back to HTML bytes if no Chromium/Chrome binary is on PATH. |
-
-### LLMsVerifier
-
-All LLM calls route through the [LLMsVerifier](https://github.com/vasic-digital/LLMsVerifier) service, which tests providers, scores models, and returns a ranked list. This is a **required dependency** for `sync`, `generate`, and `verify` commands.
-
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `LLMSVERIFIER_ENDPOINT` | string | *none* | **Required for `sync`, `generate`, `verify`.** Base URL of the LLMsVerifier service (e.g. `http://localhost:9099`). Validated at startup — the CLI exits if empty for these commands. |
-| `LLMSVERIFIER_API_KEY` | string | *none* | Authentication token for the LLMsVerifier service. Optional if your instance allows unauthenticated access (Bearer header is omitted when empty). |
-
-**Automated management:** Run `bash scripts/llmsverifier.sh` to start the LLMsVerifier container, wait for health, and automatically refresh both `LLMSVERIFIER_ENDPOINT` and `LLMSVERIFIER_API_KEY` in `.env` with a freshly generated key. The API key is **rotated on every boot**. See the [Obtaining Credentials](obtaining-credentials.md#llmsverifier-api-key) guide for details.
-
-**Important:** Even `sync --dry-run` validates that `LLMSVERIFIER_ENDPOINT` is set (though no LLM calls are actually made). The `validate` command does **not** require it.
-
-### HMAC Secret (Signed URLs)
-
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `HMAC_SECRET` | string | *none* | **Required.** Secret key used to sign and verify download URLs. Generate with: `openssl rand -hex 32`. |
+> **PostgreSQL connection string:** Built as `host=H port=P user=U password=W dbname=D sslmode=disable`.
 
 ### Git Provider Tokens
 
-Each Git service requires a personal access token (PAT) with appropriate scopes. **Providers with missing tokens are silently skipped** — the orchestrator simply will not discover repositories from that service. You only need tokens for the providers whose repositories you want to scan.
+Each provider requires a personal access token with read scopes. Providers without a token are silently skipped -- the orchestrator does not attempt to discover repositories from that service.
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `GITHUB_TOKEN` | string | *none* | GitHub personal access token (classic or fine-grained) with `repo` read scope. |
-| `GITHUB_TOKEN_SECONDARY` | string | *none* | Failover token for rate‑limit exhaustion (optional). |
-| `GITLAB_TOKEN` | string | *none* | GitLab personal access token with `read_api` and `read_repository` scopes. |
-| `GITLAB_TOKEN_SECONDARY` | string | *none* | Failover token (optional). |
-| `GITLAB_BASE_URL` | URL | `https://gitlab.com` | Base URL for self‑hosted GitLab instances. |
-| `GITFLIC_TOKEN` | string | *none* | GitFlic API token with repo read scope. |
-| `GITFLIC_TOKEN_SECONDARY` | string | *none* | Failover token (optional). |
-| `GITVERSE_TOKEN` | string | *none* | GitVerse API token with repo read scope. |
-| `GITVERSE_TOKEN_SECONDARY` | string | *none* | Failover token (optional). |
+| Variable | Required | Default | Description |
+|----------|:--------:|---------|-------------|
+| `GITHUB_TOKEN` | No | *(empty)* | GitHub personal access token (classic or fine-grained) with `repo` read scope. |
+| `GITHUB_TOKEN_SECONDARY` | No | *(empty)* | Failover token used when the primary token's rate limit is exhausted. |
+| `GITLAB_TOKEN` | No | *(empty)* | GitLab personal access token with `read_api` and `read_repository` scopes. |
+| `GITLAB_TOKEN_SECONDARY` | No | *(empty)* | Failover token for rate-limit exhaustion. |
+| `GITLAB_BASE_URL` | No | `https://gitlab.com` | Base URL for self-hosted GitLab instances. Change this if using a private GitLab server. |
+| `GITFLIC_TOKEN` | No | *(empty)* | GitFlic API token with repository read scope. |
+| `GITFLIC_TOKEN_SECONDARY` | No | *(empty)* | Failover token for rate-limit exhaustion. |
+| `GITVERSE_TOKEN` | No | *(empty)* | GitVerse API token with repository read scope. |
+| `GITVERSE_TOKEN_SECONDARY` | No | *(empty)* | Failover token for rate-limit exhaustion. |
 
-**Note:** If a secondary token is provided, the token manager automatically switches to it when the primary token's rate limit is exhausted. Secondary tokens are purely optional.
+> **Token failover:** When a primary token hits its rate limit, the `TokenManager` automatically switches to the secondary token. Secondary tokens are optional but recommended for high-volume scanning.
 
-### Webhook & Rate Limiting
+### Multi-Organization Scanning
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `WEBHOOK_HMAC_SECRET` | string | *none* | Shared secret for incoming webhook signature validation (GitHub: `X-Hub-Signature-256`; GitLab/Generic: bearer token). |
-| `RATE_LIMIT_RPS` | float | `100` | Per-IP sustained request rate (requests/sec) for `/webhook/*`, `/admin/*`, and `/download/:content_id` routes. |
-| `RATE_LIMIT_BURST` | integer | `200` | Per-IP burst budget before throttling kicks in. Stale entries are evicted after 10 minutes. |
+These variables control which organizations or groups are scanned per provider. When a multi-org variable is set, the orchestrator iterates over each specified org instead of scanning only the authenticated user's personal repositories.
+
+| Variable | Required | Default | Description |
+|----------|:--------:|---------|-------------|
+| `GITHUB_ORGS` | No | *(empty)* | Comma-separated list of GitHub organization logins. Supports `*` to scan all organizations the token has access to. |
+| `GITLAB_GROUPS` | No | *(empty)* | Comma-separated list of GitLab group paths. Subgroups are included automatically. |
+| `GITFLIC_ORGS` | No | *(empty)* | Comma-separated list of GitFlic organization names. |
+| `GITVERSE_ORGS` | No | *(empty)* | Comma-separated list of GitVerse organization names. |
+
+Values are parsed by `git.ParseOrgList()`, which splits on commas and trims whitespace. The special value `*` (a single asterisk) enables scanning of all organizations accessible to the token.
+
+When a multi-org variable is empty and no `--org` flag is provided, the provider lists repositories owned by the authenticated user.
+
+**Multi-org examples:**
+
+```env
+# Scan two GitHub organizations
+GITHUB_ORGS=acme-corp,open-source-projects
+
+# Scan all accessible GitHub organizations (wildcard)
+GITHUB_ORGS=*
+
+# Scan GitLab groups with subgroups
+GITLAB_GROUPS=engineering,consulting/client-a
+
+# Multiple providers with multi-org
+GITHUB_ORGS=acme-corp,partner-team
+GITLAB_GROUPS=backend,frontend
+GITFLIC_ORGS=acme-ru
+GITVERSE_ORGS=team-alpha,team-beta,team-gamma
+```
+
+### Content Generation
+
+| Variable | Required | Default | Description |
+|----------|:--------:|---------|-------------|
+| `CONTENT_QUALITY_THRESHOLD` | No | `0.75` | Minimum quality score (0.0--1.0) for generated content. Content scoring below this threshold is discarded or flagged for manual review. |
+| `LLM_DAILY_TOKEN_BUDGET` | No | `100000` | Daily token budget for LLM API calls. Generation pauses until the next day when this budget is exceeded. |
+| `LLM_CONCURRENCY` | No | `8` | Global cap on concurrent in-flight LLM calls across all providers. |
+| `CONTENT_TIER_MAPPING_STRATEGY` | No | `linear` | Strategy for mapping repositories to Patreon tiers. Accepted values: `linear` (one repo per tier), `weighted` (based on repository metrics such as stars and activity). |
+| `VIDEO_GENERATION_ENABLED` | No | `false` | Enable experimental video script generation. Requires additional video-generation dependencies. |
+| `PDF_RENDERING_ENABLED` | No | `false` | Enable PDF rendering alongside Markdown and HTML output. Falls back to HTML bytes if no Chromium or Chrome binary is found on `PATH`. |
+
+### LLMsVerifier
+
+All LLM calls route through the LLMsVerifier service, which tests providers, scores models, and returns a ranked list. This is a required dependency for commands that perform content generation.
+
+| Variable | Required | Default | Description |
+|----------|:--------:|---------|-------------|
+| `LLMSVERIFIER_ENDPOINT` | Conditional | *(empty)* | Base URL of the LLMsVerifier service (e.g., `http://localhost:9099`). Required for `sync`, `generate`, and `verify` commands. Validated at startup for these commands. |
+| `LLMSVERIFIER_API_KEY` | No | *(empty)* | Authentication token for the LLMsVerifier service. The `Bearer` header is omitted when this value is empty. Auto-populated by `scripts/llmsverifier.sh`. |
+
+> **Automated management:** Running `bash scripts/llmsverifier.sh` starts the LLMsVerifier container, waits for it to become healthy, and writes both `LLMSVERIFIER_ENDPOINT` and `LLMSVERIFIER_API_KEY` into your `.env` file with a freshly generated key. The key is rotated on every boot.
+
+> **Note:** The `sync --dry-run` command validates that `LLMSVERIFIER_ENDPOINT` is set but does not make any LLM calls. The `validate` command does not require it.
+
+### Security
+
+| Variable | Required | Default | Description |
+|----------|:--------:|---------|-------------|
+| `HMAC_SECRET` | Yes | *(empty)* | Secret key for signing and verifying download URLs. Generate with `openssl rand -hex 32`. |
+| `WEBHOOK_HMAC_SECRET` | No | *(empty)* | Shared secret for validating incoming webhook signatures. GitHub uses `X-Hub-Signature-256` (HMAC-SHA256); GitLab and others use a bearer token scheme. |
+| `ADMIN_KEY` | No | *(empty)* | Secret key for administrative endpoints (`/admin/*`, `/debug/pprof`). When empty, admin endpoints are disabled. |
+
+### Webhook and Rate Limiting
+
+| Variable | Required | Default | Description |
+|----------|:--------:|---------|-------------|
+| `RATE_LIMIT_RPS` | No | `100` | Per-IP sustained request rate (requests per second) applied to `/webhook/*`, `/admin/*`, and `/download/:content_id` routes. |
+| `RATE_LIMIT_BURST` | No | `200` | Per-IP burst budget before throttling engages. Stale IP entries are evicted by a background sweeper after 10 minutes. |
+
+### Repository Filtering
+
+| Variable | Required | Default | Description |
+|----------|:--------:|---------|-------------|
+| `PROCESS_PRIVATE_REPOSITORIES` | No | `false` | Set to `true` to include private repositories in sync, scan, and generate operations. By default, only public repositories are processed. |
+| `MIN_MONTHS_COMMIT_ACTIVITY` | No | `18` | Repositories with no commits within this number of months are skipped. Set to `0` to disable the activity filter and include all repositories regardless of commit history. |
+
+### User Workspace
+
+| Variable | Required | Default | Description |
+|----------|:--------:|---------|-------------|
+| `USER_WORKSPACE_DIR` | No | `user` | Root directory for all user-managed data. The application creates the following subdirectories automatically on first run: `db/`, `img/`, `content/`, `templates/`. |
 
 ### Grace Period
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `GRACE_PERIOD_HOURS` | integer | `24` | Hours after a repository change before new content is generated (prevents rapid updates). Set to `0` to disable. |
+| Variable | Required | Default | Description |
+|----------|:--------:|---------|-------------|
+| `GRACE_PERIOD_HOURS` | No | `24` | Number of hours to wait after a repository change before generating new content. Prevents rapid successive updates for repositories with frequent pushes. Set to `0` to disable. |
 
 ### Audit
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `AUDIT_STORE` | string | `ring` | Audit store backend: `ring` (bounded in-memory, default) or `sqlite` (persists into the shared database connection). |
-
-### Admin
-
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `ADMIN_KEY` | string | *none* | Secret key for administrative endpoints (`/admin/*`, `/debug/pprof`). If not set, admin endpoints are disabled. |
+| Variable | Required | Default | Description |
+|----------|:--------:|---------|-------------|
+| `AUDIT_STORE` | No | `ring` | Audit store backend. Accepted values: `ring` (bounded in-memory ring buffer, default) or `sqlite` (persists audit entries into the shared database connection). |
 
 ### Security Scanning (Optional)
 
-These are only needed if you run the security scanning phase (`scripts/` tooling). Not required for normal operation.
+These variables are only needed if you run the local security scanning tooling (`scripts/`). They are not required for normal application operation.
 
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `SNYK_TOKEN` | string | *none* | Snyk API token for dependency vulnerability scanning. |
-| `SONAR_TOKEN` | string | *none* | SonarQube/SonarCloud token for static analysis. |
-| `SONAR_HOST_URL` | string | `http://localhost:9000` | SonarQube server URL. |
+| Variable | Required | Default | Description |
+|----------|:--------:|---------|-------------|
+| `SNYK_TOKEN` | No | *(empty)* | Snyk API token for dependency vulnerability scanning. |
+| `SONAR_TOKEN` | No | *(empty)* | SonarQube or SonarCloud token for static analysis. |
+| `SONAR_HOST_URL` | No | `http://localhost:9000` | SonarQube server URL. |
 
 ## Per-Command Requirements
 
-Not every command needs every variable. This table shows what is **actually used** (not just loaded) by each CLI command:
+Not every command uses every variable. The following table shows which variables are **validated at startup** (V), **used at runtime** (U), or **optional** (O) for each command.
 
-| Variable | `validate` | `verify` | `scan` | `sync --dry-run` | `generate` | `publish` | `sync` (full) | server |
-|----------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `PATREON_CLIENT_ID` | **V** | | | **V** | **V** | **V** | **V** | **V** |
-| `PATREON_CLIENT_SECRET` | **V** | | | **V** | **V** | **V** | **V** | **V** |
-| `PATREON_ACCESS_TOKEN` | **V** | | | **V** | **V** | U | U | U |
-| `PATREON_CAMPAIGN_ID` | **V** | | | **V** | **V** | U | U | U |
-| `HMAC_SECRET` | **V** | | | **V** | **V** | **V** | **V** | **V** |
+| Variable | `validate` | `verify` | `scan` | `sync --dry-run` | `generate` | `publish` | `sync` | server |
+|----------|:----------:|:--------:|:------:|:-----------------:|:----------:|:---------:|:------:|:------:|
+| `PATREON_CLIENT_ID` | V | | | V | V | V | V | V |
+| `PATREON_CLIENT_SECRET` | V | | | V | V | V | V | V |
+| `PATREON_ACCESS_TOKEN` | V | | | V | V | U | U | U |
+| `PATREON_CAMPAIGN_ID` | V | | | V | V | U | U | U |
+| `HMAC_SECRET` | V | | | V | V | V | V | V |
 | `DB_*` | | | U | U | U | U | U | U |
-| `LLMSVERIFIER_ENDPOINT` | | **V** | | **V** | U | | U | U |
+| `LLMSVERIFIER_ENDPOINT` | | V | | V | U | | U | U |
 | `LLMSVERIFIER_API_KEY` | | O | | O | U | | U | U |
 | `GITHUB_TOKEN` | | | O | O | O | | O | O |
 | `GITLAB_TOKEN` | | | O | O | O | | O | O |
 | `GITFLIC_TOKEN` | | | O | O | O | | O | O |
 | `GITVERSE_TOKEN` | | | O | O | O | | O | O |
+| `GITHUB_ORGS` | | | O | O | O | | O | O |
+| `GITLAB_GROUPS` | | | O | O | O | | O | O |
+| `GITFLIC_ORGS` | | | O | O | O | | O | O |
+| `GITVERSE_ORGS` | | | O | O | O | | O | O |
 
-**Legend:** **V** = validated at startup (must be non-empty), **U** = used at runtime, **O** = optional (provider skipped if missing), blank = not used.
+**Legend:** **V** = validated at startup (must be non-empty), **U** = used at runtime, **O** = optional (provider or feature skipped if missing), blank = not used.
 
-## Local Validation Workflow
+## Common Configuration Patterns
 
-Before publishing anything to Patreon, use this step-by-step workflow to validate everything locally:
+### Single Organization
 
-### Step 1: Validate Configuration
+Scan one GitHub organization with local SQLite:
 
-Checks that all required environment variables are set and well-formed:
-
-```sh
-go run ./cmd/cli validate
+```env
+DB_DRIVER=sqlite
+DB_PATH=patreon_manager.db
+GITHUB_TOKEN=ghp_your_token
+GITHUB_ORGS=my-org
+HMAC_SECRET=$(openssl rand -hex 32)
+PATREON_CLIENT_ID=your_client_id
+PATREON_CLIENT_SECRET=your_client_secret
+PATREON_ACCESS_TOKEN=your_access_token
+PATREON_CAMPAIGN_ID=your_campaign_id
 ```
 
-**Requires:** `PATREON_CLIENT_ID`, `PATREON_CLIENT_SECRET`, `PATREON_ACCESS_TOKEN`, `PATREON_CAMPAIGN_ID`, `HMAC_SECRET`.
+### Multi-Organization
 
-### Step 2: Start LLMsVerifier
+Scan multiple organizations across several providers:
 
-The bootstrap script starts the container, waits for health, and refreshes `.env` with a fresh API key:
-
-```sh
-bash scripts/llmsverifier.sh
+```env
+DB_DRIVER=sqlite
+DB_PATH=patreon_manager.db
+GITHUB_TOKEN=ghp_your_token
+GITHUB_ORGS=acme-corp,partner-team,open-source
+GITLAB_TOKEN=glpat_your_token
+GITLAB_GROUPS=engineering,data-science
+GITFLIC_TOKEN=your_gitflic_token
+GITFLIC_ORGS=acme-ru
+HMAC_SECRET=$(openssl rand -hex 32)
+PATREON_CLIENT_ID=your_client_id
+PATREON_CLIENT_SECRET=your_client_secret
+PATREON_ACCESS_TOKEN=your_access_token
+PATREON_CAMPAIGN_ID=your_campaign_id
+LLMSVERIFIER_ENDPOINT=http://localhost:9099
 ```
 
-Then verify connectivity and see ranked models:
+### User Repositories Only
 
-```sh
-go run ./cmd/cli verify
+Scan only the authenticated user's personal repositories (no organization or group variables):
+
+```env
+GITHUB_TOKEN=ghp_your_token
+# GITHUB_ORGS is omitted -- scans personal repos only
+GITLAB_TOKEN=glpat_your_token
+# GITLAB_GROUPS is omitted -- scans personal projects only
 ```
 
-### Step 3: Dry-Run Sync
+### Production with PostgreSQL
 
-Fetches repository metadata from git providers, estimates content generation costs, and produces a report — **no LLM calls, no Patreon API calls, no content generated**:
-
-```sh
-go run ./cmd/cli sync --dry-run
+```env
+DB_DRIVER=postgres
+DB_HOST=db.internal.example.com
+DB_PORT=5432
+DB_USER=patreon_manager
+DB_PASSWORD=secure_password
+DB_NAME=patreon_manager
+GIN_MODE=release
+LOG_LEVEL=warn
+ADMIN_KEY=$(openssl rand -hex 32)
+WEBHOOK_HMAC_SECRET=$(openssl rand -hex 32)
+RATE_LIMIT_RPS=50
+RATE_LIMIT_BURST=100
 ```
 
-**Requires:** `LLMSVERIFIER_ENDPOINT` (validated but not called), `DB_*`, and at least one git provider token.
+### All Accessible Organizations (Wildcard)
 
-Add `--json` to get machine-readable output, or `--org`/`--repo`/`--pattern` to narrow scope:
+Scan every organization the token can access on GitHub:
 
-```sh
-go run ./cmd/cli sync --dry-run --org my-org --json
+```env
+GITHUB_TOKEN=ghp_your_token
+GITHUB_ORGS=*
 ```
 
-### Step 4: Generate Content (Without Publishing)
-
-Runs the full content generation pipeline — LLM calls, quality gates, tier mapping — and stores results in the local database. **Does not contact Patreon**:
-
-```sh
-go run ./cmd/cli generate
-```
-
-Inspect generated content in the database to verify quality before proceeding.
-
-### Step 5: Publish (When Ready)
-
-Only after you have inspected the generated content and are satisfied:
-
-```sh
-go run ./cmd/cli publish
-```
-
-Or run the full pipeline end-to-end:
-
-```sh
-go run ./cmd/cli sync
-```
-
-## Where to Get Each Token
-
-For **detailed step-by-step instructions** with screenshots-style walkthroughs and links to official documentation, see the [Obtaining Credentials](obtaining-credentials.md) guide.
-
-Quick reference:
-
-| Token | Where to obtain |
-|-------|-----------------|
-| `PATREON_CLIENT_ID` / `PATREON_CLIENT_SECRET` | [Patreon Platform Portal](https://www.patreon.com/portal/registration/register-clients) — register an OAuth client |
-| `PATREON_ACCESS_TOKEN` / `PATREON_REFRESH_TOKEN` | OAuth flow, or Creator's Access Token from the portal |
-| `PATREON_CAMPAIGN_ID` | Patreon API: `GET /api/oauth2/v2/campaigns` (returns your campaign IDs) |
-| `GITHUB_TOKEN` | [GitHub > Settings > Developer settings > Personal access tokens](https://github.com/settings/tokens) |
-| `GITLAB_TOKEN` | [GitLab > Preferences > Access Tokens](https://gitlab.com/-/user_settings/personal_access_tokens) |
-| `GITFLIC_TOKEN` | [GitFlic](https://gitflic.ru) account settings > Security > API Tokens |
-| `GITVERSE_TOKEN` | [GitVerse](https://gitverse.ru) settings > Applications > API Tokens |
-| `LLMSVERIFIER_API_KEY` | Your [LLMsVerifier](https://github.com/vasic-digital/LLMsVerifier) instance configuration |
-| `HMAC_SECRET` | Self-generated: `openssl rand -hex 32` |
-| `WEBHOOK_HMAC_SECRET` | Self-generated: `openssl rand -hex 32` |
-| `ADMIN_KEY` | Self-generated: `openssl rand -hex 32` |
-| `SNYK_TOKEN` | [Snyk Account Settings](https://app.snyk.io/account) |
-| `SONAR_TOKEN` | [SonarCloud Security](https://sonarcloud.io/account/security/) |
+The wildcard `*` instructs the orchestrator to enumerate all organizations visible to the token and scan each one. Use with caution on accounts with many organizations, as this may consume significant API rate limit.
 
 ## Validation Rules
 
-- **Required variables**: Must be set; otherwise the application fails to start.
-- **Ports**: Must be between 1 and 65535.
-- **URLs**: Must be valid URLs (parsed by `net/url`).
-- **Booleans**: Accept `true`, `1`, `yes`, `on` for true; anything else is false.
-- **Floats**: Must be parseable as float64.
-- **Integers**: Must be parseable as int.
+| Type | Rule |
+|------|------|
+| Required variables | Must be set and non-empty. The application exits with a descriptive error if validation fails. |
+| Ports | Must be a valid integer between 1 and 65535. |
+| URLs | Must be parseable by `net/url`. |
+| Booleans | Accept `true`, `1`, `yes`, `on` as true. All other values are treated as false. |
+| Floats | Must be parseable as `float64`. |
+| Integers | Must be parseable as `int`. |
+| Org lists | Comma-separated. Whitespace around values is trimmed. The value `*` is treated as a wildcard (scan all accessible orgs). Empty strings are ignored. |
 
 ## Example `.env` File
 
-A minimal `.env` for local dry-run testing (no publishing):
+A complete `.env` file for local development with SQLite, GitHub multi-org scanning, and LLMsVerifier:
 
 ```env
 # Server
@@ -262,7 +303,7 @@ PORT=8080
 GIN_MODE=debug
 LOG_LEVEL=debug
 
-# Patreon API (required by config validation, but NOT called in dry-run)
+# Patreon API
 PATREON_CLIENT_ID=your_client_id_here
 PATREON_CLIENT_SECRET=your_client_secret_here
 PATREON_ACCESS_TOKEN=your_access_token_here
@@ -272,21 +313,36 @@ PATREON_CAMPAIGN_ID=your_campaign_id_here
 # OAuth
 REDIRECT_URI=http://localhost:8080/callback
 
-# Database (SQLite — zero setup)
+# Database
 DB_DRIVER=sqlite
 DB_PATH=patreon_manager.db
 
 # Security
 HMAC_SECRET=change_this_to_a_random_secret
 
-# Git Provider Tokens — add tokens for providers you use, rest are skipped
-GITHUB_TOKEN=
+# Git Provider Tokens
+GITHUB_TOKEN=ghp_your_token_here
+GITHUB_TOKEN_SECONDARY=
+GITHUB_ORGS=my-org,partner-org
 GITLAB_TOKEN=
+GITLAB_TOKEN_SECONDARY=
 GITLAB_BASE_URL=https://gitlab.com
+GITLAB_GROUPS=
 GITFLIC_TOKEN=
+GITFLIC_TOKEN_SECONDARY=
+GITFLIC_ORGS=
 GITVERSE_TOKEN=
+GITVERSE_TOKEN_SECONDARY=
+GITVERSE_ORGS=
 
-# LLMsVerifier (required for sync/generate/verify)
+# Repository Filtering
+PROCESS_PRIVATE_REPOSITORIES=false
+MIN_MONTHS_COMMIT_ACTIVITY=18
+
+# User Workspace
+USER_WORKSPACE_DIR=user
+
+# LLMsVerifier
 LLMSVERIFIER_ENDPOINT=http://localhost:9099
 LLMSVERIFIER_API_KEY=
 
@@ -302,30 +358,37 @@ GRACE_PERIOD_HOURS=24
 # Audit
 AUDIT_STORE=ring
 
-# Optional features (disabled by default)
+# Optional Features
 VIDEO_GENERATION_ENABLED=false
 PDF_RENDERING_ENABLED=false
 
-# Admin (optional)
+# Admin
 ADMIN_KEY=
+
+# Webhooks
+WEBHOOK_HMAC_SECRET=
+
+# Rate Limiting
+RATE_LIMIT_RPS=100
+RATE_LIMIT_BURST=200
 ```
 
-## Environment‑Specific Configuration
+## Environment-Specific Configuration
 
-You can maintain separate `.env` files for different environments (e.g., `.env.production`, `.env.staging`) and load them via the `--config` flag:
+Maintain separate `.env` files for different environments (e.g., `.env.production`, `.env.staging`) and load them via the `--config` flag:
 
-```bash
+```sh
 patreon-manager sync --config .env.production
 ```
 
 ## Overriding via Command Line
 
-Most configuration can also be overridden by command‑line flags. For example, `--log-level debug` overrides `LOG_LEVEL`. See the [CLI Reference](../api/cli-reference.md) for details.
+Most configuration can be overridden by command-line flags. For example, `--log-level debug` overrides `LOG_LEVEL`, and `--org my-org` overrides the provider org list for a single run. See the CLI reference for the complete flag list.
 
 ## Security Notes
 
-- Never commit `.env` files to version control (`.env` is gitignored; only `.env.example` is tracked).
-- Use strong, random secrets for `HMAC_SECRET`, `ADMIN_KEY`, and `WEBHOOK_HMAC_SECRET`. Generate with: `openssl rand -hex 32`.
-- Rotate Git provider tokens periodically.
-- Store production secrets in a secure secret manager (e.g., HashiCorp Vault, AWS Secrets Manager) and inject them as environment variables at runtime.
-- If a credential is ever committed, rotate it immediately and purge with `git-filter-repo`.
+- Never commit `.env` files to version control. The `.gitignore` file excludes `.env`; only `.env.example` is tracked.
+- Generate strong, random secrets for `HMAC_SECRET`, `ADMIN_KEY`, and `WEBHOOK_HMAC_SECRET` using `openssl rand -hex 32`.
+- Rotate Git provider tokens periodically (every 90 days recommended).
+- In production, store secrets in a secure secret manager (e.g., HashiCorp Vault, AWS Secrets Manager) and inject them as environment variables at runtime.
+- If a credential is ever committed to version control, rotate it immediately and purge the history with `git-filter-repo`, then force-push to all four remotes.

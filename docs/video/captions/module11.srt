@@ -1,0 +1,31 @@
+1
+00:00:00,000 --> 00:01:00,000
+Module 11: Multi-Organization Repository Scanning
+
+2
+00:01:00,000 --> 00:03:00,000
+[Section 1 — see script for narration text]
+
+3
+00:03:00,000 --> 00:05:00,000
+[Section 2 — see script for narration text]
+
+4
+00:05:00,000 --> 00:07:00,000
+[Section 3 — see script for narration text]
+
+5
+00:07:00,000 --> 00:09:00,000
+[Section 4 — see script for narration text]
+
+6
+00:09:00,000 --> 00:10:30,000
+[Section 5 — see script for narration text]
+
+7
+00:10:30,000 --> 00:12:00,000
+[Section 6 — see script for narration text]
+
+8
+00:12:00,000 --> 00:12:30,000
+[Exercise assignment + end card]

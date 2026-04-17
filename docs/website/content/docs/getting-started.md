@@ -159,6 +159,27 @@ The first sync may take a few minutes because it processes every repository. Sub
 *   **Set up scheduled syncs** — `go run ./cmd/cli sync --schedule "0 */6 * * *"`.
 *   **Configure webhooks** for real-time updates — see [Git Providers Guide](/guides/git-providers/).
 *   **Enable premium content** — generate PDFs/videos and control access with tier gating.
+*   **Scan multiple organizations** — see [Multi-Org Support](/docs/multi-org-support/) for scanning repos across several GitHub orgs or GitLab groups.
+
+## Multi-Organization Configuration
+
+My Patreon Manager supports scanning repositories across multiple organizations in a single sync run. Set one or more of the following environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `GITHUB_ORGS` | Comma-separated GitHub organization logins (e.g., `acme-corp,open-source-team`). |
+| `GITLAB_GROUPS` | Comma-separated GitLab group paths (e.g., `backend-team,infra`). |
+| `GITFLIC_ORGS` | Comma-separated GitFlic organization names. |
+| `GITVERSE_ORGS` | Comma-separated GitVerse organization names. |
+
+All variables are optional. When unset, the corresponding provider scans the token owner's personal repositories (backward compatible). Example:
+
+```env
+GITHUB_ORGS=acme-corp,partner-org
+GITLAB_GROUPS=backend-team
+```
+
+See the [Multi-Org Support](/docs/multi-org-support/) page for full details including deduplication behavior and per-command usage.
 
 ## Troubleshooting
 
