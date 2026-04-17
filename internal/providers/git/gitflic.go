@@ -35,8 +35,8 @@ func (p *GitFlicProvider) Name() string { return "gitflic" }
 // responses are returned to the caller without tripping it.
 func (p *GitFlicProvider) doRequest(req *http.Request) (*http.Response, error) {
 	var (
-		resp    *http.Response
-		cliErr  error
+		resp   *http.Response
+		cliErr error
 	)
 	_, bErr := p.tm.Execute(func() (interface{}, error) {
 		r, err := p.client.Do(req)
@@ -106,7 +106,13 @@ func (p *GitFlicProvider) ListRepositories(ctx context.Context, org string, opts
 
 	var allRepos []models.Repository
 	for {
-		url := fmt.Sprintf("%s/orgs/%s/repos?page=%d&per_page=%d", p.baseURL, org, page, perPage)
+		var apiURL string
+		if org == "" {
+			apiURL = fmt.Sprintf("%s/user/repos?page=%d&per_page=%d", p.baseURL, page, perPage)
+		} else {
+			apiURL = fmt.Sprintf("%s/orgs/%s/repos?page=%d&per_page=%d", p.baseURL, org, page, perPage)
+		}
+		url := apiURL
 		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
 			return nil, fmt.Errorf("gitflic list repos: %w", err)

@@ -76,6 +76,114 @@ func TestGitLabProvider_ListRepositories_RateLimited(t *testing.T) {
 	assert.Contains(t, err.Error(), "rate limited")
 }
 
+func TestGitLabProvider_ListRepositories_EmptyGroup_UserProjects(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/v4/projects", r.URL.Path)
+		assert.Equal(t, "true", r.URL.Query().Get("owned"))
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `[{
+			"id": 1,
+			"path": "my-repo",
+			"path_with_namespace": "user/my-repo",
+			"ssh_url_to_repo": "git@gitlab.com:user/my-repo.git",
+			"http_url_to_repo": "https://gitlab.com/user/my-repo",
+			"description": "My project",
+			"star_count": 5,
+			"forks_count": 1,
+			"archived": false,
+			"created_at": "2024-01-01T00:00:00Z",
+			"last_activity_at": "2024-06-01T00:00:00Z",
+			"namespace": {"path": "user"},
+			"tag_list": ["go"]
+		}]`)
+	}))
+	defer srv.Close()
+
+	tm := NewTokenManager("tok", "")
+	p := NewGitLabProvider(tm, srv.URL)
+	if err := p.SetBaseURL(srv.URL); err != nil {
+		t.Fatal(err)
+	}
+
+	repos, err := p.ListRepositories(context.Background(), "", ListOptions{PerPage: 10})
+	require.NoError(t, err)
+	require.Len(t, repos, 1)
+	assert.Equal(t, "my-repo", repos[0].Name)
+	assert.Equal(t, "user", repos[0].Owner)
+	assert.Equal(t, "gitlab", repos[0].Service)
+}
+
+func TestGitLabProvider_ListRepositories_EmptyGroup_EmptyResult(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/v4/projects", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `[]`)
+	}))
+	defer srv.Close()
+
+	tm := NewTokenManager("tok", "")
+	p := NewGitLabProvider(tm, srv.URL)
+	if err := p.SetBaseURL(srv.URL); err != nil {
+		t.Fatal(err)
+	}
+
+	repos, err := p.ListRepositories(context.Background(), "", ListOptions{PerPage: 10})
+	require.NoError(t, err)
+	assert.Empty(t, repos)
+}
+
+func TestGitLabProvider_ListRepositories_GroupPath(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/v4/groups/mygroup/projects", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `[{
+			"id": 2,
+			"path": "group-repo",
+			"path_with_namespace": "mygroup/group-repo",
+			"ssh_url_to_repo": "git@gitlab.com:mygroup/group-repo.git",
+			"http_url_to_repo": "https://gitlab.com/mygroup/group-repo",
+			"description": "Group project",
+			"star_count": 3,
+			"forks_count": 0,
+			"archived": false,
+			"created_at": "2024-01-01T00:00:00Z",
+			"last_activity_at": "2024-06-01T00:00:00Z",
+			"namespace": {"path": "mygroup"},
+			"tag_list": []
+		}]`)
+	}))
+	defer srv.Close()
+
+	tm := NewTokenManager("tok", "")
+	p := NewGitLabProvider(tm, srv.URL)
+	if err := p.SetBaseURL(srv.URL); err != nil {
+		t.Fatal(err)
+	}
+
+	repos, err := p.ListRepositories(context.Background(), "mygroup", ListOptions{PerPage: 10})
+	require.NoError(t, err)
+	require.Len(t, repos, 1)
+	assert.Equal(t, "group-repo", repos[0].Name)
+	assert.Equal(t, "mygroup", repos[0].Owner)
+}
+
+func TestGitLabProvider_ListRepositories_EmptyGroup_RateLimited(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer srv.Close()
+
+	tm := NewTokenManager("tok", "")
+	p := NewGitLabProvider(tm, srv.URL)
+	if err := p.SetBaseURL(srv.URL); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := p.ListRepositories(context.Background(), "", ListOptions{PerPage: 10})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rate limited")
+}
+
 func TestGitLabProvider_ListRepositories_DefaultPerPage(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

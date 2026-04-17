@@ -105,7 +105,13 @@ func (p *GitVerseProvider) ListRepositories(ctx context.Context, org string, opt
 		page = 1
 	}
 
-	url := fmt.Sprintf("%s/orgs/%s/repos?page=%d&per_page=%d", p.baseURL, org, page, perPage)
+	var apiURL string
+	if org == "" {
+		apiURL = fmt.Sprintf("%s/user/repos?page=%d&per_page=%d", p.baseURL, page, perPage)
+	} else {
+		apiURL = fmt.Sprintf("%s/orgs/%s/repos?page=%d&per_page=%d", p.baseURL, org, page, perPage)
+	}
+	url := apiURL
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("gitverse list repos: %w", err)
