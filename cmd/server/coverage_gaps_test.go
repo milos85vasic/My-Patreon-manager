@@ -23,7 +23,7 @@ func TestSetupRouter_WebhookGenericService(t *testing.T) {
 		RateLimitRPS:      1000,
 		RateLimitBurst:    2000,
 	}
-	router, dedup, _, _ := setupRouter(cfg, &mockMetricsCollector{}, noopOrchestrator{}, slog.Default())
+	router, dedup, _, _ := setupRouter(cfg, &mockMetricsCollector{}, noopOrchestrator{}, slog.Default(), nil)
 	defer dedup.Close()
 
 	// gitflic uses X-Webhook-Signature with HMAC
@@ -49,7 +49,7 @@ func TestSetupRouter_WebhookGitLab(t *testing.T) {
 		RateLimitRPS:      1000,
 		RateLimitBurst:    2000,
 	}
-	router, dedup, _, _ := setupRouter(cfg, &mockMetricsCollector{}, noopOrchestrator{}, slog.Default())
+	router, dedup, _, _ := setupRouter(cfg, &mockMetricsCollector{}, noopOrchestrator{}, slog.Default(), nil)
 	defer dedup.Close()
 
 	body := []byte(`{"event":"push"}`)

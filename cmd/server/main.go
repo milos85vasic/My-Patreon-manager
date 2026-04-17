@@ -73,7 +73,7 @@ func main() {
 	godotenvLoad()
 	loadFromEnv(cfg)
 
-	addr := fmt.Sprintf(":%d", cfg.Port)
+	addr := fmt.Sprintf("0.0.0.0:%d", cfg.Port)
 	ctx, stop := signalNotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -323,14 +323,9 @@ var newDatabaseFn = database.NewDatabase
 func buildOrchestrator(cfg *config.Config) Orchestrator {
 	logger := slog.Default()
 
-	// At least one git provider must be configured for a real orchestrator.
-	providers := serverSetupProviders(cfg)
-	if len(providers) == 0 {
-		logger.Warn("no git provider tokens configured — using noop orchestrator, webhooks will be dropped")
-		return noopOrchestrator{}
-	}
-
-	// Connect database for the orchestrator.
+	// Always connect the database so the preview handler works even
+	// without git provider tokens.  This also ensures migrations run
+	// on every startup.
 	db := newDatabaseFn(cfg.DBDriver, cfg.DSN())
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -343,8 +338,15 @@ func buildOrchestrator(cfg *config.Config) Orchestrator {
 		return noopOrchestrator{}
 	}
 
-	// Store database for preview handler
+	// Store database for preview handler (set early regardless of providers).
 	getDatabase = func() database.Database { return db }
+
+	// At least one git provider must be configured for a real orchestrator.
+	providers := serverSetupProviders(cfg)
+	if len(providers) == 0 {
+		logger.Warn("no git provider tokens configured — using noop orchestrator, webhooks will be dropped")
+		return noopOrchestrator{}
+	}
 
 	// Build content generator (optional — orchestrator handles nil generator).
 	var generator *content.Generator

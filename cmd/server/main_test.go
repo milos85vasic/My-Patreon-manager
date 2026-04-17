@@ -71,7 +71,7 @@ func TestSetupRouter(t *testing.T) {
 		RateLimitRPS:      1000,
 		RateLimitBurst:    2000,
 	}
-	router, dedup, wh, limiter := setupRouter(cfg, &mockMetricsCollector{}, noopOrchestrator{}, slog.Default())
+	router, dedup, wh, limiter := setupRouter(cfg, &mockMetricsCollector{}, noopOrchestrator{}, slog.Default(), nil)
 	defer dedup.Close()
 	_ = wh // ensure returned handler is non-nil in tests
 	assert.NotNil(t, limiter)
@@ -181,7 +181,7 @@ func TestSetupRouter_DefaultsClampNonPositive(t *testing.T) {
 		RateLimitRPS:   0,
 		RateLimitBurst: 0,
 	}
-	router, dedup, _, limiter := setupRouter(cfg, &mockMetricsCollector{}, nil, nil)
+	router, dedup, _, limiter := setupRouter(cfg, &mockMetricsCollector{}, nil, nil, nil)
 	defer dedup.Close()
 	assert.NotNil(t, router)
 	assert.NotNil(t, limiter)
@@ -356,8 +356,8 @@ func TestRunServer_DrainsQueuedWebhooks(t *testing.T) {
 	defer func() { setupRouterFn = originalSetupRouterFn }()
 
 	var captured *handlers.WebhookHandler
-	setupRouterFn = func(cfg *config.Config, mc metrics.MetricsCollector, orch Orchestrator, logger *slog.Logger) (*gin.Engine, *syncsvc.EventDeduplicator, *handlers.WebhookHandler, *middleware.IPRateLimiter) {
-		r, dedup, wh, lim := setupRouter(cfg, mc, orch, logger)
+	setupRouterFn = func(cfg *config.Config, mc metrics.MetricsCollector, orch Orchestrator, logger *slog.Logger, db database.Database) (*gin.Engine, *syncsvc.EventDeduplicator, *handlers.WebhookHandler, *middleware.IPRateLimiter) {
+		r, dedup, wh, lim := setupRouter(cfg, mc, orch, logger, db)
 		// preload queue so drain loop has work to do
 		require.True(t, wh.Queue.TryEnqueue(models.Repository{ID: "preloaded", Service: "github"}))
 		captured = wh
@@ -395,8 +395,8 @@ func TestRunServer_DrainLogsNonCancelError(t *testing.T) {
 
 	originalSetupRouterFn := setupRouterFn
 	defer func() { setupRouterFn = originalSetupRouterFn }()
-	setupRouterFn = func(cfg *config.Config, mc metrics.MetricsCollector, orch Orchestrator, logger *slog.Logger) (*gin.Engine, *syncsvc.EventDeduplicator, *handlers.WebhookHandler, *middleware.IPRateLimiter) {
-		r, dedup, wh, lim := setupRouter(cfg, mc, orch, logger)
+	setupRouterFn = func(cfg *config.Config, mc metrics.MetricsCollector, orch Orchestrator, logger *slog.Logger, db database.Database) (*gin.Engine, *syncsvc.EventDeduplicator, *handlers.WebhookHandler, *middleware.IPRateLimiter) {
+		r, dedup, wh, lim := setupRouter(cfg, mc, orch, logger, db)
 		require.True(t, wh.Queue.TryEnqueue(models.Repository{ID: "trigger"}))
 		return r, dedup, wh, lim
 	}
@@ -500,7 +500,7 @@ func TestMain_Success(t *testing.T) {
 
 	// Mock metrics collector
 	newMetricsCollector = func() metrics.MetricsCollector { return &mockMetricsCollector{} }
-	setupRouterFn = func(*config.Config, metrics.MetricsCollector, Orchestrator, *slog.Logger) (*gin.Engine, *syncsvc.EventDeduplicator, *handlers.WebhookHandler, *middleware.IPRateLimiter) {
+	setupRouterFn = func(*config.Config, metrics.MetricsCollector, Orchestrator, *slog.Logger, database.Database) (*gin.Engine, *syncsvc.EventDeduplicator, *handlers.WebhookHandler, *middleware.IPRateLimiter) {
 		dedup := syncsvc.NewEventDeduplicator(time.Minute)
 		return gin.New(), dedup, handlers.NewWebhookHandler(dedup, &mockMetricsCollector{}, nil), middleware.NewIPRateLimiter(100, 200, 10*time.Minute)
 	}
@@ -579,7 +579,7 @@ func TestMain_Error(t *testing.T) {
 
 	// Mock metrics collector
 	newMetricsCollector = func() metrics.MetricsCollector { return &mockMetricsCollector{} }
-	setupRouterFn = func(*config.Config, metrics.MetricsCollector, Orchestrator, *slog.Logger) (*gin.Engine, *syncsvc.EventDeduplicator, *handlers.WebhookHandler, *middleware.IPRateLimiter) {
+	setupRouterFn = func(*config.Config, metrics.MetricsCollector, Orchestrator, *slog.Logger, database.Database) (*gin.Engine, *syncsvc.EventDeduplicator, *handlers.WebhookHandler, *middleware.IPRateLimiter) {
 		dedup := syncsvc.NewEventDeduplicator(time.Minute)
 		return gin.New(), dedup, handlers.NewWebhookHandler(dedup, &mockMetricsCollector{}, nil), middleware.NewIPRateLimiter(100, 200, 10*time.Minute)
 	}
@@ -741,19 +741,19 @@ type failDB struct {
 	migrateErr error
 }
 
-func (f *failDB) Connect(_ context.Context, _ string) error      { return f.connectErr }
-func (f *failDB) Close() error                                    { return nil }
-func (f *failDB) Migrate(_ context.Context) error                 { return f.migrateErr }
-func (f *failDB) Repositories() database.RepositoryStore          { return nil }
-func (f *failDB) SyncStates() database.SyncStateStore             { return nil }
-func (f *failDB) MirrorMaps() database.MirrorMapStore             { return nil }
-func (f *failDB) GeneratedContents() database.GeneratedContentStore { return nil }
-func (f *failDB) ContentTemplates() database.ContentTemplateStore  { return nil }
-func (f *failDB) Posts() database.PostStore                        { return nil }
-func (f *failDB) AuditEntries() database.AuditEntryStore          { return nil }
+func (f *failDB) Connect(_ context.Context, _ string) error                { return f.connectErr }
+func (f *failDB) Close() error                                             { return nil }
+func (f *failDB) Migrate(_ context.Context) error                          { return f.migrateErr }
+func (f *failDB) Repositories() database.RepositoryStore                   { return nil }
+func (f *failDB) SyncStates() database.SyncStateStore                      { return nil }
+func (f *failDB) MirrorMaps() database.MirrorMapStore                      { return nil }
+func (f *failDB) GeneratedContents() database.GeneratedContentStore        { return nil }
+func (f *failDB) ContentTemplates() database.ContentTemplateStore          { return nil }
+func (f *failDB) Posts() database.PostStore                                { return nil }
+func (f *failDB) AuditEntries() database.AuditEntryStore                   { return nil }
 func (f *failDB) AcquireLock(_ context.Context, _ database.SyncLock) error { return nil }
-func (f *failDB) ReleaseLock(_ context.Context) error              { return nil }
+func (f *failDB) ReleaseLock(_ context.Context) error                      { return nil }
 func (f *failDB) IsLocked(_ context.Context) (bool, *database.SyncLock, error) {
 	return false, nil, nil
 }
-func (f *failDB) BeginTx(_ context.Context) (*sql.Tx, error)      { return nil, nil }
+func (f *failDB) BeginTx(_ context.Context) (*sql.Tx, error) { return nil, nil }
