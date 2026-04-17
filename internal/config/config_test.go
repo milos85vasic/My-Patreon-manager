@@ -51,6 +51,10 @@ func TestNewConfigDefaults(t *testing.T) {
 	assert.Empty(t, cfg.GitFlicTokenSecondary)
 	assert.Empty(t, cfg.GitVerseToken)
 	assert.Empty(t, cfg.GitVerseTokenSecondary)
+	assert.Empty(t, cfg.GitHubOrgs)
+	assert.Empty(t, cfg.GitLabGroups)
+	assert.Empty(t, cfg.GitFlicOrgs)
+	assert.Empty(t, cfg.GitVerseOrgs)
 }
 
 func TestLoadFromEnv(t *testing.T) {
@@ -85,6 +89,10 @@ func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("GITFLIC_TOKEN_SECONDARY", "gf-token2")
 	t.Setenv("GITVERSE_TOKEN", "gv-token")
 	t.Setenv("GITVERSE_TOKEN_SECONDARY", "gv-token2")
+	t.Setenv("GITHUB_ORGS", "my-org")
+	t.Setenv("GITLAB_GROUPS", "my-group")
+	t.Setenv("GITFLIC_ORGS", "flic-org")
+	t.Setenv("GITVERSE_ORGS", "verse-org")
 	t.Setenv("CONTENT_TIER_MAPPING_STRATEGY", "exponential")
 	t.Setenv("GRACE_PERIOD_HOURS", "48")
 	t.Setenv("AUDIT_STORE", "sqlite")
@@ -127,6 +135,10 @@ func TestLoadFromEnv(t *testing.T) {
 	assert.Equal(t, "gf-token2", cfg.GitFlicTokenSecondary)
 	assert.Equal(t, "gv-token", cfg.GitVerseToken)
 	assert.Equal(t, "gv-token2", cfg.GitVerseTokenSecondary)
+	assert.Equal(t, "my-org", cfg.GitHubOrgs)
+	assert.Equal(t, "my-group", cfg.GitLabGroups)
+	assert.Equal(t, "flic-org", cfg.GitFlicOrgs)
+	assert.Equal(t, "verse-org", cfg.GitVerseOrgs)
 	assert.Equal(t, "exponential", cfg.ContentTierMappingStrategy)
 	assert.Equal(t, 48, cfg.GracePeriodHours)
 	assert.Equal(t, "sqlite", cfg.AuditStore)

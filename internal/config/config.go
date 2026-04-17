@@ -39,6 +39,10 @@ type Config struct {
 	GitFlicTokenSecondary      string
 	GitVerseToken              string
 	GitVerseTokenSecondary     string
+	GitHubOrgs                 string
+	GitLabGroups               string
+	GitFlicOrgs                string
+	GitVerseOrgs               string
 	ContentTierMappingStrategy string
 	GracePeriodHours           int
 	// AuditStore selects the audit.Store backend. Valid values: "ring"
@@ -237,6 +241,10 @@ func (c *Config) LoadFromEnv() {
 	c.GitFlicTokenSecondary = getEnv("GITFLIC_TOKEN_SECONDARY", c.GitFlicTokenSecondary)
 	c.GitVerseToken = getEnv("GITVERSE_TOKEN", c.GitVerseToken)
 	c.GitVerseTokenSecondary = getEnv("GITVERSE_TOKEN_SECONDARY", c.GitVerseTokenSecondary)
+	c.GitHubOrgs = getEnv("GITHUB_ORGS", c.GitHubOrgs)
+	c.GitLabGroups = getEnv("GITLAB_GROUPS", c.GitLabGroups)
+	c.GitFlicOrgs = getEnv("GITFLIC_ORGS", c.GitFlicOrgs)
+	c.GitVerseOrgs = getEnv("GITVERSE_ORGS", c.GitVerseOrgs)
 	c.ContentTierMappingStrategy = getEnv("CONTENT_TIER_MAPPING_STRATEGY", c.ContentTierMappingStrategy)
 	c.GracePeriodHours = getEnvInt("GRACE_PERIOD_HOURS", c.GracePeriodHours)
 	c.AuditStore = getEnv("AUDIT_STORE", c.AuditStore)
