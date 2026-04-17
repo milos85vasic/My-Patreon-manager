@@ -188,6 +188,45 @@ func TestGitFlicProvider_ListRepositories_Pagination(t *testing.T) {
 	}
 }
 
+func TestGitFlicProvider_ListRepositories_EmptyOrg_UserRepos(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/user/repos" {
+			t.Errorf("expected /user/repos path, got %s", r.URL.Path)
+		}
+		repos := []map[string]interface{}{
+			{
+				"id":          1,
+				"title":       "My Repo",
+				"alias":       "my-repo",
+				"description": "user repo",
+				"owner":       "testuser",
+				"ownerAlias":  "testuser",
+				"httpUrl":     "https://gitflic.ru/testuser/my-repo",
+				"sshUrl":      "git@gitflic.ru:testuser/my-repo.git",
+				"stars":       3,
+				"forks":       1,
+				"language":    "Go",
+			},
+		}
+		json.NewEncoder(w).Encode(repos)
+	}))
+	defer server.Close()
+
+	p := NewGitFlicProvider(NewTokenManager("tok", ""))
+	p.SetBaseURL(server.URL)
+
+	repos, err := p.ListRepositories(context.Background(), "", ListOptions{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(repos) != 1 {
+		t.Fatalf("expected 1 repo, got %d", len(repos))
+	}
+	if repos[0].Name != "my-repo" {
+		t.Errorf("expected my-repo, got %s", repos[0].Name)
+	}
+}
+
 func TestGitFlicProvider_GetRepositoryMetadata_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]interface{}{
