@@ -131,6 +131,8 @@ func (m *mockOrchestrator) PublishOnly(ctx context.Context, opts syncsvc.SyncOpt
 
 func (m *mockOrchestrator) SetAuditStore(_ audit.Store) {}
 
+func (m *mockOrchestrator) SetProviderOrgs(_ map[string][]string) {}
+
 // mock metrics collector
 type mockMetricsCollector struct{}
 
@@ -778,4 +780,115 @@ func TestMain_PublishCommand(t *testing.T) {
 	assert.Equal(t, 0, code)
 	assert.True(t, orchestratorCalled, "orchestrator should have been called")
 	assert.False(t, orchestratorOpts.DryRun, "dry-run should default to false")
+}
+
+func TestBuildProviderOrgs_Empty(t *testing.T) {
+	cfg := &config.Config{}
+	orgs := buildProviderOrgs(cfg)
+	assert.Empty(t, orgs)
+}
+
+func TestBuildProviderOrgs_Single(t *testing.T) {
+	cfg := &config.Config{
+		GitHubOrgs: "org1,org2",
+	}
+	orgs := buildProviderOrgs(cfg)
+	assert.Equal(t, map[string][]string{
+		"github": {"org1", "org2"},
+	}, orgs)
+}
+
+func TestBuildProviderOrgs_AllProviders(t *testing.T) {
+	cfg := &config.Config{
+		GitHubOrgs:   "gh1",
+		GitLabGroups: "gl1,gl2",
+		GitFlicOrgs:  "gf1",
+		GitVerseOrgs: "gv1,gv2,gv3",
+	}
+	orgs := buildProviderOrgs(cfg)
+	assert.Equal(t, map[string][]string{
+		"github":   {"gh1"},
+		"gitlab":   {"gl1", "gl2"},
+		"gitflic":  {"gf1"},
+		"gitverse": {"gv1", "gv2", "gv3"},
+	}, orgs)
+}
+
+func TestBuildProviderOrgs_WhitespaceOnly(t *testing.T) {
+	cfg := &config.Config{
+		GitHubOrgs: "  ",
+	}
+	orgs := buildProviderOrgs(cfg)
+	assert.Empty(t, orgs)
+}
+
+func TestMain_SyncWithProviderOrgs(t *testing.T) {
+	oldArgs := os.Args
+	defer func() { os.Args = oldArgs }()
+	os.Args = []string{"patreon-manager", "scan"}
+	oldFlag := flag.CommandLine
+	defer func() { flag.CommandLine = oldFlag }()
+	flag.CommandLine = flag.NewFlagSet("test", flag.ContinueOnError)
+	oldEnviron := os.Environ()
+	os.Clearenv()
+	defer func() {
+		for _, e := range oldEnviron {
+			parts := strings.SplitN(e, "=", 2)
+			if len(parts) == 2 {
+				os.Setenv(parts[0], parts[1])
+			}
+		}
+	}()
+	os.Setenv("DB_DRIVER", "sqlite")
+	os.Setenv("DB_DSN", ":memory:")
+	os.Setenv("PATREON_CLIENT_ID", "dummy")
+	os.Setenv("PATREON_CLIENT_SECRET", "dummy")
+	os.Setenv("PATREON_ACCESS_TOKEN", "dummy")
+	os.Setenv("PATREON_REFRESH_TOKEN", "dummy")
+	os.Setenv("PATREON_CAMPAIGN_ID", "dummy")
+	os.Setenv("HMAC_SECRET", "dummy")
+	os.Setenv("GITHUB_ORGS", "org1,org2")
+
+	oldNewDatabase := newDatabase
+	defer func() { newDatabase = oldNewDatabase }()
+	newDatabase = func(driver, dsn string) database.Database {
+		return &mockDatabase{}
+	}
+
+	cleanup := withMockPrometheusRegistry(t)
+	defer cleanup()
+
+	var capturedOrgs map[string][]string
+	oldNewOrchestrator := newOrchestrator
+	defer func() { newOrchestrator = oldNewOrchestrator }()
+	newOrchestrator = func(db database.Database, providers []git.RepositoryProvider, patreonClient patreon.Provider, generator *content.Generator, m metrics.MetricsCollector, logger *slog.Logger, tierMapper *content.TierMapper) orchestrator {
+		return &trackingMockOrchestrator{
+			mockOrchestrator: mockOrchestrator{
+				scanFunc: func(ctx context.Context, opts syncsvc.SyncOptions) ([]models.Repository, error) {
+					return []models.Repository{{ID: "r1", Service: "github", Owner: "o", Name: "n", URL: "https://x"}}, nil
+				},
+			},
+			setProviderOrgsFunc: func(orgs map[string][]string) {
+				capturedOrgs = orgs
+			},
+		}
+	}
+
+	exited, code := withMockExit(t, func() {
+		main()
+	})
+	assert.False(t, exited)
+	assert.Equal(t, 0, code)
+	assert.Equal(t, map[string][]string{"github": {"org1", "org2"}}, capturedOrgs)
+}
+
+type trackingMockOrchestrator struct {
+	mockOrchestrator
+	setProviderOrgsFunc func(orgs map[string][]string)
+}
+
+func (t *trackingMockOrchestrator) SetProviderOrgs(orgs map[string][]string) {
+	if t.setProviderOrgsFunc != nil {
+		t.setProviderOrgsFunc(orgs)
+	}
 }

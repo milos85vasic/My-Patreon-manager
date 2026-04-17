@@ -41,6 +41,7 @@ type orchestrator interface {
 	GenerateOnly(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error)
 	PublishOnly(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error)
 	SetAuditStore(s audit.Store)
+	SetProviderOrgs(providerOrgs map[string][]string)
 }
 
 // dbWithRawConn is implemented by database backends that expose the
@@ -153,6 +154,10 @@ func main() {
 
 	orchestrator := newOrchestrator(db, providers, patreonClient, generator, promMetrics, logger, nil)
 
+	if providerOrgs := buildProviderOrgs(cfg); len(providerOrgs) > 0 {
+		orchestrator.SetProviderOrgs(providerOrgs)
+	}
+
 	// Wire the configured audit store backend. Default is "ring" (in-memory).
 	if cfg.AuditStore == "sqlite" {
 		if rawDB, ok := db.(dbWithRawConn); ok {
@@ -211,6 +216,23 @@ func setupProviders(cfg *config.Config) []git.RepositoryProvider {
 		providers = append(providers, git.NewGitVerseProvider(tm))
 	}
 	return providers
+}
+
+func buildProviderOrgs(cfg *config.Config) map[string][]string {
+	orgs := make(map[string][]string)
+	if v := git.ParseOrgList(cfg.GitHubOrgs); len(v) > 0 {
+		orgs["github"] = v
+	}
+	if v := git.ParseOrgList(cfg.GitLabGroups); len(v) > 0 {
+		orgs["gitlab"] = v
+	}
+	if v := git.ParseOrgList(cfg.GitFlicOrgs); len(v) > 0 {
+		orgs["gitflic"] = v
+	}
+	if v := git.ParseOrgList(cfg.GitVerseOrgs); len(v) > 0 {
+		orgs["gitverse"] = v
+	}
+	return orgs
 }
 
 func runSync(ctx context.Context, orch orchestrator, opts syncsvc.SyncOptions, logger *slog.Logger) {
