@@ -107,6 +107,10 @@ type Orchestrator struct {
 	logger     *slog.Logger
 	mirrorURLs map[string][]renderer.MirrorURL
 	renamedIDs map[string]bool
+	// providerOrgs maps provider name to a list of organization names to
+	// scan. When non-empty for a given provider, discoverRepositories
+	// iterates over each org instead of using the single filter.Org value.
+	providerOrgs map[string][]string
 	// audit is the structured audit-log sink. Always non-nil after
 	// NewOrchestrator: defaults to a bounded ring store. Every mutation
 	// path (sync run, per-repo processing, publish) emits exactly one
@@ -161,6 +165,20 @@ func (o *Orchestrator) SetAuditStore(s audit.Store) {
 // AuditStore returns the orchestrator's current audit sink. Test-only
 // accessor; production callers should not depend on this.
 func (o *Orchestrator) AuditStore() audit.Store { return o.audit }
+
+// SetProviderOrgs configures per-provider organization lists for multi-org
+// scanning. When set, discoverRepositories iterates over the specified orgs
+// for each provider instead of using the single SyncFilter.Org value. Pass nil
+// or an empty map to revert to single-org behaviour.
+func (o *Orchestrator) SetProviderOrgs(providerOrgs map[string][]string) {
+	o.providerOrgs = providerOrgs
+}
+
+// ProviderOrgs returns the current per-provider organization mapping. Test-only
+// accessor.
+func (o *Orchestrator) ProviderOrgs() map[string][]string {
+	return o.providerOrgs
+}
 
 // emitAudit writes a single audit entry, stamping CreatedAt if the caller did
 // not. Errors from the underlying store are intentionally ignored: audit
@@ -238,16 +256,32 @@ func (o *Orchestrator) discoverRepositories(ctx context.Context, opts SyncOption
 	filter := opts.Filter
 	var allRepos []models.Repository
 	for _, p := range o.providers {
-		org := filter.Org
-		repos, err := p.ListRepositories(ctx, org, git.ListOptions{PerPage: 100})
-		if err != nil {
-			if errsOut != nil {
-				*errsOut = append(*errsOut, fmt.Sprintf("%s: %v", p.Name(), err))
-			}
-			continue
+		orgs := o.providerOrgs[p.Name()]
+		if len(orgs) == 0 {
+			orgs = []string{filter.Org}
 		}
-		allRepos = append(allRepos, repos...)
+		for _, org := range orgs {
+			repos, err := p.ListRepositories(ctx, org, git.ListOptions{PerPage: 100})
+			if err != nil {
+				if errsOut != nil {
+					*errsOut = append(*errsOut, fmt.Sprintf("%s: %v", p.Name(), err))
+				}
+				continue
+			}
+			allRepos = append(allRepos, repos...)
+		}
 	}
+
+	seen := make(map[string]bool)
+	var deduped []models.Repository
+	for _, r := range allRepos {
+		key := r.Owner + "/" + r.Name
+		if !seen[key] {
+			seen[key] = true
+			deduped = append(deduped, r)
+		}
+	}
+	allRepos = deduped
 
 	ri, err := loadRepoignore()
 	if err != nil {
