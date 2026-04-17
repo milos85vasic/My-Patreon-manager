@@ -130,6 +130,54 @@ func TestGitVerseProvider_ListRepositories(t *testing.T) {
 	assert.Equal(t, "https://gitverse.ru/test-org/repo1", repos[0].HTTPSURL)
 }
 
+func TestGitVerseProvider_ListRepositories_EmptyOrg(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/topics" || r.URL.Path == "/api/v1/templates" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]interface{}{})
+			return
+		}
+		if r.URL.Path == "/api/v1/user/repos" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			repos := []map[string]interface{}{
+				{
+					"id":               2,
+					"name":             "my-repo",
+					"full_name":        "myuser/my-repo",
+					"description":      "Personal repo",
+					"html_url":         "https://gitverse.ru/myuser/my-repo",
+					"ssh_url":          "git@gitverse.ru:myuser/my-repo.git",
+					"stargazers_count": 5,
+					"forks_count":      1,
+					"language":         "Rust",
+					"topics":           []string{"rust"},
+					"archived":         false,
+				},
+			}
+			json.NewEncoder(w).Encode(repos)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	provider := newTestGitVerseProvider(t, server.URL)
+	err := provider.Authenticate(context.Background(), git.Credentials{PrimaryToken: "test-token"})
+	assert.NoError(t, err)
+	repos, err := provider.ListRepositories(context.Background(), "", git.ListOptions{Page: 1, PerPage: 100})
+	assert.NoError(t, err)
+	assert.Len(t, repos, 1)
+	assert.Equal(t, "gitverse", repos[0].Service)
+	assert.Equal(t, "myuser", repos[0].Owner)
+	assert.Equal(t, "my-repo", repos[0].Name)
+	assert.Equal(t, "Personal repo", repos[0].Description)
+	assert.Equal(t, "Rust", repos[0].PrimaryLanguage)
+	assert.Equal(t, 5, repos[0].Stars)
+	assert.Equal(t, 1, repos[0].Forks)
+}
+
 func TestGitVerseProvider_GetRepositoryMetadata_WithTopicsCapability(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Capability probes: topics returns 200, templates 404
