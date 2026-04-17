@@ -96,14 +96,27 @@ func (p *GitLabProvider) ListRepositories(ctx context.Context, group string, opt
 	var allRepos []models.Repository
 	for {
 		var projects []*gitlab.Project
-		resp, err := p.execute(func() (*gitlab.Response, error) {
-			ps, rr, e := p.client.Groups.ListGroupProjects(group, &gitlab.ListGroupProjectsOptions{
-				ListOptions:      gitlab.ListOptions{Page: page, PerPage: perPage},
-				IncludeSubGroups: gitlab.Ptr(true),
+		var resp *gitlab.Response
+		var err error
+		if group == "" {
+			resp, err = p.execute(func() (*gitlab.Response, error) {
+				ps, rr, e := p.client.Projects.ListProjects(&gitlab.ListProjectsOptions{
+					ListOptions: gitlab.ListOptions{Page: page, PerPage: perPage},
+					Owned:       gitlab.Ptr(true),
+				})
+				projects = ps
+				return rr, e
 			})
-			projects = ps
-			return rr, e
-		})
+		} else {
+			resp, err = p.execute(func() (*gitlab.Response, error) {
+				ps, rr, e := p.client.Groups.ListGroupProjects(group, &gitlab.ListGroupProjectsOptions{
+					ListOptions:      gitlab.ListOptions{Page: page, PerPage: perPage},
+					IncludeSubGroups: gitlab.Ptr(true),
+				})
+				projects = ps
+				return rr, e
+			})
+		}
 		if err != nil {
 			if resp != nil && resp.StatusCode == 403 {
 				p.tm.Failover()
