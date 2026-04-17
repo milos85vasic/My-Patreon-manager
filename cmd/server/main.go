@@ -26,9 +26,11 @@ import (
 	"github.com/milos85vasic/My-Patreon-Manager/internal/middleware"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/models"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/providers/git"
+	imgprov "github.com/milos85vasic/My-Patreon-Manager/internal/providers/image"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/providers/llm"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/providers/patreon"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/services/content"
+	"github.com/milos85vasic/My-Patreon-Manager/internal/services/illustration"
 	syncsvc "github.com/milos85vasic/My-Patreon-Manager/internal/services/sync"
 )
 
@@ -95,9 +97,15 @@ func runServer(ctx context.Context, cfg *config.Config, addr string, logger *slo
 
 	metricsCollector := newMetricsCollector()
 	orch := newOrchestrator(cfg)
+	// If orchestrator is nil (e.g., no providers configured), use noopOrchestrator
+	// so webhook draining still works (drops events silently).
+	var orchInterface Orchestrator = noopOrchestrator{}
+	if orch != nil {
+		orchInterface = orch
+	}
 	db := getDatabase()
 	logger.Info("setupRouter getting db", "db_nil", db == nil)
-	r, dedup, webhookHandler, limiter := setupRouterFn(cfg, metricsCollector, orch, logger, db)
+	r, dedup, webhookHandler, limiter := setupRouterFn(cfg, metricsCollector, orchInterface, logger, db)
 
 	// Supervise background goroutines via Lifecycle so shutdown is observed
 	// and none of them can outlive the process.
@@ -106,7 +114,7 @@ func runServer(ctx context.Context, cfg *config.Config, addr string, logger *slo
 	// Webhook drain: forwards queue items to the orchestrator's EnqueueRepo
 	// path. Replaces Phase 1 Task 4's log-and-drop placeholder.
 	lifecycle.Go(func(ctx context.Context) {
-		drain := webhookDrainFn(logger, orch)
+		drain := webhookDrainFn(logger, orchInterface)
 		if err := webhookHandler.Queue.Drain(ctx, drain); err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 			logger.Error("webhook drain stopped", slog.String("error", err.Error()))
 		}
@@ -320,7 +328,7 @@ var newDatabaseFn = database.NewDatabase
 // the required configuration (at least one git provider token) is present.
 // Falls back to noopOrchestrator with a log warning when construction is not
 // possible. The server only needs EnqueueRepo for webhook draining.
-func buildOrchestrator(cfg *config.Config) Orchestrator {
+func buildOrchestrator(cfg *config.Config) *syncsvc.Orchestrator {
 	logger := slog.Default()
 
 	// Always connect the database so the preview handler works even
@@ -331,11 +339,11 @@ func buildOrchestrator(cfg *config.Config) Orchestrator {
 	defer cancel()
 	if err := db.Connect(ctx, cfg.DSN()); err != nil {
 		logger.Warn("database connect failed — using noop orchestrator", slog.String("error", err.Error()))
-		return noopOrchestrator{}
+		return nil
 	}
 	if err := db.Migrate(ctx); err != nil {
 		logger.Warn("database migration failed — using noop orchestrator", slog.String("error", err.Error()))
-		return noopOrchestrator{}
+		return nil
 	}
 
 	// Store database for preview handler (set early regardless of providers).
@@ -345,7 +353,7 @@ func buildOrchestrator(cfg *config.Config) Orchestrator {
 	providers := serverSetupProviders(cfg)
 	if len(providers) == 0 {
 		logger.Warn("no git provider tokens configured — using noop orchestrator, webhooks will be dropped")
-		return noopOrchestrator{}
+		return nil
 	}
 
 	// Build content generator (optional — orchestrator handles nil generator).
@@ -366,7 +374,28 @@ func buildOrchestrator(cfg *config.Config) Orchestrator {
 	patreonClient := patreon.NewClient(oauth, cfg.PatreonCampaignID)
 
 	logger.Info("real orchestrator wired for webhook processing")
-	return syncsvc.NewOrchestrator(db, providers, patreonClient, generator, nil, logger, nil)
+
+	// Build orchestrator
+	realOrch := syncsvc.NewOrchestrator(db, providers, patreonClient, generator, promMetrics, logger, nil)
+
+	// Wire illustration generator if enabled
+	if cfg.IllustrationEnabled {
+		imgProviders := serverBuildImageProviders(cfg, logger)
+		if len(imgProviders) > 0 {
+			fallbackImgProv := imgprov.NewFallbackProvider(imgProviders...)
+			imgStore := db.Illustrations()
+			styleLoader := illustration.NewStyleLoader(cfg.IllustrationDefaultStyle)
+			promptBuilder := illustration.NewPromptBuilder(cfg.IllustrationDefaultStyle)
+			imgDir := cfg.IllustrationDir
+			if imgDir == "" {
+				imgDir = "./data/illustrations"
+			}
+			imgGenerator := illustration.NewGenerator(fallbackImgProv, imgStore, styleLoader, promptBuilder, logger, imgDir)
+			realOrch.SetIllustrationGenerator(imgGenerator)
+		}
+	}
+
+	return realOrch
 }
 
 // serverSetupProviders mirrors cmd/cli's setupProviders. Kept separate so the
@@ -389,5 +418,37 @@ func serverSetupProviders(cfg *config.Config) []git.RepositoryProvider {
 		tm := git.NewTokenManager(cfg.GitVerseToken, cfg.GitVerseTokenSecondary)
 		providers = append(providers, git.NewGitVerseProvider(tm))
 	}
+	return providers
+}
+
+func serverBuildImageProviders(cfg *config.Config, logger *slog.Logger) []imgprov.ImageProvider {
+	var providers []imgprov.ImageProvider
+
+	if cfg.OpenAIAPIKey != "" {
+		dalleProv := imgprov.NewDALLEProvider(cfg.OpenAIAPIKey, nil)
+		dalleProv.SetLogger(logger)
+		providers = append(providers, dalleProv)
+	}
+	if cfg.StabilityAIAPIKey != "" {
+		stabilityProv := imgprov.NewStabilityProvider(cfg.StabilityAIAPIKey, nil)
+		stabilityProv.SetLogger(logger)
+		providers = append(providers, stabilityProv)
+	}
+	if cfg.MidjourneyAPIKey != "" {
+		mjProv := imgprov.NewMidjourneyProvider(cfg.MidjourneyAPIKey, cfg.MidjourneyEndpoint, nil)
+		mjProv.SetLogger(logger)
+		providers = append(providers, mjProv)
+	}
+	if cfg.OpenAICompatAPIKey != "" {
+		openaiProv := imgprov.NewOpenAICompatProvider(
+			cfg.OpenAICompatAPIKey,
+			cfg.OpenAICompatBaseURL,
+			cfg.OpenAICompatModel,
+			nil,
+		)
+		openaiProv.SetLogger(logger)
+		providers = append(providers, openaiProv)
+	}
+
 	return providers
 }

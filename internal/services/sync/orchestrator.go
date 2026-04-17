@@ -123,6 +123,10 @@ type Orchestrator struct {
 	// that never touch the queue don't pay the allocation.
 	workMu sync.Mutex
 	workCh chan models.Repository
+
+	// illustrationGen is the optional illustration generator. When set,
+	// Generate is called after quality gate passes to create embed images.
+	illustrationGen any // interface { Generate(ctx context.Context, repoID, repoName, repoDesc, lang string, topics []string, contentID, title, body string) (*string, error) }
 }
 
 func NewOrchestrator(
@@ -178,6 +182,13 @@ func (o *Orchestrator) SetProviderOrgs(providerOrgs map[string][]string) {
 // accessor.
 func (o *Orchestrator) ProviderOrgs() map[string][]string {
 	return o.providerOrgs
+}
+
+// SetIllustrationGenerator configures the optional illustration generator.
+// When set, Generate is called after quality gate passes to create embed
+// images for articles. Passing nil disables illustration generation.
+func (o *Orchestrator) SetIllustrationGenerator(gen any) {
+	o.illustrationGen = gen
 }
 
 // emitAudit writes a single audit entry, stamping CreatedAt if the caller did
@@ -818,6 +829,29 @@ func (o *Orchestrator) processRepo(ctx context.Context, repo models.Repository, 
 			generated, err := o.generator.GenerateForRepository(ctx, enhancedRepo, nil, mirrorURLs)
 			if err != nil {
 				return false, fmt.Errorf("generate content: %w", err)
+			}
+			// Generate illustration if enabled and quality gate passed
+			if generated != nil && generated.PassedQualityGate && o.illustrationGen != nil {
+				if gen, ok := o.illustrationGen.(interface {
+					Generate(ctx context.Context, repoID, repoName, repoDesc, lang string, topics []string, contentID, title, body string) (*string, error)
+				}); ok {
+					embedTag, err := gen.Generate(
+						ctx,
+						enhancedRepo.ID,
+						enhancedRepo.Name,
+						enhancedRepo.Description,
+						enhancedRepo.PrimaryLanguage,
+						enhancedRepo.Topics,
+						generated.ID,
+						generated.Title,
+						generated.Body,
+					)
+					if err != nil {
+						o.logger.Warn("illustration generation failed", "repo_id", enhancedRepo.ID, "error", err)
+					} else if embedTag != nil && *embedTag != "" {
+						generated.Body = *embedTag + "\n\n" + generated.Body
+					}
+				}
 			}
 			// Publish to Patreon if quality gate passed and we have a client
 			if generated != nil && generated.PassedQualityGate && o.patreon != nil && o.tierMapper != nil {

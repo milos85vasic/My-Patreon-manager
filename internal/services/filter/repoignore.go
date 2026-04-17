@@ -23,13 +23,17 @@ type Pattern struct {
 }
 
 type Repoignore struct {
-	patterns []Pattern
-	mu       sync.RWMutex
-	path     string
+	patterns   []Pattern
+	directives map[string]bool
+	mu         sync.RWMutex
+	path       string
 }
 
 func ParseRepoignoreFile(path string) (*Repoignore, error) {
-	r := &Repoignore{path: path}
+	r := &Repoignore{
+		path:       path,
+		directives: make(map[string]bool),
+	}
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return r, nil
 	}
@@ -43,6 +47,11 @@ func ParseRepoignoreFile(path string) (*Repoignore, error) {
 	for scanner.Scan() {
 		line := strings.TrimRight(scanner.Text(), " \t\r")
 		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(line, "no-") && !strings.Contains(line, "/") {
+			directive := strings.TrimSpace(line)
+			r.directives[directive] = true
 			continue
 		}
 		pattern := Pattern{Raw: line}
@@ -172,8 +181,15 @@ func (r *Repoignore) Reload() error {
 	}
 	r.mu.Lock()
 	r.patterns = newR.patterns
+	r.directives = newR.directives
 	r.mu.Unlock()
 	return nil
+}
+
+func (r *Repoignore) HasDirective(directive string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.directives[directive]
 }
 
 // WatchSIGHUP starts a goroutine that reloads the repoignore config whenever

@@ -82,6 +82,23 @@ type Config struct {
 	LLMsVerifierEndpoint string
 	// LLMsVerifierAPIKey is the authentication token for the LLMsVerifier service.
 	LLMsVerifierAPIKey string
+	// Illustration generation settings
+	IllustrationEnabled        bool
+	IllustrationDefaultStyle   string
+	IllustrationDefaultSize    string
+	IllustrationDefaultQuality string
+	IllustrationDir            string
+	ImageProviderPriority      string
+	// Image provider API keys
+	OpenAIAPIKey        string
+	OpenAIBaseURL       string
+	StabilityAIAPIKey   string
+	StabilityAIBaseURL  string
+	MidjourneyAPIKey    string
+	MidjourneyEndpoint  string
+	OpenAICompatAPIKey  string
+	OpenAICompatBaseURL string
+	OpenAICompatModel   string
 }
 
 func NewConfig() *Config {
@@ -108,6 +125,12 @@ func NewConfig() *Config {
 		UserWorkspaceDir:           "user",
 		RateLimitRPS:               100,
 		RateLimitBurst:             200,
+		IllustrationEnabled:        true,
+		IllustrationDefaultStyle:   "modern tech illustration, clean lines, professional",
+		IllustrationDefaultSize:    "1792x1024",
+		IllustrationDefaultQuality: "hd",
+		IllustrationDir:            "./data/illustrations",
+		ImageProviderPriority:      "dalle,stability,midjourney,openai_compat",
 	}
 }
 
@@ -257,4 +280,19 @@ func (c *Config) LoadFromEnv() {
 	c.UserWorkspaceDir = getEnv("USER_WORKSPACE_DIR", c.UserWorkspaceDir)
 	c.LLMsVerifierEndpoint = getEnv("LLMSVERIFIER_ENDPOINT", c.LLMsVerifierEndpoint)
 	c.LLMsVerifierAPIKey = getEnv("LLMSVERIFIER_API_KEY", c.LLMsVerifierAPIKey)
+	c.IllustrationEnabled = getEnvBool("ILLUSTRATION_ENABLED", c.IllustrationEnabled)
+	c.IllustrationDefaultStyle = getEnv("ILLUSTRATION_DEFAULT_STYLE", c.IllustrationDefaultStyle)
+	c.IllustrationDefaultSize = getEnv("ILLUSTRATION_DEFAULT_SIZE", c.IllustrationDefaultSize)
+	c.IllustrationDefaultQuality = getEnv("ILLUSTRATION_DEFAULT_QUALITY", c.IllustrationDefaultQuality)
+	c.IllustrationDir = getEnv("ILLUSTRATION_DIR", c.IllustrationDir)
+	c.ImageProviderPriority = getEnv("IMAGE_PROVIDER_PRIORITY", c.ImageProviderPriority)
+	c.StabilityAIAPIKey = getEnv("STABILITY_AI_API_KEY", c.StabilityAIAPIKey)
+	c.StabilityAIBaseURL = getEnv("STABILITY_AI_BASE_URL", c.StabilityAIBaseURL)
+	c.MidjourneyAPIKey = getEnv("MIDJOURNEY_API_KEY", c.MidjourneyAPIKey)
+	c.MidjourneyEndpoint = getEnv("MIDJOURNEY_ENDPOINT", c.MidjourneyEndpoint)
+	c.OpenAIAPIKey = getEnv("OPENAI_API_KEY", c.OpenAIAPIKey)
+	c.OpenAIBaseURL = getEnv("OPENAI_BASE_URL", c.OpenAIBaseURL)
+	c.OpenAICompatAPIKey = getEnv("OPENAI_COMPAT_API_KEY", c.OpenAICompatAPIKey)
+	c.OpenAICompatBaseURL = getEnv("OPENAI_COMPAT_BASE_URL", c.OpenAICompatBaseURL)
+	c.OpenAICompatModel = getEnv("OPENAI_COMPAT_MODEL", c.OpenAICompatModel)
 }

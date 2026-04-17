@@ -263,6 +263,10 @@ func (db *SQLiteDB) AuditEntries() AuditEntryStore {
 	return &SQLiteAuditEntryStore{db: db.db}
 }
 
+func (db *SQLiteDB) Illustrations() IllustrationStore {
+	return &SQLiteIllustrationStore{db: db.db}
+}
+
 func (db *SQLiteDB) AcquireLock(ctx context.Context, lockInfo SyncLock) error {
 	tx, err := db.db.BeginTx(ctx, nil)
 	if err != nil {

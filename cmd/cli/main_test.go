@@ -133,6 +133,8 @@ func (m *mockOrchestrator) SetAuditStore(_ audit.Store) {}
 
 func (m *mockOrchestrator) SetProviderOrgs(_ map[string][]string) {}
 
+func (m *mockOrchestrator) SetIllustrationGenerator(_ any) {}
+
 // mock metrics collector
 type mockMetricsCollector struct{}
 
@@ -182,6 +184,7 @@ func (m *mockDatabase) GeneratedContents() database.GeneratedContentStore       
 func (m *mockDatabase) ContentTemplates() database.ContentTemplateStore                   { return nil }
 func (m *mockDatabase) Posts() database.PostStore                                         { return nil }
 func (m *mockDatabase) AuditEntries() database.AuditEntryStore                            { return nil }
+func (m *mockDatabase) Illustrations() database.IllustrationStore                         { return nil }
 func (m *mockDatabase) AcquireLock(ctx context.Context, lockInfo database.SyncLock) error { return nil }
 func (m *mockDatabase) ReleaseLock(ctx context.Context) error                             { return nil }
 func (m *mockDatabase) IsLocked(ctx context.Context) (bool, *database.SyncLock, error) {

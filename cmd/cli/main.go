@@ -17,10 +17,12 @@ import (
 	"github.com/milos85vasic/My-Patreon-Manager/internal/metrics"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/models"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/providers/git"
+	imgprov "github.com/milos85vasic/My-Patreon-Manager/internal/providers/image"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/providers/llm"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/providers/patreon"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/services/audit"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/services/content"
+	"github.com/milos85vasic/My-Patreon-Manager/internal/services/illustration"
 	syncsvc "github.com/milos85vasic/My-Patreon-Manager/internal/services/sync"
 )
 
@@ -42,6 +44,7 @@ type orchestrator interface {
 	PublishOnly(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error)
 	SetAuditStore(s audit.Store)
 	SetProviderOrgs(providerOrgs map[string][]string)
+	SetIllustrationGenerator(gen any)
 }
 
 // dbWithRawConn is implemented by database backends that expose the
@@ -162,6 +165,23 @@ func main() {
 	if cfg.AuditStore == "sqlite" {
 		if rawDB, ok := db.(dbWithRawConn); ok {
 			orchestrator.SetAuditStore(audit.NewSQLiteStore(rawDB.DB()))
+		}
+	}
+
+	// Wire illustration generator if enabled
+	if cfg.IllustrationEnabled {
+		imgProviders := buildImageProviders(cfg, promMetrics, logger)
+		if len(imgProviders) > 0 {
+			fallbackImgProv := imgprov.NewFallbackProvider(imgProviders...)
+			imgStore := db.Illustrations()
+			styleLoader := illustration.NewStyleLoader(cfg.IllustrationDefaultStyle)
+			promptBuilder := illustration.NewPromptBuilder(cfg.IllustrationDefaultStyle)
+			imgDir := cfg.IllustrationDir
+			if imgDir == "" {
+				imgDir = "./data/illustrations"
+			}
+			imgGenerator := illustration.NewGenerator(fallbackImgProv, imgStore, styleLoader, promptBuilder, logger, imgDir)
+			orchestrator.SetIllustrationGenerator(imgGenerator)
 		}
 	}
 
@@ -293,4 +313,36 @@ func parseLogLevel(level string) slog.Level {
 	default:
 		return slog.LevelInfo
 	}
+}
+
+func buildImageProviders(cfg *config.Config, _ metrics.MetricsCollector, logger *slog.Logger) []imgprov.ImageProvider {
+	var providers []imgprov.ImageProvider
+
+	if cfg.OpenAIAPIKey != "" {
+		dalleProv := imgprov.NewDALLEProvider(cfg.OpenAIAPIKey, nil)
+		dalleProv.SetLogger(logger)
+		providers = append(providers, dalleProv)
+	}
+	if cfg.StabilityAIAPIKey != "" {
+		stabilityProv := imgprov.NewStabilityProvider(cfg.StabilityAIAPIKey, nil)
+		stabilityProv.SetLogger(logger)
+		providers = append(providers, stabilityProv)
+	}
+	if cfg.MidjourneyAPIKey != "" {
+		mjProv := imgprov.NewMidjourneyProvider(cfg.MidjourneyAPIKey, cfg.MidjourneyEndpoint, nil)
+		mjProv.SetLogger(logger)
+		providers = append(providers, mjProv)
+	}
+	if cfg.OpenAICompatAPIKey != "" {
+		openaiProv := imgprov.NewOpenAICompatProvider(
+			cfg.OpenAICompatAPIKey,
+			cfg.OpenAICompatBaseURL,
+			cfg.OpenAICompatModel,
+			nil,
+		)
+		openaiProv.SetLogger(logger)
+		providers = append(providers, openaiProv)
+	}
+
+	return providers
 }

@@ -28,6 +28,7 @@ type Database interface {
 	ContentTemplates() ContentTemplateStore
 	Posts() PostStore
 	AuditEntries() AuditEntryStore
+	Illustrations() IllustrationStore
 
 	AcquireLock(ctx context.Context, lockInfo SyncLock) error
 	ReleaseLock(ctx context.Context) error
@@ -106,4 +107,13 @@ type AuditEntryStore interface {
 	ListByEventType(ctx context.Context, eventType string) ([]*models.AuditEntry, error)
 	ListByTimeRange(ctx context.Context, from, to string) ([]*models.AuditEntry, error)
 	PurgeOlderThan(ctx context.Context, cutoff string) (int64, error)
+}
+
+type IllustrationStore interface {
+	Create(ctx context.Context, ill *models.Illustration) error
+	GetByID(ctx context.Context, id string) (*models.Illustration, error)
+	GetByContentID(ctx context.Context, contentID string) (*models.Illustration, error)
+	GetByFingerprint(ctx context.Context, fingerprint string) (*models.Illustration, error)
+	ListByRepository(ctx context.Context, repoID string) ([]*models.Illustration, error)
+	Delete(ctx context.Context, id string) error
 }

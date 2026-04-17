@@ -207,6 +207,9 @@ func (db *PostgresDB2) ContentTemplates() ContentTemplateStore {
 }
 func (db *PostgresDB2) Posts() PostStore              { return &PostgresPostStore{db: db.db} }
 func (db *PostgresDB2) AuditEntries() AuditEntryStore { return &PostgresAuditEntryStore{db: db.db} }
+func (db *PostgresDB2) Illustrations() IllustrationStore {
+	return &PostgresIllustrationStore{db: db.db}
+}
 
 func (db *PostgresDB2) AcquireLock(ctx context.Context, lockInfo SyncLock) error {
 	var locked bool
@@ -704,4 +707,79 @@ func (s *PostgresAuditEntryStore) PurgeOlderThan(ctx context.Context, cutoff str
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+type PostgresIllustrationStore struct{ db *sql.DB }
+
+func (s *PostgresIllustrationStore) Create(ctx context.Context, ill *models.Illustration) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO illustrations (id, generated_content_id, repository_id, file_path, image_url, prompt, style, provider_used, format, size, content_hash, fingerprint, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+		ill.ID, ill.GeneratedContentID, ill.RepositoryID, ill.FilePath, ill.ImageURL, ill.Prompt, ill.Style, ill.ProviderUsed, ill.Format, ill.Size, ill.ContentHash, ill.Fingerprint, ill.CreatedAt)
+	return err
+}
+
+func (s *PostgresIllustrationStore) GetByID(ctx context.Context, id string) (*models.Illustration, error) {
+	ill := &models.Illustration{}
+	err := s.db.QueryRowContext(ctx,
+		"SELECT id, generated_content_id, repository_id, file_path, image_url, prompt, style, provider_used, format, size, content_hash, fingerprint, created_at FROM illustrations WHERE id = $1",
+		id).Scan(&ill.ID, &ill.GeneratedContentID, &ill.RepositoryID, &ill.FilePath, &ill.ImageURL, &ill.Prompt, &ill.Style, &ill.ProviderUsed, &ill.Format, &ill.Size, &ill.ContentHash, &ill.Fingerprint, &ill.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return ill, nil
+}
+
+func (s *PostgresIllustrationStore) GetByContentID(ctx context.Context, contentID string) (*models.Illustration, error) {
+	ill := &models.Illustration{}
+	err := s.db.QueryRowContext(ctx,
+		"SELECT id, generated_content_id, repository_id, file_path, image_url, prompt, style, provider_used, format, size, content_hash, fingerprint, created_at FROM illustrations WHERE generated_content_id = $1",
+		contentID).Scan(&ill.ID, &ill.GeneratedContentID, &ill.RepositoryID, &ill.FilePath, &ill.ImageURL, &ill.Prompt, &ill.Style, &ill.ProviderUsed, &ill.Format, &ill.Size, &ill.ContentHash, &ill.Fingerprint, &ill.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return ill, nil
+}
+
+func (s *PostgresIllustrationStore) GetByFingerprint(ctx context.Context, fingerprint string) (*models.Illustration, error) {
+	ill := &models.Illustration{}
+	err := s.db.QueryRowContext(ctx,
+		"SELECT id, generated_content_id, repository_id, file_path, image_url, prompt, style, provider_used, format, size, content_hash, fingerprint, created_at FROM illustrations WHERE fingerprint = $1",
+		fingerprint).Scan(&ill.ID, &ill.GeneratedContentID, &ill.RepositoryID, &ill.FilePath, &ill.ImageURL, &ill.Prompt, &ill.Style, &ill.ProviderUsed, &ill.Format, &ill.Size, &ill.ContentHash, &ill.Fingerprint, &ill.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return ill, nil
+}
+
+func (s *PostgresIllustrationStore) ListByRepository(ctx context.Context, repoID string) ([]*models.Illustration, error) {
+	rows, err := s.db.QueryContext(ctx,
+		"SELECT id, generated_content_id, repository_id, file_path, image_url, prompt, style, provider_used, format, size, content_hash, fingerprint, created_at FROM illustrations WHERE repository_id = $1",
+		repoID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var result []*models.Illustration
+	for rows.Next() {
+		ill := &models.Illustration{}
+		if err := rows.Scan(&ill.ID, &ill.GeneratedContentID, &ill.RepositoryID, &ill.FilePath, &ill.ImageURL, &ill.Prompt, &ill.Style, &ill.ProviderUsed, &ill.Format, &ill.Size, &ill.ContentHash, &ill.Fingerprint, &ill.CreatedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, ill)
+	}
+	return result, nil
+}
+
+func (s *PostgresIllustrationStore) Delete(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, "DELETE FROM illustrations WHERE id = $1", id)
+	return err
 }

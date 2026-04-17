@@ -19,6 +19,7 @@ type MockDatabase struct {
 	ContentTemplatesFunc  func() database.ContentTemplateStore
 	PostsFunc             func() database.PostStore
 	AuditEntriesFunc      func() database.AuditEntryStore
+	IllustrationsFunc     func() database.IllustrationStore
 	AcquireLockFunc       func(ctx context.Context, lockInfo database.SyncLock) error
 	ReleaseLockFunc       func(ctx context.Context) error
 	IsLockedFunc          func(ctx context.Context) (bool, *database.SyncLock, error)
@@ -95,6 +96,13 @@ func (m *MockDatabase) AuditEntries() database.AuditEntryStore {
 	return nil
 }
 
+func (m *MockDatabase) Illustrations() database.IllustrationStore {
+	if m.IllustrationsFunc != nil {
+		return m.IllustrationsFunc()
+	}
+	return nil
+}
+
 func (m *MockDatabase) AcquireLock(ctx context.Context, lockInfo database.SyncLock) error {
 	if m.AcquireLockFunc != nil {
 		return m.AcquireLockFunc(ctx, lockInfo)
@@ -164,6 +172,57 @@ func (m *MockRepositoryStore) Update(ctx context.Context, repo *models.Repositor
 }
 
 func (m *MockRepositoryStore) Delete(ctx context.Context, id string) error {
+	if m.DeleteFunc != nil {
+		return m.DeleteFunc(ctx, id)
+	}
+	return nil
+}
+
+type MockIllustrationStore struct {
+	CreateFunc           func(ctx context.Context, ill *models.Illustration) error
+	GetByIDFunc          func(ctx context.Context, id string) (*models.Illustration, error)
+	GetByContentIDFunc   func(ctx context.Context, contentID string) (*models.Illustration, error)
+	GetByFingerprintFunc func(ctx context.Context, fingerprint string) (*models.Illustration, error)
+	ListByRepositoryFunc func(ctx context.Context, repoID string) ([]*models.Illustration, error)
+	DeleteFunc           func(ctx context.Context, id string) error
+}
+
+func (m *MockIllustrationStore) Create(ctx context.Context, ill *models.Illustration) error {
+	if m.CreateFunc != nil {
+		return m.CreateFunc(ctx, ill)
+	}
+	return nil
+}
+
+func (m *MockIllustrationStore) GetByID(ctx context.Context, id string) (*models.Illustration, error) {
+	if m.GetByIDFunc != nil {
+		return m.GetByIDFunc(ctx, id)
+	}
+	return nil, nil
+}
+
+func (m *MockIllustrationStore) GetByContentID(ctx context.Context, contentID string) (*models.Illustration, error) {
+	if m.GetByContentIDFunc != nil {
+		return m.GetByContentIDFunc(ctx, contentID)
+	}
+	return nil, nil
+}
+
+func (m *MockIllustrationStore) GetByFingerprint(ctx context.Context, fingerprint string) (*models.Illustration, error) {
+	if m.GetByFingerprintFunc != nil {
+		return m.GetByFingerprintFunc(ctx, fingerprint)
+	}
+	return nil, nil
+}
+
+func (m *MockIllustrationStore) ListByRepository(ctx context.Context, repoID string) ([]*models.Illustration, error) {
+	if m.ListByRepositoryFunc != nil {
+		return m.ListByRepositoryFunc(ctx, repoID)
+	}
+	return nil, nil
+}
+
+func (m *MockIllustrationStore) Delete(ctx context.Context, id string) error {
 	if m.DeleteFunc != nil {
 		return m.DeleteFunc(ctx, id)
 	}
