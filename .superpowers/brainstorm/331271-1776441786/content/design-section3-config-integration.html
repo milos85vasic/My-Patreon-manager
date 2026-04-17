@@ -1,0 +1,168 @@
+<h2>Design Section 3: Configuration &amp; Integration</h2>
+<p class="subtitle">Environment variables, .illustyle format, and orchestrator wiring</p>
+
+<div class="section">
+  <h3>New Environment Variables</h3>
+  <div class="mockup">
+    <div class="mockup-header">.env additions</div>
+    <div class="mockup-body" style="padding: 0;">
+      <table style="width: 100%; border-collapse: collapse; font-size: 0.85em;">
+        <thead>
+          <tr style="background: #f5f5f5;">
+            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Variable</th>
+            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Required</th>
+            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee; font-family: monospace;">ILLUSTRATION_ENABLED</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee;">No</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee;">"true" / "false". Default: "true"</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee; font-family: monospace;">ILLUSTRATION_DEFAULT_STYLE</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee;">No</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee;">Global style prompt. Default: "modern tech illustration, clean lines, professional"</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee; font-family: monospace;">ILLUSTRATION_DEFAULT_SIZE</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee;">No</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee;">Image size. Default: "1792x1024"</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee; font-family: monospace;">ILLUSTRATION_DEFAULT_QUALITY</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee;">No</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee;">"standard" / "hd". Default: "hd"</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee; font-family: monospace;">ILLUSTRATION_DIR</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee;">No</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee;">Local storage path. Default: "./data/illustrations"</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee; font-family: monospace;">IMAGE_PROVIDER_PRIORITY</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee;">No</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee;">Comma-separated provider order. Default: "dalle,stability,midjourney,openai_compat"</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee; font-family: monospace;">OPENAI_API_KEY</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee;">If DALL-E used</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee;">For DALL-E 3 and OpenAI-compatible endpoints</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee; font-family: monospace;">STABILITY_API_KEY</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee;">If Stability used</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee;">Stability AI API key</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee; font-family: monospace;">MIDJOURNEY_API_KEY</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee;">If Midjourney used</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #eee;">Midjourney proxy API key</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 10px; font-family: monospace;">MIDJOURNEY_ENDPOINT</td>
+            <td style="padding: 8px 10px;">If Midjourney used</td>
+            <td style="padding: 8px 10px;">Midjourney proxy base URL</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>.illustyle Per-Repo Override</h3>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">Example: tech repo</div>
+      <div class="mockup-body" style="padding: 12px;">
+        <pre style="background: #263238; color: #81d4fa; padding: 12px; border-radius: 6px; font-size: 0.82em; line-height: 1.5; overflow-x: auto;">
+<span style="color: #f9a825;"># .illustyle</span>
+<span style="color: #f9a825;"># For a Go backend project</span>
+
+style: "isometric 3D diagram of microservices architecture, blue and orange color scheme, dark background"
+provider: dalle
+quality: hd
+size: "1792x1024"</pre>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">Example: creative repo</div>
+      <div class="mockup-body" style="padding: 12px;">
+        <pre style="background: #263238; color: #ce93d8; padding: 12px; border-radius: 6px; font-size: 0.82em; line-height: 1.5; overflow-x: auto;">
+<span style="color: #f9a825;"># .illustyle</span>
+<span style="color: #f9a825;"># For an art/creative project</span>
+
+style: "watercolor painting, soft pastel colors, dreamy atmosphere"
+provider: midjourney
+quality: hd
+size: "1024x1024"</pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Opt-out in .repoignore</h3>
+  <div class="mockup">
+    <div class="mockup-header">.repoignore additions</div>
+    <div class="mockup-body" style="padding: 12px;">
+      <pre style="background: #263238; color: #e8eaed; padding: 12px; border-radius: 6px; font-size: 0.82em; line-height: 1.5; overflow-x: auto;">
+<span style="color: #f9a825;"># Existing repo ignore patterns</span>
+internal-tool
+test-project-*
+
+<span style="color: #f9a825;"># NEW: Disable illustration generation for matching repos</span>
+<span style="color: #ef5350; font-weight: bold;">no-illustration</span></pre>
+      <p style="margin-top: 10px; font-size: 0.85em; color: #666;">When <code>no-illustration</code> is present, the repo is scanned and content is generated as normal, but illustration generation is skipped entirely.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Orchestrator Integration</h3>
+  <div class="mockup">
+    <div class="mockup-header">processRepo() flow with illustration step</div>
+    <div class="mockup-body" style="padding: 20px;">
+      <div style="font-family: monospace; font-size: 0.85em; line-height: 2.2;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="background: #e3f2fd; padding: 6px 14px; border-radius: 4px;">1. Get repo metadata</div>
+        </div>
+        <div style="margin-left: 8px; color: #999;">↓</div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="background: #e3f2fd; padding: 6px 14px; border-radius: 4px;">2. Check archived status</div>
+        </div>
+        <div style="margin-left: 8px; color: #999;">↓</div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="background: #e3f2fd; padding: 6px 14px; border-radius: 4px;">3. <code>generator.GenerateForRepository()</code></div>
+          <span style="color: #888; font-size: 0.8em;">→ text content</span>
+        </div>
+        <div style="margin-left: 8px; color: #999;">↓</div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="background: #e3f2fd; padding: 6px 14px; border-radius: 4px;">4. Quality gate check</div>
+          <span style="color: #888; font-size: 0.8em;">→ pass/fail</span>
+        </div>
+        <div style="margin-left: 8px; color: #ff9800; font-weight: bold;">↓ NEW STEP</div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="background: #fff3e0; padding: 6px 14px; border-radius: 4px; border: 2px solid #ff9800;">
+            5. <code>illustrationGen.Generate()</code>
+          </div>
+          <span style="color: #888; font-size: 0.8em;">→ check .repoignore → load style → build prompt → call provider → store image → embed in content</span>
+        </div>
+        <div style="margin-left: 8px; color: #999;">↓</div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="background: #e3f2fd; padding: 6px 14px; border-radius: 4px;">6. Content hash check (idempotency)</div>
+        </div>
+        <div style="margin-left: 8px; color: #999;">↓</div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="background: #e3f2fd; padding: 6px 14px; border-radius: 4px;">7. Renderers (markdown, etc.)</div>
+        </div>
+        <div style="margin-left: 8px; color: #999;">↓</div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="background: #e3f2fd; padding: 6px 14px; border-radius: 4px;">8. Publish to Patreon</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

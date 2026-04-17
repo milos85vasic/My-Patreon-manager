@@ -1,0 +1,138 @@
+<h2>Design Section 2: Data Model &amp; Database</h2>
+<p class="subtitle">New models, migrations, and storage</p>
+
+<div class="section">
+  <h3>New Model: Illustration</h3>
+  <div class="mockup">
+    <div class="mockup-header">internal/models/illustration.go</div>
+    <div class="mockup-body" style="padding: 15px;">
+      <pre style="background: #263238; color: #e8eaed; padding: 16px; border-radius: 8px; font-size: 0.85em; line-height: 1.6; overflow-x: auto;">
+<span style="color: #7c4dff;">type</span> <span style="color: #4fc3f7;">Illustration</span> <span style="color: #7c4dff;">struct</span> {
+    ID                 <span style="color: #7c4dff;">string</span>    <span style="color: #f9a825;">`json:"id"`</span>
+    GeneratedContentID <span style="color: #7c4dff;">string</span>    <span style="color: #f9a825;">`json:"generated_content_id"`</span>
+    RepositoryID       <span style="color: #7c4dff;">string</span>    <span style="color: #f9a825;">`json:"repository_id"`</span>
+    FilePath           <span style="color: #7c4dff;">string</span>    <span style="color: #f9a825;">`json:"file_path"`</span>    <span style="color: #f9a825;">// local: ./data/illustrations/abc.png</span>
+    ImageURL           <span style="color: #7c4dff;">string</span>    <span style="color: #f9a825;">`json:"image_url"`</span>    <span style="color: #f9a825;">// if hosted</span>
+    Prompt             <span style="color: #7c4dff;">string</span>    <span style="color: #f9a825;">`json:"prompt"`</span>
+    Style              <span style="color: #7c4dff;">string</span>    <span style="color: #f9a825;">`json:"style"`</span>
+    ProviderUsed       <span style="color: #7c4dff;">string</span>    <span style="color: #f9a825;">`json:"provider_used"`</span>
+    Format             <span style="color: #7c4dff;">string</span>    <span style="color: #f9a825;">`json:"format"`</span>        <span style="color: #f9a825;">// png, jpeg, webp</span>
+    Size               <span style="color: #7c4dff;">string</span>    <span style="color: #f9a825;">`json:"size"`</span>          <span style="color: #f9a825;">// 1792x1024</span>
+    ContentHash        <span style="color: #7c4dff;">string</span>    <span style="color: #f9a825;">`json:"content_hash"`</span>  <span style="color: #f9a825;">// SHA-256 of image data</span>
+    Fingerprint        <span style="color: #7c4dff;">string</span>    <span style="color: #f9a825;">`json:"fingerprint"`</span>   <span style="color: #f9a825;">// prompt+style hash for idempotency</span>
+    CreatedAt          time.Time <span style="color: #f9a825;">`json:"created_at"`</span>
+}</pre>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Entity Relationships</h3>
+  <div class="mockup">
+    <div class="mockup-header">How illustrations relate to existing entities</div>
+    <div class="mockup-body" style="padding: 20px;">
+      <div style="font-family: monospace; font-size: 0.85em; line-height: 2;">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+          <div style="background: #e3f2fd; padding: 8px 16px; border-radius: 6px; border: 2px solid #1565c0; min-width: 120px; text-align: center;">
+            <strong>Repository</strong><br><span style="font-size: 0.8em;">1</span>
+          </div>
+          <span style="color: #666;">─────→</span>
+          <div style="background: #fff3e0; padding: 8px 16px; border-radius: 6px; border: 2px solid #ff9800; min-width: 120px; text-align: center;">
+            <strong>GeneratedContent</strong><br><span style="font-size: 0.8em;">1</span>
+          </div>
+          <span style="color: #666;">─────→</span>
+          <div style="background: #e8f5e9; padding: 8px 16px; border-radius: 6px; border: 2px solid #2e7d32; min-width: 120px; text-align: center;">
+            <strong>Illustration</strong><br><span style="font-size: 0.8em;">0..1</span>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; margin-left: 130px; margin-bottom: 10px;">
+          <span style="color: #666;">│</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; margin-left: 130px;">
+          <div style="background: #fff3e0; padding: 8px 16px; border-radius: 6px; border: 2px solid #ff9800; min-width: 120px; text-align: center;">
+            <strong>GeneratedContent</strong><br><span style="font-size: 0.8em;">1</span>
+          </div>
+          <span style="color: #666;">─────→</span>
+          <div style="background: #fce4ec; padding: 8px 16px; border-radius: 6px; border: 2px solid #c62828; min-width: 120px; text-align: center;">
+            <strong>Post</strong><br><span style="font-size: 0.8em;">0..1</span>
+          </div>
+          <span style="color: #666;">(has illustration embedded in content)</span>
+        </div>
+      </div>
+      <div style="margin-top: 15px; padding: 10px; background: #f5f5f5; border-radius: 6px; font-size: 0.85em;">
+        <strong>Key constraint:</strong> One illustration per <code>GeneratedContent</code>. The <code>Fingerprint</code> field ensures idempotency — if the prompt+style haven't changed, the existing illustration is reused.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Database Migration</h3>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">0002_illustrations.up.sql</div>
+      <div class="mockup-body" style="padding: 15px;">
+        <pre style="background: #263238; color: #e8eaed; padding: 12px; border-radius: 6px; font-size: 0.8em; line-height: 1.5; overflow-x: auto;">
+<span style="color: #7c4dff;">CREATE TABLE</span> illustrations (
+    id <span style="color: #4fc3f7;">TEXT PRIMARY KEY</span>,
+    generated_content_id <span style="color: #4fc3f7;">TEXT NOT NULL</span>,
+    repository_id <span style="color: #4fc3f7;">TEXT NOT NULL</span>,
+    file_path <span style="color: #4fc3f7;">TEXT NOT NULL</span>,
+    image_url <span style="color: #4fc3f7;">TEXT DEFAULT ''</span>,
+    prompt <span style="color: #4fc3f7;">TEXT NOT NULL</span>,
+    style <span style="color: #4fc3f7;">TEXT DEFAULT ''</span>,
+    provider_used <span style="color: #4fc3f7;">TEXT NOT NULL</span>,
+    format <span style="color: #4fc3f7;">TEXT DEFAULT 'png'</span>,
+    size <span style="color: #4fc3f7;">TEXT DEFAULT '1792x1024'</span>,
+    content_hash <span style="color: #4fc3f7;">TEXT NOT NULL</span>,
+    fingerprint <span style="color: #4fc3f7;">TEXT NOT NULL</span>,
+    created_at <span style="color: #4fc3f7;">DATETIME DEFAULT CURRENT_TIMESTAMP</span>,
+    <span style="color: #7c4dff;">FOREIGN KEY</span> (generated_content_id)
+        <span style="color: #7c4dff;">REFERENCES</span> generated_contents(id),
+    <span style="color: #7c4dff;">FOREIGN KEY</span> (repository_id)
+        <span style="color: #7c4dff;">REFERENCES</span> repositories(id)
+);
+
+<span style="color: #7c4dff;">CREATE UNIQUE INDEX</span>
+  idx_illustrations_content
+  <span style="color: #7c4dff;">ON</span> illustrations(generated_content_id);
+
+<span style="color: #7c4dff;">CREATE INDEX</span>
+  idx_illustrations_fingerprint
+  <span style="color: #7c4dff;">ON</span> illustrations(fingerprint);</pre>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">0002_illustrations.down.sql</div>
+      <div class="mockup-body" style="padding: 15px;">
+        <pre style="background: #263238; color: #e8eaed; padding: 12px; border-radius: 6px; font-size: 0.8em; line-height: 1.5;">
+<span style="color: #7c4dff;">DROP INDEX IF EXISTS</span>
+  idx_illustrations_fingerprint;
+<span style="color: #7c4dff;">DROP INDEX IF EXISTS</span>
+  idx_illustrations_content;
+<span style="color: #7c4dff;">DROP TABLE IF EXISTS</span>
+  illustrations;</pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>File Storage Layout</h3>
+  <div class="mockup">
+    <div class="mockup-header">Local illustration storage</div>
+    <div class="mockup-body" style="padding: 15px;">
+      <div style="font-family: monospace; font-size: 0.9em; line-height: 1.8;">
+        <span style="color: #7c4dff;">data/</span><br>
+        <span style="margin-left: 20px;">├── <span style="color: #4fc3f7;">illustrations/</span></span><br>
+        <span style="margin-left: 40px;">├── <span style="color: #69f0ae;">abc123.png</span>    <span style="color: #888;">← by content hash</span></span><br>
+        <span style="margin-left: 40px;">├── <span style="color: #69f0ae;">def456.png</span></span><br>
+        <span style="margin-left: 40px;">└── <span style="color: #69f0ae;">ghi789.jpeg</span></span><br>
+        <span style="margin-left: 20px;">└── <span style="color: #888;">patreon-manager.db</span></span>
+      </div>
+      <div style="margin-top: 15px; padding: 10px; background: #fff8e1; border-radius: 6px; font-size: 0.85em;">
+        <strong>Note:</strong> Files are named by their <code>content_hash</code> (SHA-256). This prevents duplicates and makes idempotent re-runs free — same prompt+style = same file, no re-generation.
+      </div>
+    </div>
+  </div>
+</div>

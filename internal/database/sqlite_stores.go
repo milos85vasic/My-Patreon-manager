@@ -522,3 +522,80 @@ func (s *SQLiteAuditEntryStore) PurgeOlderThan(ctx context.Context, cutoff strin
 func (db *SQLiteDB) Connect2(ctx context.Context, dsn string) error {
 	return db.Connect(ctx, dsn)
 }
+
+type SQLiteIllustrationStore struct {
+	db *sql.DB
+}
+
+func (s *SQLiteIllustrationStore) Create(ctx context.Context, ill *models.Illustration) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO illustrations (id, generated_content_id, repository_id, file_path, image_url, prompt, style, provider_used, format, size, content_hash, fingerprint, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		ill.ID, ill.GeneratedContentID, ill.RepositoryID, ill.FilePath, ill.ImageURL, ill.Prompt, ill.Style, ill.ProviderUsed, ill.Format, ill.Size, ill.ContentHash, ill.Fingerprint, ill.CreatedAt)
+	return err
+}
+
+func (s *SQLiteIllustrationStore) GetByID(ctx context.Context, id string) (*models.Illustration, error) {
+	ill := &models.Illustration{}
+	err := s.db.QueryRowContext(ctx,
+		"SELECT id, generated_content_id, repository_id, file_path, image_url, prompt, style, provider_used, format, size, content_hash, fingerprint, created_at FROM illustrations WHERE id = ?",
+		id).Scan(&ill.ID, &ill.GeneratedContentID, &ill.RepositoryID, &ill.FilePath, &ill.ImageURL, &ill.Prompt, &ill.Style, &ill.ProviderUsed, &ill.Format, &ill.Size, &ill.ContentHash, &ill.Fingerprint, &ill.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return ill, nil
+}
+
+func (s *SQLiteIllustrationStore) GetByContentID(ctx context.Context, contentID string) (*models.Illustration, error) {
+	ill := &models.Illustration{}
+	err := s.db.QueryRowContext(ctx,
+		"SELECT id, generated_content_id, repository_id, file_path, image_url, prompt, style, provider_used, format, size, content_hash, fingerprint, created_at FROM illustrations WHERE generated_content_id = ?",
+		contentID).Scan(&ill.ID, &ill.GeneratedContentID, &ill.RepositoryID, &ill.FilePath, &ill.ImageURL, &ill.Prompt, &ill.Style, &ill.ProviderUsed, &ill.Format, &ill.Size, &ill.ContentHash, &ill.Fingerprint, &ill.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return ill, nil
+}
+
+func (s *SQLiteIllustrationStore) GetByFingerprint(ctx context.Context, fingerprint string) (*models.Illustration, error) {
+	ill := &models.Illustration{}
+	err := s.db.QueryRowContext(ctx,
+		"SELECT id, generated_content_id, repository_id, file_path, image_url, prompt, style, provider_used, format, size, content_hash, fingerprint, created_at FROM illustrations WHERE fingerprint = ?",
+		fingerprint).Scan(&ill.ID, &ill.GeneratedContentID, &ill.RepositoryID, &ill.FilePath, &ill.ImageURL, &ill.Prompt, &ill.Style, &ill.ProviderUsed, &ill.Format, &ill.Size, &ill.ContentHash, &ill.Fingerprint, &ill.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return ill, nil
+}
+
+func (s *SQLiteIllustrationStore) ListByRepository(ctx context.Context, repoID string) ([]*models.Illustration, error) {
+	rows, err := s.db.QueryContext(ctx,
+		"SELECT id, generated_content_id, repository_id, file_path, image_url, prompt, style, provider_used, format, size, content_hash, fingerprint, created_at FROM illustrations WHERE repository_id = ?",
+		repoID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var result []*models.Illustration
+	for rows.Next() {
+		ill := &models.Illustration{}
+		if err := rows.Scan(&ill.ID, &ill.GeneratedContentID, &ill.RepositoryID, &ill.FilePath, &ill.ImageURL, &ill.Prompt, &ill.Style, &ill.ProviderUsed, &ill.Format, &ill.Size, &ill.ContentHash, &ill.Fingerprint, &ill.CreatedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, ill)
+	}
+	return result, nil
+}
+
+func (s *SQLiteIllustrationStore) Delete(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, "DELETE FROM illustrations WHERE id = ?", id)
+	return err
+}

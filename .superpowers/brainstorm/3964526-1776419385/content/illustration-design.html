@@ -1,0 +1,214 @@
+<h2>Illustration Generation System Design</h2>
+<p class="subtitle">Enterprise-grade, unique, context-aware illustrations for every article</p>
+
+<div class="section">
+  <h3>Primary Requirements</h3>
+  <div class="mockup">
+    <div class="mockup-header">You selected: ALL PURPOSES</div>
+    <div class="mockup-body">
+      <div style="padding: 20px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+        <div style="background: #e8f5e9; padding: 15px; border-radius: 8px;">
+          <strong>✅ Visual Enhancement</strong><br>
+          Make articles more engaging
+        </div>
+        <div style="background: #e8f5e9; padding: 15px; border-radius: 8px;">
+          <strong>✅ Concept Explanation</strong><br>
+          Explain complex concepts visually
+        </div>
+        <div style="background: #e8f5e9; padding: 15px; border-radius: 8px;">
+          <strong>✅ Brand Identity</strong><br>
+          Consistent visual style across articles
+        </div>
+        <div style="background: #e8f5e9; padding: 15px; border-radius: 8px;">
+          <strong>✅ Social Sharing</strong><br>
+          Eye-catching images for social media
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Key Design Decision 1: Integration Point</h3>
+  <p>Where should illustration generation happen in the content pipeline?</p>
+  
+  <div class="options">
+    <div class="option" data-choice="content_generation" onclick="toggleSelect(this)">
+      <div class="letter">A</div>
+      <div class="content">
+        <h3>During Content Generation</h3>
+        <p>Generate illustrations as part of LLM content creation (same prompt/call)</p>
+        <div class="pros-cons" style="margin-top: 10px;">
+          <div class="pros"><h4>Pros</h4><ul><li>Perfect context awareness</li><li>Single operation</li><li>Coherent article+image</li></ul></div>
+          <div class="cons"><h4>Cons</h4><ul><li>Higher token/API cost</li><li>Longer generation time</li><li>LLM may not be best at images</li></ul></div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="option" data-choice="post_generation" onclick="toggleSelect(this)">
+      <div class="letter">B</div>
+      <div class="content">
+        <h3>Post-Content Generation</h3>
+        <p>Generate illustrations after text content is complete (separate pipeline)</p>
+        <div class="pros-cons" style="margin-top: 10px;">
+          <div class="pros"><h4>Pros</h4><ul><li>Specialized image models</li><li>Parallel processing</li><li>Better quality control</li></ul></div>
+          <div class="cons"><h4>Cons</h4><ul><li>Context extraction needed</li><li>Two-step process</li><li>Potential mismatch</li></ul></div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="option" data-choice="hybrid" onclick="toggleSelect(this)">
+      <div class="letter">C</div>
+      <div class="content">
+        <h3>Hybrid Approach</h3>
+        <p>LLM generates image prompts during content creation, separate service renders images</p>
+        <div class="pros-cons" style="margin-top: 10px;">
+          <div class="pros"><h4>Pros</h4><ul><li>Best of both worlds</li><li>Context-aware prompts</li><li>Specialized rendering</li></ul></div>
+          <div class="cons"><h4>Cons</h4><ul><li>Most complex</li><li>Multiple API calls</li><li>Prompt quality critical</li></ul></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Key Design Decision 2: Image Generation Technology</h3>
+  <p>What service/technology should generate the illustrations?</p>
+  
+  <div class="cards" data-multiselect>
+    <div class="card" data-choice="openai_dalle" onclick="toggleSelect(this)">
+      <div class="card-body">
+        <h3>OpenAI DALL-E 3</h3>
+        <p>High-quality, prompt-following, natural images</p>
+        <div class="label">Quality: ⭐⭐⭐⭐⭐ | Cost: $$$ | Consistency: Medium</div>
+      </div>
+    </div>
+    
+    <div class="card" data-choice="stability_ai" onclick="toggleSelect(this)">
+      <div class="card-body">
+        <h3>Stability AI (SDXL)</h3>
+        <p>Open-source, customizable, good for technical concepts</p>
+        <div class="label">Quality: ⭐⭐⭐⭐ | Cost: $$ | Consistency: Low (needs tuning)</div>
+      </div>
+    </div>
+    
+    <div class="card" data-choice="midjourney" onclick="toggleSelect(this)">
+      <div class="card-body">
+        <h3>Midjourney API</h3>
+        <p>Artistic, creative, strong visual style</p>
+        <div class="label">Quality: ⭐⭐⭐⭐⭐ | Cost: $$$$ | Consistency: High</div>
+      </div>
+    </div>
+    
+    <div class="card" data-choice="llm_verifier" onclick="toggleSelect(this)">
+      <div class="card-body">
+        <h3>LLMsVerifier Integration</h3>
+        <p>Use existing LLM provider infrastructure (Venice, Replicate, etc.)</p>
+        <div class="label">Quality: Varies | Cost: Existing | Consistency: Medium</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Key Design Decision 3: Storage & Management</h3>
+  <p>How should generated illustrations be stored and managed?</p>
+  
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">Option X: Database + Local Files</div>
+      <div class="mockup-body" style="padding: 15px;">
+        <strong>Structure:</strong><br>
+        • Database: image metadata, prompts, associations<br>
+        • Local files: images in user/illustrations/<br>
+        • References: article_id → image_path<br><br>
+        <strong>Pros:</strong> Simple, fast, no external dependencies<br>
+        <strong>Cons:</strong> Manual backup, scaling issues
+      </div>
+    </div>
+    
+    <div class="mockup">
+      <div class="mockup-header">Option Y: Cloud Storage (S3/R2)</div>
+      <div class="mockup-body" style="padding: 15px;">
+        <strong>Structure:</strong><br>
+        • Database: image metadata + cloud URLs<br>
+        • Cloud: images in bucket with CDN<br>
+        • References: article_id → cloud_url<br><br>
+        <strong>Pros:</strong> Scalable, durable, CDN delivery<br>
+        <strong>Cons:</strong> Additional cost, external dependency
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Key Design Decision 4: Brand Consistency</h3>
+  <p>How to ensure consistent "enterprise-grade" visual style?</p>
+  
+  <div class="options">
+    <div class="option" data-choice="style_prompts" onclick="toggleSelect(this)">
+      <div class="letter">A</div>
+      <div class="content">
+        <h3>Style Prompts</h3>
+        <p>Add consistent style instructions to every image prompt</p>
+        <div class="label">Example: "in a modern tech illustration style, clean lines, blue/gray color scheme"</div>
+      </div>
+    </div>
+    
+    <div class="option" data-choice="reference_images" onclick="toggleSelect(this)">
+      <div class="letter">B</div>
+      <div class="content">
+        <h3>Reference Images</h3>
+        <p>Use image-to-image generation with reference style images</p>
+        <div class="label">Requires: Base style images, more complex generation</div>
+      </div>
+    </div>
+    
+    <div class="option" data-choice="custom_model" onclick="toggleSelect(this)">
+      <div class="letter">C</div>
+      <div class="content">
+        <h3>Custom Fine-tuned Model</h3>
+        <p>Fine-tune a model on approved illustration style</p>
+        <div class="label">Most consistent, but expensive/complex</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="mockup">
+    <div class="mockup-header">Pipeline Architecture Visualization</div>
+    <div class="mockup-body">
+      <div style="font-family: monospace; line-height: 1.6; padding: 20px;">
+        <div style="margin-bottom: 10px;">
+          <span style="color: #4a6fa5;">[Repository Scan]</span> → <span style="color: #4a6fa5;">[Content Generation]</span>
+        </div>
+        <div style="margin-left: 40px; margin-bottom: 10px;">
+          ↓<br>
+          <strong>Article Content Ready</strong><br>
+          (Title: "Building Scalable APIs with Go")<br>
+          ↓
+        </div>
+        <div style="margin-bottom: 10px;">
+          <span style="color: #d35400;">[Illustration Pipeline]</span><br>
+          <div style="margin-left: 20px;">
+            1. Extract key concepts from article<br>
+            2. Generate image prompt (context-aware)<br>
+            3. Call image generation API<br>
+            4. Store image + metadata<br>
+            5. Associate with article
+          </div>
+          ↓
+        </div>
+        <div style="margin-bottom: 10px;">
+          <span style="color: #27ae60;">[Patreon Publishing]</span><br>
+          <div style="margin-left: 20px;">
+            • Upload image to Patreon<br>
+            • Embed in article<br>
+            • Set as social preview
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

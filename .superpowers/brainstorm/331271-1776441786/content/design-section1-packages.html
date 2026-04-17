@@ -1,0 +1,120 @@
+<h2>Design Section 1: Package Structure &amp; Interfaces</h2>
+<p class="subtitle">New packages and how they connect to existing code</p>
+
+<div class="section">
+  <h3>New Packages</h3>
+  <div class="mockup">
+    <div class="mockup-header">New directories added to internal/</div>
+    <div class="mockup-body" style="padding: 20px;">
+      <div style="font-family: monospace; font-size: 0.9em; line-height: 1.8;">
+        <div style="color: #999;">internal/</div>
+        <div style="color: #999;">  providers/</div>
+        <div style="color: #999;">    git/          <span style="color: #888;">← existing</span></div>
+        <div style="color: #999;">    llm/          <span style="color: #888;">← existing</span></div>
+        <div style="color: #999;">    patreon/      <span style="color: #888;">← existing</span></div>
+        <div style="color: #999;">    renderer/     <span style="color: #888;">← existing</span></div>
+        <div style="background: #e8f5e9; padding: 2px 6px; border-radius: 3px; display: inline-block;">    image/          <span style="color: #2e7d32;">← NEW</span></div>
+        <div style="margin-left: 40px; color: #2e7d32;">
+          ├── provider.go         <span style="color: #888;">ImageProvider interface</span><br>
+          ├── dalle.go            <span style="color: #888;">DALL-E 3 implementation</span><br>
+          ├── stability.go        <span style="color: #888;">Stability AI implementation</span><br>
+          ├── midjourney.go       <span style="color: #888;">Midjourney proxy implementation</span><br>
+          ├── openai_compat.go    <span style="color: #888;">OpenAI-compatible endpoint</span><br>
+          ├── fallback.go         <span style="color: #888;">Fallback chain logic</span><br>
+          └── provider_test.go
+        </div>
+        <div style="color: #999;">  services/</div>
+        <div style="color: #999;">    content/      <span style="color: #888;">← existing</span></div>
+        <div style="color: #999;">    sync/         <span style="color: #888;">← existing</span></div>
+        <div style="background: #e8f5e9; padding: 2px 6px; border-radius: 3px; display: inline-block;">    illustration/  <span style="color: #2e7d32;">← NEW</span></div>
+        <div style="margin-left: 40px; color: #2e7d32;">
+          ├── generator.go        <span style="color: #888;">IllustrationGenerator service</span><br>
+          ├── generator_test.go<br>
+          ├── style.go            <span style="color: #888;">Style config loading (.illustyle)</span><br>
+          ├── prompt.go           <span style="color: #888;">Context extraction &amp; prompt building</span><br>
+          └── doc.go
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>ImageProvider Interface</h3>
+  <div class="mockup">
+    <div class="mockup-header">internal/providers/image/provider.go</div>
+    <div class="mockup-body" style="padding: 15px;">
+      <pre style="background: #263238; color: #e8eaed; padding: 16px; border-radius: 8px; font-size: 0.85em; line-height: 1.6; overflow-x: auto;">
+<span style="color: #f9a825;">// ImageProvider</span> generates illustrations from text prompts.
+<span style="color: #7c4dff;">type</span> <span style="color: #4fc3f7;">ImageProvider</span> <span style="color: #7c4dff;">interface</span> {
+    <span style="color: #69f0ae;">GenerateImage</span>(ctx context.Context, req ImageRequest) (*ImageResult, error)
+    <span style="color: #69f0ae;">ProviderName</span>() <span style="color: #7c4dff;">string</span>
+    <span style="color: #69f0ae;">IsAvailable</span>(ctx context.Context) <span style="color: #7c4dff;">bool</span>
+}
+
+<span style="color: #7c4dff;">type</span> <span style="color: #4fc3f7;">ImageRequest</span> <span style="color: #7c4dff;">struct</span> {
+    Prompt       <span style="color: #7c4dff;">string</span>
+    Style        <span style="color: #7c4dff;">string</span>    <span style="color: #f9a825;">// from .illustyle or global default</span>
+    Size         <span style="color: #7c4dff;">string</span>    <span style="color: #f9a825;">// e.g., "1792x1024"</span>
+    Quality      <span style="color: #7c4dff;">string</span>    <span style="color: #f9a825;">// "standard" or "hd"</span>
+    RepositoryID <span style="color: #7c4dff;">string</span>    <span style="color: #f9a825;">// for logging/attribution</span>
+}
+
+<span style="color: #7c4dff;">type</span> <span style="color: #4fc3f7;">ImageResult</span> <span style="color: #7c4dff;">struct</span> {
+    Data     []<span style="color: #7c4dff;">byte</span>
+    URL      <span style="color: #7c4dff;">string</span>
+    Format   <span style="color: #7c4dff;">string</span>    <span style="color: #f9a825;">// "png", "jpeg", "webp"</span>
+    Provider <span style="color: #7c4dff;">string</span>    <span style="color: #f9a825;">// which provider generated it</span>
+    Prompt   <span style="color: #7c4dff;">string</span>    <span style="color: #f9a825;">// the final prompt used</span>
+}</pre>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Fallback Chain</h3>
+  <div class="mockup">
+    <div class="mockup-header">internal/providers/image/fallback.go</div>
+    <div class="mockup-body" style="padding: 20px;">
+      <div style="font-family: monospace; line-height: 2.2; text-align: center;">
+        <div style="background: #e3f2fd; padding: 8px 20px; border-radius: 6px; display: inline-block; font-weight: bold;">Primary Provider (DALL-E 3)</div>
+        <div style="color: #ff9800;">↓ fails</div>
+        <div style="background: #fff3e0; padding: 8px 20px; border-radius: 6px; display: inline-block;">Fallback #1 (Stability AI)</div>
+        <div style="color: #ff9800;">↓ fails</div>
+        <div style="background: #fce4ec; padding: 8px 20px; border-radius: 6px; display: inline-block;">Fallback #2 (Midjourney proxy)</div>
+        <div style="color: #ff9800;">↓ fails</div>
+        <div style="background: #f3e5f5; padding: 8px 20px; border-radius: 6px; display: inline-block;">Fallback #3 (OpenAI-compatible)</div>
+        <div style="color: #999;">↓ all fail</div>
+        <div style="background: #fafafa; padding: 8px 20px; border-radius: 6px; display: inline-block; color: #999; border: 1px dashed #ccc;">Log warning → publish without illustration</div>
+      </div>
+      <p style="text-align: center; margin-top: 15px; font-size: 0.9em; color: #666;">Order configurable via <code>IMAGE_PROVIDER_PRIORITY</code> env var</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>IllustrationGenerator Service</h3>
+  <div class="mockup">
+    <div class="mockup-header">internal/services/illustration/generator.go</div>
+    <div class="mockup-body" style="padding: 15px;">
+      <pre style="background: #263238; color: #e8eaed; padding: 16px; border-radius: 8px; font-size: 0.85em; line-height: 1.6; overflow-x: auto;">
+<span style="color: #7c4dff;">type</span> <span style="color: #4fc3f7;">Generator</span> <span style="color: #7c4dff;">struct</span> {
+    providers    []image.ImageProvider  <span style="color: #f9a825;">// ordered by priority</span>
+    store        database.IllustrationStore
+    styleLoader  *StyleLoader           <span style="color: #f9a825;">// .illustyle parser</span>
+    promptBuilder *PromptBuilder        <span style="color: #f9a825;">// context → image prompt</span>
+    metrics      metrics.MetricsCollector
+    logger       *slog.Logger
+    audit        audit.Store
+    imageDir     <span style="color: #7c4dff;">string</span>                 <span style="color: #f9a825;">// e.g., "./data/illustrations"</span>
+}
+
+<span style="color: #f9a825;">// Generate creates an illustration for the given content.</span>
+<span style="color: #69f0ae;">func</span> (g *Generator) <span style="color: #69f0ae;">Generate</span>(
+    ctx context.Context,
+    repo *models.Repository,
+    content *models.GeneratedContent,
+) (*models.Illustration, error)</pre>
+    </div>
+  </div>
+</div>

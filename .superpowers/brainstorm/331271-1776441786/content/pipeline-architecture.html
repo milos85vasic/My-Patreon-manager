@@ -1,0 +1,113 @@
+<h2>Illustration Generation Pipeline</h2>
+<p class="subtitle">Where illustrations fit in the content pipeline</p>
+
+<div class="section">
+  <div class="mockup">
+    <div class="mockup-header">Current Pipeline (without illustrations)</div>
+    <div class="mockup-body">
+      <div style="font-family: monospace; line-height: 2; padding: 20px;">
+        <span style="background: #e3f2fd; padding: 4px 12px; border-radius: 4px;">Repository Scan</span>
+        <span style="color: #999;"> → </span>
+        <span style="background: #e3f2fd; padding: 4px 12px; border-radius: 4px;">Content Generation</span>
+        <span style="color: #999;"> → </span>
+        <span style="background: #e3f2fd; padding: 4px 12px; border-radius: 4px;">Quality Gate</span>
+        <span style="color: #999;"> → </span>
+        <span style="background: #e3f2fd; padding: 4px 12px; border-radius: 4px;">Rendering</span>
+        <span style="color: #999;"> → </span>
+        <span style="background: #e3f2fd; padding: 4px 12px; border-radius: 4px;">Publish to Patreon</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="mockup">
+    <div class="mockup-header">New Pipeline (with illustrations)</div>
+    <div class="mockup-body">
+      <div style="font-family: monospace; line-height: 2; padding: 20px;">
+        <span style="background: #e3f2fd; padding: 4px 12px; border-radius: 4px;">Repository Scan</span>
+        <span style="color: #999;"> → </span>
+        <span style="background: #e3f2fd; padding: 4px 12px; border-radius: 4px;">Content Generation</span>
+        <span style="color: #999;"> → </span>
+        <span style="background: #e3f2fd; padding: 4px 12px; border-radius: 4px;">Quality Gate</span>
+        <span style="color: #999;"> → </span>
+        <span style="background: #fff3e0; padding: 4px 12px; border-radius: 4px; border: 2px solid #ff9800; font-weight: bold;">✨ Illustration Generation</span>
+        <span style="color: #999;"> → </span>
+        <span style="background: #e3f2fd; padding: 4px 12px; border-radius: 4px;">Rendering</span>
+        <span style="color: #999;"> → </span>
+        <span style="background: #e3f2fd; padding: 4px 12px; border-radius: 4px;">Publish to Patreon</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Illustration Step Detail</h3>
+  <div class="mockup">
+    <div class="mockup-header">What happens inside the illustration step</div>
+    <div class="mockup-body">
+      <div style="padding: 20px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+          <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; border-left: 4px solid #2196f3;">
+            <strong style="color: #1565c0;">1. Check .repoignore</strong><br>
+            <span style="font-size: 0.9em; color: #666;">Skip if <code>no-illustration</code> or <code>skip-images</code> is set</span>
+          </div>
+          <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; border-left: 4px solid #2196f3;">
+            <strong style="color: #1565c0;">2. Load Style Config</strong><br>
+            <span style="font-size: 0.9em; color: #666;">Per-repo <code>.illustyle</code> or global default</span>
+          </div>
+          <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; border-left: 4px solid #4caf50;">
+            <strong style="color: #2e7d32;">3. Extract Context</strong><br>
+            <span style="font-size: 0.9em; color: #666;">Title, topics, language, description → prompt</span>
+          </div>
+          <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; border-left: 4px solid #4caf50;">
+            <strong style="color: #2e7d32;">4. Build Image Prompt</strong><br>
+            <span style="font-size: 0.9em; color: #666;">Context + style instructions → final prompt</span>
+          </div>
+          <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; border-left: 4px solid #ff9800;">
+            <strong style="color: #e65100;">5. Call Image Provider</strong><br>
+            <span style="font-size: 0.9em; color: #666;">DALL-E / Stability / Midjourney / compatible</span>
+          </div>
+          <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; border-left: 4px solid #ff9800;">
+            <strong style="color: #e65100;">6. Store & Embed</strong><br>
+            <span style="font-size: 0.9em; color: #666;">Save image locally, inject into markdown body</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Opt-out Mechanism</h3>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">.repoignore (existing file)</div>
+      <div class="mockup-body" style="padding: 15px;">
+        <pre style="background: #263238; color: #aed581; padding: 12px; border-radius: 6px; font-size: 0.85em; overflow-x: auto;">
+# Existing ignore patterns
+internal-secret-repo
+test-*
+
+# NEW: Disable illustration generation
+no-illustration</pre>
+        <p style="margin-top: 10px; font-size: 0.9em; color: #666;">Simple directive in existing file</p>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">.illustyle (new per-repo file)</div>
+      <div class="mockup-body" style="padding: 15px;">
+        <pre style="background: #263238; color: #81d4fa; padding: 12px; border-radius: 6px; font-size: 0.85em; overflow-x: auto;">
+# Illustration style for this repo
+style: "watercolor technical diagram"
+provider: stability
+quality: hd
+size: 1792x1024
+
+# Or disable entirely
+disabled: true</pre>
+        <p style="margin-top: 10px; font-size: 0.9em; color: #666;">Rich per-repo override config</p>
+      </div>
+    </div>
+  </div>
+</div>

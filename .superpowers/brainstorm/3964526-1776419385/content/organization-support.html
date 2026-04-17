@@ -1,0 +1,146 @@
+<h2>Organization Repository Support Design</h2>
+<p class="subtitle">Extending My-Patreon-Manager to handle repositories across multiple organizations</p>
+
+<div class="section">
+  <h3>Current Architecture</h3>
+  <div class="mockup">
+    <div class="mockup-header">Current Git Provider Implementation</div>
+    <div class="mockup-body">
+      <div style="padding: 20px; font-family: monospace; line-height: 1.5;">
+        <div style="margin-bottom: 15px;">
+          <strong>GitHub Provider:</strong> ✅ Full support<br>
+          <span style="margin-left: 20px;">• User repos (when org="")</span><br>
+          <span style="margin-left: 20px;">• Organization repos (when org specified)</span>
+        </div>
+        <div style="margin-bottom: 15px;">
+          <strong>GitLab Provider:</strong> ⚠️ Limited<br>
+          <span style="margin-left: 20px;">• Only supports organization/group repos</span><br>
+          <span style="margin-left: 20px;">• No user repository fallback</span>
+        </div>
+        <div style="margin-bottom: 15px;">
+          <strong>GitFlic Provider:</strong> ⚠️ Limited<br>
+          <span style="margin-left: 20px;">• Only supports organization repos</span><br>
+          <span style="margin-left: 20px;">• No user repository fallback</span>
+        </div>
+        <div style="margin-bottom: 15px;">
+          <strong>GitVerse Provider:</strong> ⚠️ Limited<br>
+          <span style="margin-left: 20px;">• Only supports organization repos</span><br>
+          <span style="margin-left: 20px;">• No user repository fallback</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Key Questions About Organization Support</h3>
+  <p>What specific organization support do you need?</p>
+  
+  <div class="options">
+    <div class="option" data-choice="single_org" onclick="toggleSelect(this)">
+      <div class="letter">A</div>
+      <div class="content">
+        <h3>Single Organization Scanning</h3>
+        <p>Scan repositories from one organization at a time (current capability with --org flag)</p>
+        <div class="pros-cons" style="margin-top: 10px;">
+          <div class="pros"><h4>Pros</h4><ul><li>Simple to implement</li><li>Matches current CLI pattern</li><li>Less API quota usage</li></ul></div>
+          <div class="cons"><h4>Cons</h4><ul><li>Multiple runs needed for multiple orgs</li><li>Manual coordination required</li></ul></div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="option" data-choice="multi_org" onclick="toggleSelect(this)">
+      <div class="letter">B</div>
+      <div class="content">
+        <h3>Multi-Organization Scanning</h3>
+        <p>Scan repositories from multiple organizations in a single sync operation</p>
+        <div class="pros-cons" style="margin-top: 10px;">
+          <div class="pros"><h4>Pros</h4><ul><li>Single command for all orgs</li><li>Unified deduplication</li><li>Better user experience</li></ul></div>
+          <div class="cons"><h4>Cons</h4><ul><li>More complex configuration</li><li>Higher API quota usage</li><li>Potential rate limiting issues</li></ul></div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="option" data-choice="discovery" onclick="toggleSelect(this)">
+      <div class="letter">C</div>
+      <div class="content">
+        <h3>Automatic Organization Discovery</h3>
+        <p>Automatically discover all organizations the user belongs to and scan them</p>
+        <div class="pros-cons" style="margin-top: 10px;">
+          <div class="pros"><h4>Pros</h4><ul><li>Zero configuration</li><li>Automatic updates as orgs change</li><li>Most comprehensive coverage</li></ul></div>
+          <div class="cons"><h4>Cons</h4><ul><li>Complex API calls for each provider</li><li>May include unwanted orgs</li><li>High API quota consumption</li></ul></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Configuration Approach</h3>
+  <p>How should organizations be configured?</p>
+  
+  <div class="cards" data-multiselect>
+    <div class="card" data-choice="env_vars" onclick="toggleSelect(this)">
+      <div class="card-body">
+        <h3>Environment Variables</h3>
+        <p>Separate env vars per provider (e.g., GITHUB_ORGS, GITLAB_GROUPS)</p>
+        <div class="label">Example: GITHUB_ORGS=my-org,other-org</div>
+      </div>
+    </div>
+    
+    <div class="card" data-choice="config_file" onclick="toggleSelect(this)">
+      <div class="card-body">
+        <h3>Configuration File</h3>
+        <p>YAML/JSON config file with provider-specific organization lists</p>
+        <div class="label">Example: config/organizations.yml</div>
+      </div>
+    </div>
+    
+    <div class="card" data-choice="cli_args" onclick="toggleSelect(this)">
+      <div class="card-body">
+        <h3>CLI Arguments</h3>
+        <p>Multiple --org flags or comma-separated list in sync command</p>
+        <div class="label">Example: --org github:my-org --org gitlab:my-group</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="mockup">
+    <div class="mockup-header">Implementation Complexity Assessment</div>
+    <div class="mockup-body">
+      <table style="width: 100%; border-collapse: collapse; font-family: monospace;">
+        <thead>
+          <tr style="background: #f5f5f5;">
+            <th style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">Provider</th>
+            <th style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">Changes Needed</th>
+            <th style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">Estimated Effort</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">GitHub</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">Minimal (already supports orgs)</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">Low</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">GitLab</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">Add user repo fallback, group scanning</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">Medium</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">GitFlic</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">Add user repo endpoint support</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">Medium (API verification needed)</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">GitVerse</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">Add user repo endpoint support</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">Medium (API verification needed)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

@@ -131,3 +131,60 @@ func TestParseRepoignoreFile_ScannerTokenTooLong(t *testing.T) {
 		t.Error("expected scanner error for token too long")
 	}
 }
+
+func TestHasDirective(t *testing.T) {
+	tests := []struct {
+		name      string
+		content   string
+		directive string
+		want      bool
+	}{
+		{
+			name:      "no-illustration directive present",
+			content:   "no-illustration\n",
+			directive: "no-illustration",
+			want:      true,
+		},
+		{
+			name:      "no-illustration directive absent",
+			content:   "github.com/owner/repo\n",
+			directive: "no-illustration",
+			want:      false,
+		},
+		{
+			name:      "multiple directives",
+			content:   "no-illustration\nno-sync\n",
+			directive: "no-illustration",
+			want:      true,
+		},
+		{
+			name:      "non-matching directive",
+			content:   "no-illustration\n",
+			directive: "no-sync",
+			want:      false,
+		},
+		{
+			name:      "directive with pattern",
+			content:   "no-illustration\ngithub.com/owner/*\n",
+			directive: "no-illustration",
+			want:      true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, ".repoignore")
+			if err := os.WriteFile(path, []byte(tt.content), 0644); err != nil {
+				t.Fatal(err)
+			}
+			r, err := ParseRepoignoreFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := r.HasDirective(tt.directive)
+			if got != tt.want {
+				t.Errorf("HasDirective(%q) = %v, want %v", tt.directive, got, tt.want)
+			}
+		})
+	}
+}

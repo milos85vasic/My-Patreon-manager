@@ -617,8 +617,7 @@ func TestMain_Error(t *testing.T) {
 func TestBuildOrchestrator_NoProviders(t *testing.T) {
 	cfg := &config.Config{}
 	orch := buildOrchestrator(cfg)
-	_, isNoop := orch.(noopOrchestrator)
-	assert.True(t, isNoop, "should return noopOrchestrator when no providers configured")
+	assert.Nil(t, orch, "should return nil when no providers configured")
 }
 
 func TestBuildOrchestrator_DBConnectFail(t *testing.T) {
@@ -633,8 +632,7 @@ func TestBuildOrchestrator_DBConnectFail(t *testing.T) {
 		DBDriver:    "sqlite",
 	}
 	orch := buildOrchestrator(cfg)
-	_, isNoop := orch.(noopOrchestrator)
-	assert.True(t, isNoop, "should return noopOrchestrator when DB connect fails")
+	assert.Nil(t, orch, "should return nil when DB connect fails")
 }
 
 func TestBuildOrchestrator_DBMigrateFail(t *testing.T) {
@@ -649,8 +647,7 @@ func TestBuildOrchestrator_DBMigrateFail(t *testing.T) {
 		DBDriver:    "sqlite",
 	}
 	orch := buildOrchestrator(cfg)
-	_, isNoop := orch.(noopOrchestrator)
-	assert.True(t, isNoop, "should return noopOrchestrator when DB migration fails")
+	assert.Nil(t, orch, "should return nil when DB migration fails")
 }
 
 func TestBuildOrchestrator_RealOrchestrator(t *testing.T) {
@@ -667,8 +664,7 @@ func TestBuildOrchestrator_RealOrchestrator(t *testing.T) {
 		LLMDailyTokenBudget:     100000,
 	}
 	orch := buildOrchestrator(cfg)
-	_, isNoop := orch.(noopOrchestrator)
-	assert.False(t, isNoop, "should return real orchestrator when providers are available")
+	assert.NotNil(t, orch, "should return real orchestrator when providers are available")
 }
 
 func TestBuildOrchestrator_WithLLMsVerifier(t *testing.T) {
@@ -686,8 +682,7 @@ func TestBuildOrchestrator_WithLLMsVerifier(t *testing.T) {
 		LLMDailyTokenBudget:     100000,
 	}
 	orch := buildOrchestrator(cfg)
-	_, isNoop := orch.(noopOrchestrator)
-	assert.False(t, isNoop, "should return real orchestrator with LLM verifier")
+	assert.NotNil(t, orch, "should return real orchestrator with LLM verifier")
 }
 
 func TestServerSetupProviders(t *testing.T) {
@@ -751,6 +746,7 @@ func (f *failDB) GeneratedContents() database.GeneratedContentStore        { ret
 func (f *failDB) ContentTemplates() database.ContentTemplateStore          { return nil }
 func (f *failDB) Posts() database.PostStore                                { return nil }
 func (f *failDB) AuditEntries() database.AuditEntryStore                   { return nil }
+func (f *failDB) Illustrations() database.IllustrationStore                { return nil }
 func (f *failDB) AcquireLock(_ context.Context, _ database.SyncLock) error { return nil }
 func (f *failDB) ReleaseLock(_ context.Context) error                      { return nil }
 func (f *failDB) IsLocked(_ context.Context) (bool, *database.SyncLock, error) {
