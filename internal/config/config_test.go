@@ -174,6 +174,57 @@ func TestLoadFromEnv_DefaultValues(t *testing.T) {
 	assert.Equal(t, 200, cfg.RateLimitBurst)
 }
 
+func TestConfig_ProcessDefaults(t *testing.T) {
+	c := NewConfig()
+	if c.MaxArticlesPerRepo != 1 {
+		t.Fatalf("MaxArticlesPerRepo default: got %d want 1", c.MaxArticlesPerRepo)
+	}
+	if c.MaxArticlesPerRun != 0 {
+		t.Fatalf("MaxArticlesPerRun default: got %d want 0 (unlimited)", c.MaxArticlesPerRun)
+	}
+	if c.MaxRevisions != 20 {
+		t.Fatalf("MaxRevisions default: got %d want 20", c.MaxRevisions)
+	}
+	if c.GeneratorVersion != "v1" {
+		t.Fatalf("GeneratorVersion default: got %s want v1", c.GeneratorVersion)
+	}
+	if c.DriftCheckSkipMinutes != 30 {
+		t.Fatalf("DriftCheckSkipMinutes default: got %d want 30", c.DriftCheckSkipMinutes)
+	}
+	if c.ProcessLockHeartbeatSeconds != 30 {
+		t.Fatalf("ProcessLockHeartbeatSeconds default: got %d want 30", c.ProcessLockHeartbeatSeconds)
+	}
+}
+
+func TestConfig_ProcessLoadFromEnv(t *testing.T) {
+	t.Setenv("MAX_ARTICLES_PER_REPO", "2")
+	t.Setenv("MAX_ARTICLES_PER_RUN", "5")
+	t.Setenv("MAX_REVISIONS", "25")
+	t.Setenv("GENERATOR_VERSION", "v2")
+	t.Setenv("DRIFT_CHECK_SKIP_MINUTES", "0")
+	t.Setenv("PROCESS_LOCK_HEARTBEAT_SECONDS", "60")
+	c := NewConfig()
+	c.LoadFromEnv()
+	if c.MaxArticlesPerRepo != 2 {
+		t.Fatalf("MaxArticlesPerRepo: %d", c.MaxArticlesPerRepo)
+	}
+	if c.MaxArticlesPerRun != 5 {
+		t.Fatalf("MaxArticlesPerRun: %d", c.MaxArticlesPerRun)
+	}
+	if c.MaxRevisions != 25 {
+		t.Fatalf("MaxRevisions: %d", c.MaxRevisions)
+	}
+	if c.GeneratorVersion != "v2" {
+		t.Fatalf("GeneratorVersion: %s", c.GeneratorVersion)
+	}
+	if c.DriftCheckSkipMinutes != 0 {
+		t.Fatalf("DriftCheckSkipMinutes: %d", c.DriftCheckSkipMinutes)
+	}
+	if c.ProcessLockHeartbeatSeconds != 60 {
+		t.Fatalf("ProcessLockHeartbeatSeconds: %d", c.ProcessLockHeartbeatSeconds)
+	}
+}
+
 func TestValidate(t *testing.T) {
 	t.Run("valid config", func(t *testing.T) {
 		cfg := &Config{

@@ -99,6 +99,26 @@ type Config struct {
 	OpenAICompatAPIKey  string
 	OpenAICompatBaseURL string
 	OpenAICompatModel   string
+	// Process pipeline (see docs/superpowers/specs/2026-04-18-process-command-design.md).
+	// MaxArticlesPerRepo caps the number of pending_review drafts per repo
+	// before `process` skips it. Higher values let alternatives stack.
+	MaxArticlesPerRepo int
+	// MaxArticlesPerRun is the global cap per `process` invocation. 0 means
+	// unlimited; otherwise rate-limits LLM spend per cron tick.
+	MaxArticlesPerRun int
+	// MaxRevisions is the per-repo retention cap. Revisions that were ever
+	// published or are currently approved / pending_review are always pinned.
+	MaxRevisions int
+	// GeneratorVersion is a component of the LLM/image cache key. Bump it
+	// when prompts or models change to invalidate stale cache entries.
+	GeneratorVersion string
+	// DriftCheckSkipMinutes skips the Patreon drift check if the post was
+	// verified within this window. 0 means always re-check.
+	DriftCheckSkipMinutes int
+	// ProcessLockHeartbeatSeconds is the heartbeat interval for the
+	// process_runs lock row. Stale rows whose heartbeat exceeds ~10x this
+	// value are reclaimable as crashed.
+	ProcessLockHeartbeatSeconds int
 }
 
 func NewConfig() *Config {
@@ -131,6 +151,13 @@ func NewConfig() *Config {
 		IllustrationDefaultQuality: "hd",
 		IllustrationDir:            "./data/illustrations",
 		ImageProviderPriority:      "dalle,stability,midjourney,openai_compat",
+		// Process pipeline defaults.
+		MaxArticlesPerRepo:          1,
+		MaxArticlesPerRun:           0, // 0 = unlimited
+		MaxRevisions:                20,
+		GeneratorVersion:            "v1",
+		DriftCheckSkipMinutes:       30,
+		ProcessLockHeartbeatSeconds: 30,
 	}
 }
 
@@ -295,4 +322,10 @@ func (c *Config) LoadFromEnv() {
 	c.OpenAICompatAPIKey = getEnv("OPENAI_COMPAT_API_KEY", c.OpenAICompatAPIKey)
 	c.OpenAICompatBaseURL = getEnv("OPENAI_COMPAT_BASE_URL", c.OpenAICompatBaseURL)
 	c.OpenAICompatModel = getEnv("OPENAI_COMPAT_MODEL", c.OpenAICompatModel)
+	c.MaxArticlesPerRepo = getEnvInt("MAX_ARTICLES_PER_REPO", c.MaxArticlesPerRepo)
+	c.MaxArticlesPerRun = getEnvInt("MAX_ARTICLES_PER_RUN", c.MaxArticlesPerRun)
+	c.MaxRevisions = getEnvInt("MAX_REVISIONS", c.MaxRevisions)
+	c.GeneratorVersion = getEnv("GENERATOR_VERSION", c.GeneratorVersion)
+	c.DriftCheckSkipMinutes = getEnvInt("DRIFT_CHECK_SKIP_MINUTES", c.DriftCheckSkipMinutes)
+	c.ProcessLockHeartbeatSeconds = getEnvInt("PROCESS_LOCK_HEARTBEAT_SECONDS", c.ProcessLockHeartbeatSeconds)
 }

@@ -152,6 +152,19 @@ Each provider is activated by providing the relevant API key(s). Providers with 
 > - `midjourney`: both `MIDJOURNEY_API_KEY` and `MIDJOURNEY_ENDPOINT` set.
 > - `openai_compat`: both `OPENAI_COMPAT_API_KEY` and `OPENAI_COMPAT_BASE_URL` set.
 
+### Process Pipeline
+
+Controls the `process` command -- the top-level versioned-content pipeline (replaces legacy `sync`). See `docs/superpowers/specs/2026-04-18-process-command-design.md` for the full design.
+
+| Variable | Required | Default | Description |
+|----------|:--------:|---------|-------------|
+| `MAX_ARTICLES_PER_REPO` | No | `1` | Max `pending_review` drafts allowed per repo before `process` skips it. Higher numbers let alternatives stack per repo. |
+| `MAX_ARTICLES_PER_RUN` | No | *(empty = unlimited)* | Global cap per `process` invocation. Rate-limits LLM spend per cron tick. |
+| `MAX_REVISIONS` | No | `20` | Per-repo retention. Revisions that were ever published or are in `approved` / `pending_review` status are always pinned. |
+| `GENERATOR_VERSION` | No | `v1` | Component of the LLM/image cache key. Bump when prompts or models change to invalidate stale cache entries. |
+| `DRIFT_CHECK_SKIP_MINUTES` | No | `30` | Skip the Patreon drift check if the post was verified within this window. Set to `0` to always re-check. |
+| `PROCESS_LOCK_HEARTBEAT_SECONDS` | No | `30` | Heartbeat interval for the `process_runs` lock row. Stale rows whose heartbeat exceeds ~10x this value are reclaimable as `crashed`. |
+
 ### LLMsVerifier
 
 All LLM calls route through the LLMsVerifier service, which tests providers, scores models, and returns a ranked list. This is a required dependency for commands that perform content generation.
