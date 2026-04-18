@@ -30,6 +30,7 @@ type Database interface {
 	AuditEntries() AuditEntryStore
 	Illustrations() IllustrationStore
 	ContentRevisions() ContentRevisionStore
+	ProcessRuns() ProcessRunStore
 
 	AcquireLock(ctx context.Context, lockInfo SyncLock) error
 	ReleaseLock(ctx context.Context) error

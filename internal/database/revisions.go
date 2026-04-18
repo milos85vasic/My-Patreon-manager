@@ -115,6 +115,22 @@ func formatTime(t time.Time) string {
 	return t.UTC().Format(time.RFC3339Nano)
 }
 
+// parseNullTime lifts parseTimeString over sql.NullString. It returns the
+// parsed time and ok=true on success (including for invalid/empty rows,
+// where ok=true and the returned time is the zero value — callers that
+// care about null vs present should inspect ns.Valid themselves). ok=false
+// signals an unparseable non-empty string that the caller should surface.
+func parseNullTime(ns sql.NullString) (time.Time, bool) {
+	if !ns.Valid || ns.String == "" {
+		return time.Time{}, true
+	}
+	t, err := parseTimeString(ns.String)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
+}
+
 func (s *contentRevisionStore) Create(ctx context.Context, r *models.ContentRevision) error {
 	q := `INSERT INTO content_revisions (
             id, repository_id, version, source, status, title, body,

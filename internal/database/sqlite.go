@@ -323,6 +323,10 @@ func (db *SQLiteDB) ContentRevisions() ContentRevisionStore {
 	return NewSQLiteContentRevisionStore(db.db)
 }
 
+func (db *SQLiteDB) ProcessRuns() ProcessRunStore {
+	return NewSQLiteProcessRunStore(db.db)
+}
+
 func (db *SQLiteDB) AcquireLock(ctx context.Context, lockInfo SyncLock) error {
 	tx, err := db.db.BeginTx(ctx, nil)
 	if err != nil {
