@@ -206,6 +206,20 @@ func (db *PostgresDB2) Migrate(ctx context.Context) error {
 		`CREATE INDEX IF NOT EXISTS idx_revisions_status        ON content_revisions(status)`,
 		`CREATE INDEX IF NOT EXISTS idx_revisions_fingerprint   ON content_revisions(fingerprint)`,
 		`CREATE INDEX IF NOT EXISTS idx_revisions_patreon_post  ON content_revisions(patreon_post_id) WHERE patreon_post_id IS NOT NULL`,
+		`CREATE TABLE IF NOT EXISTS process_runs (
+			id                TEXT PRIMARY KEY,
+			started_at        TIMESTAMP NOT NULL,
+			finished_at       TIMESTAMP NULL,
+			heartbeat_at      TIMESTAMP NOT NULL,
+			hostname          TEXT NOT NULL,
+			pid               INTEGER NOT NULL,
+			status            TEXT NOT NULL,
+			repos_scanned     INTEGER NOT NULL DEFAULT 0,
+			drafts_created    INTEGER NOT NULL DEFAULT 0,
+			error             TEXT NOT NULL DEFAULT ''
+		)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_process_runs_single_active
+		  ON process_runs(status) WHERE status = 'running'`,
 	}
 	for _, q := range queries {
 		if _, err := db.db.ExecContext(ctx, q); err != nil {

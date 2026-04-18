@@ -35,9 +35,9 @@ func TestPostgresDB2_Migrate_Success(t *testing.T) {
 	ctx := context.Background()
 
 	// Expect all CREATE TABLE and CREATE INDEX queries
-	// The Migrate method executes 22 queries (11 CREATE TABLE, 11 CREATE INDEX)
+	// The Migrate method executes 24 queries (12 CREATE TABLE, 12 CREATE INDEX)
 	// We'll expect Exec for each query
-	for i := 0; i < 22; i++ {
+	for i := 0; i < 24; i++ {
 		mock.ExpectExec("CREATE").WillReturnResult(sqlmock.NewResult(0, 0))
 	}
 
