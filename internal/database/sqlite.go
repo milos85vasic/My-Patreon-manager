@@ -239,6 +239,17 @@ func (db *SQLiteDB) Migrate(ctx context.Context) error {
 		)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_process_runs_single_active
 		  ON process_runs(status) WHERE status = 'running'`,
+		`CREATE TABLE IF NOT EXISTS unmatched_patreon_posts (
+			id                      TEXT PRIMARY KEY,
+			patreon_post_id         TEXT NOT NULL UNIQUE,
+			title                   TEXT NOT NULL,
+			url                     TEXT NOT NULL,
+			published_at            TEXT NULL,
+			raw_payload             TEXT NOT NULL,
+			discovered_at           TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			resolved_repository_id  TEXT NULL,
+			resolved_at             TEXT NULL
+		)`,
 	}
 	for _, q := range queries {
 		if _, err := db.db.ExecContext(ctx, q); err != nil {
