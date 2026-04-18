@@ -104,6 +104,10 @@ Phase M3 — CLI:
 - Automatic generation of down-migrations from up-migrations.
 - Integration with third-party migration frameworks (goose, migrate, atlas).
 
+## Additional pre-existing defects surfaced during process-command work
+
+- **SQLite `PRAGMA foreign_keys` is not set.** Every `REFERENCES … ON DELETE CASCADE` in the SQLite schema (sync_states, mirror_maps, generated_contents, content_revisions, etc.) is **silently advisory** because the SQLite connection doesn't issue `PRAGMA foreign_keys=ON`. Discovered during Task 1 code review (commit `92e5165`). The migration-system refactor must include a connection-time pragma setup so FK constraints actually enforce. Without this, repo deletion will leave dangling child rows and `content_revisions` cascade-on-archive won't work.
+
 ## Open questions
 
 1. Do we want to require explicit `MigrateUp` in the CLI, or keep the "automatic on startup" convenience for dev loops? (Staging/prod would always use explicit.)
