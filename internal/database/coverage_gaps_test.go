@@ -393,6 +393,39 @@ func TestSQLiteRepositoryStore_List_ScanErrorInLoop(t *testing.T) {
 	assert.Nil(t, repos)
 }
 
+// TestSQLiteRepositoryStore_ListForProcessQueue_QueryError exercises
+// the top-level QueryContext error branch.
+func TestSQLiteRepositoryStore_ListForProcessQueue_QueryError(t *testing.T) {
+	mockDB, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer mockDB.Close()
+
+	mock.ExpectQuery("SELECT id, service.*FROM repositories ORDER BY last_processed_at IS NULL DESC").
+		WillReturnError(sql.ErrConnDone)
+
+	store := &SQLiteRepositoryStore{db: mockDB}
+	repos, err := store.ListForProcessQueue(context.Background())
+	assert.Error(t, err)
+	assert.Nil(t, repos)
+}
+
+// TestSQLiteRepositoryStore_ListForProcessQueue_ScanErrorInLoop exercises
+// the per-row scan error branch by returning a row that doesn't match
+// the scanner's expected column count.
+func TestSQLiteRepositoryStore_ListForProcessQueue_ScanErrorInLoop(t *testing.T) {
+	mockDB, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer mockDB.Close()
+
+	mock.ExpectQuery("SELECT id, service.*FROM repositories ORDER BY last_processed_at IS NULL DESC").
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("r1"))
+
+	store := &SQLiteRepositoryStore{db: mockDB}
+	repos, err := store.ListForProcessQueue(context.Background())
+	assert.Error(t, err)
+	assert.Nil(t, repos)
+}
+
 func TestSQLiteSyncStateStore_GetByStatus_ScanErrorInLoop(t *testing.T) {
 	mockDB, mock, err := sqlmock.New()
 	require.NoError(t, err)

@@ -215,6 +215,10 @@ func (m *MockRepositoryStore) SetLastProcessedAt(ctx context.Context, repoID str
 	return nil
 }
 
+func (m *MockRepositoryStore) ListForProcessQueue(ctx context.Context) ([]*models.Repository, error) {
+	return nil, nil
+}
+
 type MockIllustrationStore struct {
 	CreateFunc           func(ctx context.Context, ill *models.Illustration) error
 	GetByIDFunc          func(ctx context.Context, id string) (*models.Illustration, error)

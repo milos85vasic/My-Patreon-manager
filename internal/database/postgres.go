@@ -535,6 +535,29 @@ func (s *PostgresRepositoryStore) SetLastProcessedAt(ctx context.Context, repoID
 	return err
 }
 
+// ListForProcessQueue returns every repository row ordered for fair
+// queueing: NULL last_processed_at first, then older timestamps ahead
+// of newer ones, with id ASC as a stable tiebreaker. No filtering is
+// applied here; the process-command queue builder decides which rows
+// to skip.
+func (s *PostgresRepositoryStore) ListForProcessQueue(ctx context.Context) ([]*models.Repository, error) {
+	rows, err := s.db.QueryContext(ctx,
+		"SELECT "+postgresRepoColumnList+" FROM repositories ORDER BY last_processed_at ASC NULLS FIRST, id ASC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var repos []*models.Repository
+	for rows.Next() {
+		repo, err := scanPostgresRepository(rows.Scan)
+		if err != nil {
+			return nil, err
+		}
+		repos = append(repos, repo)
+	}
+	return repos, nil
+}
+
 func (s *PostgresSyncStateStore) Create(ctx context.Context, state *models.SyncState) error {
 	_, err := s.db.ExecContext(ctx, `INSERT INTO sync_states (id, repository_id, patreon_post_id, last_sync_at, last_commit_sha, last_content_hash, status, last_failure_reason, grace_period_until, checkpoint, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
 		state.ID, state.RepositoryID, state.PatreonPostID, state.LastSyncAt, state.LastCommitSHA, state.LastContentHash, state.Status, state.LastFailureReason, state.GracePeriodUntil, state.Checkpoint, state.CreatedAt, state.UpdatedAt)

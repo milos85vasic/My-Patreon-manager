@@ -653,3 +653,39 @@ func TestRepositoryStore_RoundTripRepositoryPointers_ViaUpdate(t *testing.T) {
 		t.Fatalf("lpa after update: %+v", got2.LastProcessedAt)
 	}
 }
+
+// TestRepositoryStore_ListForProcessQueue_FairOrder verifies the
+// NULL-first, timestamp-ASC, id-ASC ordering that the process-command
+// queue builder depends on for round-robin fairness.
+func TestRepositoryStore_ListForProcessQueue_FairOrder(t *testing.T) {
+	db := setupSQLite(t)
+	ctx := context.Background()
+
+	// Three repos:
+	//   rA: last_processed_at = t1 (most recent)
+	//   rB: last_processed_at = NULL (never processed)
+	//   rC: last_processed_at = t0 (older)
+	// Expected order: rB, rC, rA.
+	t1 := time.Now().UTC()
+	t0 := t1.Add(-time.Hour)
+	_, _ = db.DB().ExecContext(ctx, `INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES ('rA','github','o','A','u','h')`)
+	if err := db.Repositories().SetLastProcessedAt(ctx, "rA", t1); err != nil {
+		t.Fatalf("set rA: %v", err)
+	}
+	_, _ = db.DB().ExecContext(ctx, `INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES ('rB','github','o','B','u','h')`)
+	_, _ = db.DB().ExecContext(ctx, `INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES ('rC','github','o','C','u','h')`)
+	if err := db.Repositories().SetLastProcessedAt(ctx, "rC", t0); err != nil {
+		t.Fatalf("set rC: %v", err)
+	}
+
+	list, err := db.Repositories().ListForProcessQueue(ctx)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(list) != 3 {
+		t.Fatalf("want 3, got %d", len(list))
+	}
+	if list[0].ID != "rB" || list[1].ID != "rC" || list[2].ID != "rA" {
+		t.Fatalf("bad order: %s, %s, %s", list[0].ID, list[1].ID, list[2].ID)
+	}
+}

@@ -55,6 +55,12 @@ type RepositoryStore interface {
 	SetProcessState(ctx context.Context, repoID, state string) error
 	// SetLastProcessedAt overwrites the last_processed_at column.
 	SetLastProcessedAt(ctx context.Context, repoID string, t time.Time) error
+	// ListForProcessQueue returns every repository row in fair-queue
+	// order: least-recently-processed first (NULL last_processed_at ranks
+	// before any timestamp), id ASC as a stable tiebreaker. No filtering
+	// (archived, up-to-date, pending cap) is applied here — the
+	// process-command queue builder is responsible for those checks.
+	ListForProcessQueue(ctx context.Context) ([]*models.Repository, error)
 }
 
 type RepositoryFilter struct {

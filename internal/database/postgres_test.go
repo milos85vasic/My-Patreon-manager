@@ -367,6 +367,65 @@ func TestPostgresRepositoryStore_SetLastProcessedAt(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TestPostgresRepositoryStore_ListForProcessQueue verifies the SELECT
+// uses the NULLS-FIRST ordering the queue builder depends on. The
+// sqlmock harness can't actually sort rows, so we rely on the query
+// regex to pin the ORDER BY clause.
+func TestPostgresRepositoryStore_ListForProcessQueue(t *testing.T) {
+	pg, mock, cleanup := setupMockPostgres(t)
+	defer cleanup()
+	ctx := context.Background()
+	store := pg.Repositories().(*PostgresRepositoryStore)
+
+	mock.ExpectQuery("SELECT id, service.*FROM repositories ORDER BY last_processed_at ASC NULLS FIRST, id ASC").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "service", "owner", "name", "url", "https_url", "description", "readme_content", "readme_format", "topics", "primary_language", "language_stats", "stars", "forks", "last_commit_sha", "last_commit_at", "is_archived", "created_at", "updated_at", "current_revision_id", "published_revision_id", "process_state", "last_processed_at"}).
+			AddRow("rB", "github", "o", "B", "u", "h", "", "", "", `[]`, "", `{}`, 0, 0, "", nil, false, time.Now(), time.Now(), nil, nil, "idle", nil).
+			AddRow("rC", "github", "o", "C", "u", "h", "", "", "", `[]`, "", `{}`, 0, 0, "", nil, false, time.Now(), time.Now(), nil, nil, "idle", nil).
+			AddRow("rA", "github", "o", "A", "u", "h", "", "", "", `[]`, "", `{}`, 0, 0, "", nil, false, time.Now(), time.Now(), nil, nil, "idle", time.Now()))
+
+	repos, err := store.ListForProcessQueue(ctx)
+	assert.NoError(t, err)
+	assert.Len(t, repos, 3)
+	assert.Equal(t, "rB", repos[0].ID)
+	assert.Equal(t, "rC", repos[1].ID)
+	assert.Equal(t, "rA", repos[2].ID)
+}
+
+// TestPostgresRepositoryStore_ListForProcessQueue_QueryError exercises
+// the QueryContext error branch.
+func TestPostgresRepositoryStore_ListForProcessQueue_QueryError(t *testing.T) {
+	pg, mock, cleanup := setupMockPostgres(t)
+	defer cleanup()
+	ctx := context.Background()
+	store := pg.Repositories().(*PostgresRepositoryStore)
+
+	mock.ExpectQuery("SELECT id, service.*FROM repositories ORDER BY last_processed_at ASC NULLS FIRST").
+		WillReturnError(sql.ErrConnDone)
+
+	repos, err := store.ListForProcessQueue(ctx)
+	assert.Error(t, err)
+	assert.Nil(t, repos)
+}
+
+// TestPostgresRepositoryStore_ListForProcessQueue_ScanError exercises
+// the per-row scan error branch — the rows iterator yields a row whose
+// column count doesn't line up with the scanner, which makes
+// scanPostgresRepository fail.
+func TestPostgresRepositoryStore_ListForProcessQueue_ScanError(t *testing.T) {
+	pg, mock, cleanup := setupMockPostgres(t)
+	defer cleanup()
+	ctx := context.Background()
+	store := pg.Repositories().(*PostgresRepositoryStore)
+
+	// Only two columns — the scanner expects 23. Scan fails.
+	mock.ExpectQuery("SELECT id, service.*FROM repositories ORDER BY last_processed_at ASC NULLS FIRST").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "service"}).AddRow("rA", "github"))
+
+	repos, err := store.ListForProcessQueue(ctx)
+	assert.Error(t, err)
+	assert.Nil(t, repos)
+}
+
 func TestPostgresRepositoryStore_List(t *testing.T) {
 	pg, mock, cleanup := setupMockPostgres(t)
 	defer cleanup()

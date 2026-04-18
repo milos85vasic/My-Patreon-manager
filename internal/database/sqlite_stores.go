@@ -200,6 +200,33 @@ func (s *SQLiteRepositoryStore) SetLastProcessedAt(ctx context.Context, repoID s
 	return err
 }
 
+// ListForProcessQueue returns every repository row ordered for fair
+// queueing: NULL last_processed_at first (never-processed repos),
+// then older timestamps ahead of newer ones, with id ASC as a stable
+// tiebreaker. No filtering is applied here; the process-command queue
+// builder decides which rows to skip.
+//
+// SQLite trick: `last_processed_at IS NULL` evaluates to 1 when NULL
+// and 0 otherwise, so `ORDER BY last_processed_at IS NULL DESC` puts
+// NULLs first without relying on the NULLS FIRST extension.
+func (s *SQLiteRepositoryStore) ListForProcessQueue(ctx context.Context) ([]*models.Repository, error) {
+	rows, err := s.db.QueryContext(ctx,
+		"SELECT "+sqliteRepoColumnList+" FROM repositories ORDER BY last_processed_at IS NULL DESC, last_processed_at ASC, id ASC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var repos []*models.Repository
+	for rows.Next() {
+		repo, err := scanSQLiteRepository(rows.Scan)
+		if err != nil {
+			return nil, err
+		}
+		repos = append(repos, repo)
+	}
+	return repos, nil
+}
+
 type SQLiteSyncStateStore struct {
 	db *sql.DB
 }

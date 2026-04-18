@@ -172,6 +172,9 @@ func (f *fakeRepoStore) SetRevisionPointers(context.Context, string, string, str
 }
 func (f *fakeRepoStore) SetProcessState(context.Context, string, string) error  { return nil }
 func (f *fakeRepoStore) SetLastProcessedAt(context.Context, string, time.Time) error { return nil }
+func (f *fakeRepoStore) ListForProcessQueue(context.Context) ([]*models.Repository, error) {
+	return nil, nil
+}
 
 type fakeContentStore struct {
 	latest *models.GeneratedContent
