@@ -75,6 +75,10 @@ func (db *SQLiteDB) Migrate(ctx context.Context) error {
 			is_archived INTEGER DEFAULT 0,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			current_revision_id TEXT NULL,
+			published_revision_id TEXT NULL,
+			process_state TEXT NOT NULL DEFAULT 'idle',
+			last_processed_at TEXT NULL,
 			UNIQUE(service, owner, name)
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_repos_service ON repositories(service)`,

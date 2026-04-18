@@ -66,6 +66,10 @@ func (db *PostgresDB2) Migrate(ctx context.Context) error {
 			is_archived BOOLEAN DEFAULT FALSE,
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			current_revision_id TEXT NULL,
+			published_revision_id TEXT NULL,
+			process_state TEXT NOT NULL DEFAULT 'idle',
+			last_processed_at TIMESTAMP NULL,
 			UNIQUE(service, owner, name)
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_repos_service ON repositories(service)`,
