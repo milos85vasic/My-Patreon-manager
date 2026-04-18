@@ -34,11 +34,12 @@ func TestPostgresDB2_Migrate_Success(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// Expect all CREATE TABLE and CREATE INDEX queries
-	// The Migrate method executes 25 queries (13 CREATE TABLE, 12 CREATE INDEX)
-	// We'll expect Exec for each query
-	for i := 0; i < 25; i++ {
-		mock.ExpectExec("CREATE").WillReturnResult(sqlmock.NewResult(0, 0))
+	// Expect all DDL/DML queries the Migrate loop executes.
+	// The Migrate method executes 28 queries (13 CREATE TABLE, 12 CREATE INDEX,
+	// plus 3 backfill statements: 1 INSERT + 2 UPDATE from migration 0006).
+	// We'll expect Exec for each query; the empty regex matches any statement.
+	for i := 0; i < 28; i++ {
+		mock.ExpectExec("").WillReturnResult(sqlmock.NewResult(0, 0))
 	}
 
 	err := pg.Migrate(ctx)
