@@ -20,6 +20,7 @@ type MockDatabase struct {
 	PostsFunc             func() database.PostStore
 	AuditEntriesFunc      func() database.AuditEntryStore
 	IllustrationsFunc     func() database.IllustrationStore
+	ContentRevisionsFunc  func() database.ContentRevisionStore
 	AcquireLockFunc       func(ctx context.Context, lockInfo database.SyncLock) error
 	ReleaseLockFunc       func(ctx context.Context) error
 	IsLockedFunc          func(ctx context.Context) (bool, *database.SyncLock, error)
@@ -99,6 +100,13 @@ func (m *MockDatabase) AuditEntries() database.AuditEntryStore {
 func (m *MockDatabase) Illustrations() database.IllustrationStore {
 	if m.IllustrationsFunc != nil {
 		return m.IllustrationsFunc()
+	}
+	return nil
+}
+
+func (m *MockDatabase) ContentRevisions() database.ContentRevisionStore {
+	if m.ContentRevisionsFunc != nil {
+		return m.ContentRevisionsFunc()
 	}
 	return nil
 }

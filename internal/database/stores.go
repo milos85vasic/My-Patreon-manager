@@ -29,6 +29,7 @@ type Database interface {
 	Posts() PostStore
 	AuditEntries() AuditEntryStore
 	Illustrations() IllustrationStore
+	ContentRevisions() ContentRevisionStore
 
 	AcquireLock(ctx context.Context, lockInfo SyncLock) error
 	ReleaseLock(ctx context.Context) error

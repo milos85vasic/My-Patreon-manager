@@ -747,6 +747,7 @@ func (f *failDB) ContentTemplates() database.ContentTemplateStore          { ret
 func (f *failDB) Posts() database.PostStore                                { return nil }
 func (f *failDB) AuditEntries() database.AuditEntryStore                   { return nil }
 func (f *failDB) Illustrations() database.IllustrationStore                { return nil }
+func (f *failDB) ContentRevisions() database.ContentRevisionStore          { return nil }
 func (f *failDB) AcquireLock(_ context.Context, _ database.SyncLock) error { return nil }
 func (f *failDB) ReleaseLock(_ context.Context) error                      { return nil }
 func (f *failDB) IsLocked(_ context.Context) (bool, *database.SyncLock, error) {
