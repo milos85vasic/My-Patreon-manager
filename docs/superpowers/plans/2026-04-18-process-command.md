@@ -33,6 +33,121 @@
 
 Goal: migrations + stores + backfill, fully tested, nothing user-facing yet.
 
+### Phase 1 Migration Strategy (READ BEFORE TASKS 1-4 and 9)
+
+**The project currently applies schema in hardcoded Go, not via `.sql` file execution at runtime.**
+
+Concretely:
+- `internal/database/sqlite.go:Migrate()` and `internal/database/postgres.go:Migrate()` each contain a `queries []string` slice with every `CREATE TABLE`/`CREATE INDEX` statement. This is what runs on `db.Migrate(ctx)` at app startup.
+- `internal/database/migrations/*.sql` files exist as reference/design-doc artifacts. They are **not** executed in production; `RunMigrations(ctx, embed.FS, dir)` is defined but never called from `cmd/cli` or `cmd/server`.
+- The existing `illustrations` table (migration `0002`) follows this pattern: the `.sql` file is a design artifact; the real schema lives in both drivers' `Migrate()` slices.
+- A proper versioned migration system (up/down, `RunMigrationsUpTo`, etc.) is **out of scope for this plan** and tracked separately in `docs/superpowers/specs/2026-04-18-migration-system-refactor.md`.
+
+**Therefore, every Phase-1 schema-change task below must:**
+1. Create the `.sql` file (both `.up.sql` and `.down.sql`) for documentation parity with `0001`/`0002`.
+2. Add the corresponding `CREATE TABLE` / `CREATE INDEX` / `ALTER TABLE`-equivalent statement to the `queries []string` slice in **both** `sqlite.go:Migrate()` **and** `postgres.go:Migrate()`. Use the SQLite syntax in SQLite, Postgres syntax (`JSONB`, `TIMESTAMP`, `BOOLEAN`) in Postgres. The `.sql` files should be written in Postgres-compatible syntax and documented as such.
+3. Where the plan's test snippets call `database.RunMigrationsUpTo(ctx, db, N)`, replace with `testhelpers.OpenMigratedSQLite(t)` (introduced in Task 0 below). For down-migration assertions, the current codebase has no "migrate down" capability — omit those tests and rely on the up-migration having the `IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS` guards for idempotency. Down-migration `.sql` files remain as design-doc artifacts for the future migration-system refactor.
+
+### Task 0: Test helper for migrated in-memory SQLite
+
+**Why:** Phase-1 store tests need a fast way to obtain an empty, fully-migrated SQLite database. The existing `testhelpers` package (`internal/testhelpers/`) only has `doc.go` and `goleak.go`; add a database helper here.
+
+**Files:**
+- Create: `internal/testhelpers/database.go`
+- Create: `internal/testhelpers/database_test.go`
+
+- [ ] **Step 1: Write failing test**
+
+```go
+// internal/testhelpers/database_test.go
+package testhelpers_test
+
+import (
+    "context"
+    "testing"
+
+    "github.com/milos85vasic/My-Patreon-Manager/internal/testhelpers"
+)
+
+func TestOpenMigratedSQLite_ReturnsMigratedDB(t *testing.T) {
+    db := testhelpers.OpenMigratedSQLite(t)
+    // Every known table from the current Migrate() slice should exist.
+    // We verify a representative subset: repositories, sync_states, generated_contents, illustrations.
+    for _, table := range []string{"repositories", "sync_states", "generated_contents", "illustrations"} {
+        var n int
+        err := db.DB().QueryRowContext(context.Background(),
+            `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&n)
+        if err != nil {
+            t.Fatalf("query for %s: %v", table, err)
+        }
+        if n != 1 {
+            t.Fatalf("expected table %s to exist, got count=%d", table, n)
+        }
+    }
+}
+
+func TestOpenMigratedSQLite_ClosesOnTestCleanup(t *testing.T) {
+    db := testhelpers.OpenMigratedSQLite(t)
+    if err := db.DB().Ping(); err != nil {
+        t.Fatalf("ping: %v", err)
+    }
+    // t.Cleanup registered by the helper will close the DB after the test.
+    // This test asserts the helper wired Cleanup correctly by re-entering.
+}
+```
+
+- [ ] **Step 2: Run — expect FAIL** (package/function missing)
+
+Run: `go test ./internal/testhelpers/ -v`
+Expected: FAIL
+
+- [ ] **Step 3: Implement the helper**
+
+```go
+// internal/testhelpers/database.go
+package testhelpers
+
+import (
+    "context"
+    "testing"
+
+    "github.com/milos85vasic/My-Patreon-Manager/internal/database"
+)
+
+// OpenMigratedSQLite returns an in-memory SQLite database with the current
+// schema applied via db.Migrate(ctx). The database is closed automatically
+// via t.Cleanup. Intended for fast, isolated store-level tests.
+func OpenMigratedSQLite(t *testing.T) *database.SQLiteDB {
+    t.Helper()
+    db, err := database.NewSQLiteDB(":memory:")
+    if err != nil {
+        t.Fatalf("open sqlite: %v", err)
+    }
+    if err := db.Migrate(context.Background()); err != nil {
+        _ = db.Close()
+        t.Fatalf("migrate: %v", err)
+    }
+    t.Cleanup(func() { _ = db.Close() })
+    return db
+}
+```
+
+If `database.NewSQLiteDB` has a different constructor signature, check `internal/database/sqlite.go` and adapt — the pattern is: obtain a `*SQLiteDB`, call `Migrate`, register cleanup. Do not copy a driver's internal state; use its public API.
+
+- [ ] **Step 4: Run — expect PASS**
+
+Run: `go test ./internal/testhelpers/ -v -cover`
+Expected: PASS with 100% coverage of `internal/testhelpers/database.go`.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add internal/testhelpers/database.go internal/testhelpers/database_test.go
+git commit -m "test(helpers): OpenMigratedSQLite helper for fast store tests"
+```
+
+---
+
 ### Task 1: Migration — `content_revisions` table
 
 **Files:**
