@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/milos85vasic/My-Patreon-Manager/internal/database"
@@ -69,4 +70,59 @@ func (r *Runner) Release(ctx context.Context, reposScanned, draftsCreated int, e
 		return nil
 	}
 	return r.deps.DB.ProcessRuns().Finish(ctx, r.run.ID, reposScanned, draftsCreated, errorMsg)
+}
+
+// StartHeartbeat spawns a goroutine that keeps the run's heartbeat_at
+// fresh at HeartbeatInterval (default 30s). It returns a stop func that
+// is safe to call multiple times. The goroutine also exits when ctx is
+// canceled. Heartbeat errors are logged but never propagated.
+//
+// No-op when Acquire was not called: returns a usable stop func that
+// does nothing.
+func (r *Runner) StartHeartbeat(ctx context.Context) (stop func()) {
+	if r.run == nil {
+		return func() {}
+	}
+	interval := r.deps.HeartbeatInterval
+	if interval == 0 {
+		interval = 30 * time.Second
+	}
+	done := make(chan struct{})
+	go func() {
+		t := time.NewTicker(interval)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+				return
+			case <-t.C:
+				if err := r.deps.DB.ProcessRuns().Heartbeat(ctx, r.run.ID); err != nil {
+					r.logger.Warn("process: heartbeat write failed", "run_id", r.run.ID, "err", err)
+				}
+			}
+		}
+	}()
+	var once sync.Once
+	return func() { once.Do(func() { close(done) }) }
+}
+
+// ReclaimStale flips any process_runs row in 'running' whose heartbeat
+// exceeds StaleAfter (default 5m) to 'crashed'. Called once at startup
+// by the process command so a crash on one invocation doesn't deadlock
+// the next one.
+func (r *Runner) ReclaimStale(ctx context.Context) error {
+	after := r.deps.StaleAfter
+	if after == 0 {
+		after = 5 * time.Minute
+	}
+	n, err := r.deps.DB.ProcessRuns().ReclaimStale(ctx, after)
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		r.logger.Warn("process: reclaimed stale process_runs rows", "count", n)
+	}
+	return nil
 }
