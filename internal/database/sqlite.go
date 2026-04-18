@@ -327,6 +327,10 @@ func (db *SQLiteDB) ProcessRuns() ProcessRunStore {
 	return NewSQLiteProcessRunStore(db.db)
 }
 
+func (db *SQLiteDB) UnmatchedPatreonPosts() UnmatchedPatreonPostStore {
+	return NewSQLiteUnmatchedPatreonPostStore(db.db)
+}
+
 func (db *SQLiteDB) AcquireLock(ctx context.Context, lockInfo SyncLock) error {
 	tx, err := db.db.BeginTx(ctx, nil)
 	if err != nil {

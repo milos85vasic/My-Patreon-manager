@@ -31,6 +31,7 @@ type Database interface {
 	Illustrations() IllustrationStore
 	ContentRevisions() ContentRevisionStore
 	ProcessRuns() ProcessRunStore
+	UnmatchedPatreonPosts() UnmatchedPatreonPostStore
 
 	AcquireLock(ctx context.Context, lockInfo SyncLock) error
 	ReleaseLock(ctx context.Context) error

@@ -187,6 +187,7 @@ func (m *mockDatabase) AuditEntries() database.AuditEntryStore                  
 func (m *mockDatabase) Illustrations() database.IllustrationStore                         { return nil }
 func (m *mockDatabase) ContentRevisions() database.ContentRevisionStore                   { return nil }
 func (m *mockDatabase) ProcessRuns() database.ProcessRunStore                              { return nil }
+func (m *mockDatabase) UnmatchedPatreonPosts() database.UnmatchedPatreonPostStore           { return nil }
 func (m *mockDatabase) AcquireLock(ctx context.Context, lockInfo database.SyncLock) error { return nil }
 func (m *mockDatabase) ReleaseLock(ctx context.Context) error                             { return nil }
 func (m *mockDatabase) IsLocked(ctx context.Context) (bool, *database.SyncLock, error) {

@@ -271,6 +271,10 @@ func (db *PostgresDB2) ProcessRuns() ProcessRunStore {
 	return NewPostgresProcessRunStore(db.db)
 }
 
+func (db *PostgresDB2) UnmatchedPatreonPosts() UnmatchedPatreonPostStore {
+	return NewPostgresUnmatchedPatreonPostStore(db.db)
+}
+
 func (db *PostgresDB2) AcquireLock(ctx context.Context, lockInfo SyncLock) error {
 	var locked bool
 	err := db.db.QueryRowContext(ctx, "SELECT pg_try_advisory_lock(hashtext($1))", lockInfo.ID).Scan(&locked)
