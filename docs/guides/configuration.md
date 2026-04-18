@@ -115,6 +115,43 @@ GITVERSE_ORGS=team-alpha,team-beta,team-gamma
 | `VIDEO_GENERATION_ENABLED` | No | `false` | Enable experimental video script generation. Requires additional video-generation dependencies. |
 | `PDF_RENDERING_ENABLED` | No | `false` | Enable PDF rendering alongside Markdown and HTML output. Falls back to HTML bytes if no Chromium or Chrome binary is found on `PATH`. |
 
+### Illustration Generation
+
+Per-article image generation. Runs automatically after the quality gate and before rendering, producing one illustration per generated article and embedding it into the final Markdown/HTML/PDF output. Skipped for repositories that opt out via `.repoignore` (`no-illustration`) or `.illustyle` (`disabled: true`).
+
+| Variable | Required | Default | Description |
+|----------|:--------:|---------|-------------|
+| `ILLUSTRATION_ENABLED` | No | `true` | Master on/off switch. When `false`, the illustration step is skipped for every article regardless of image-provider availability. |
+| `ILLUSTRATION_DEFAULT_STYLE` | No | `modern tech illustration, clean lines, professional` | Default style suffix appended to each generated prompt. Overridable per repository via `.illustyle`. |
+| `ILLUSTRATION_DEFAULT_SIZE` | No | `1792x1024` | Default image dimensions (provider-dependent). DALL-E 3 accepts `1024x1024`, `1792x1024`, `1024x1792`. |
+| `ILLUSTRATION_DEFAULT_QUALITY` | No | `hd` | Quality hint passed to providers that accept one (DALL-E 3: `standard` or `hd`). |
+| `ILLUSTRATION_DIR` | No | `./data/illustrations` | Filesystem directory where generated image files are stored. |
+| `IMAGE_PROVIDER_PRIORITY` | No | `dalle,stability,midjourney,openai_compat` | Comma-separated order in which available image providers are tried. The first provider whose required keys are set becomes the primary; the rest form the fallback chain. |
+
+> **Requires at least one image provider.** When `ILLUSTRATION_ENABLED=true` but no provider is fully configured, article generation still succeeds -- the article is published without an illustration and a warning is logged.
+
+### Image Providers
+
+Each provider is activated by providing the relevant API key(s). Providers with missing keys are silently skipped; `IMAGE_PROVIDER_PRIORITY` determines the order in which the remaining providers are tried. Only one provider is required for illustrations to work.
+
+| Variable | Required | Default | Description |
+|----------|:--------:|---------|-------------|
+| `OPENAI_API_KEY` | Conditional | *(empty)* | OpenAI API key used by the **DALL-E 3** provider. Required to enable `dalle`. |
+| `OPENAI_BASE_URL` | No | *reserved* | Reserved for a future override of the DALL-E API endpoint. **Not currently applied** -- the DALL-E provider hardcodes `https://api.openai.com/v1`. |
+| `STABILITY_AI_API_KEY` | Conditional | *(empty)* | Stability AI key for the **Stability** (SDXL) provider. Required to enable `stability`. |
+| `STABILITY_AI_BASE_URL` | No | *reserved* | Reserved for a future override of the Stability endpoint. **Not currently applied** -- the Stability provider hardcodes `https://api.stability.ai/v2beta`. |
+| `MIDJOURNEY_API_KEY` | Conditional | *(empty)* | Bearer token for a Midjourney-compatible proxy API. Required to enable `midjourney`. |
+| `MIDJOURNEY_ENDPOINT` | Conditional | *(empty)* | Base URL of the Midjourney proxy (no default). Required alongside `MIDJOURNEY_API_KEY`. |
+| `OPENAI_COMPAT_API_KEY` | Conditional | *(empty)* | API key for an OpenAI-compatible image endpoint (Venice, Together, etc.). Required to enable `openai_compat`. |
+| `OPENAI_COMPAT_BASE_URL` | Conditional | *(empty)* | Base URL of the OpenAI-compatible endpoint (no default). Required alongside `OPENAI_COMPAT_API_KEY`. |
+| `OPENAI_COMPAT_MODEL` | No | *(empty)* | Model name sent in the request body when calling the OpenAI-compatible endpoint. |
+
+> **Provider readiness rules** (enforced by `IsAvailable`):
+> - `dalle`: `OPENAI_API_KEY` set.
+> - `stability`: `STABILITY_AI_API_KEY` set.
+> - `midjourney`: both `MIDJOURNEY_API_KEY` and `MIDJOURNEY_ENDPOINT` set.
+> - `openai_compat`: both `OPENAI_COMPAT_API_KEY` and `OPENAI_COMPAT_BASE_URL` set.
+
 ### LLMsVerifier
 
 All LLM calls route through the LLMsVerifier service, which tests providers, scores models, and returns a ranked list. This is a required dependency for commands that perform content generation.
@@ -200,8 +237,18 @@ Not every command uses every variable. The following table shows which variables
 | `GITLAB_GROUPS` | | | O | O | O | | O | O |
 | `GITFLIC_ORGS` | | | O | O | O | | O | O |
 | `GITVERSE_ORGS` | | | O | O | O | | O | O |
+| `ILLUSTRATION_ENABLED` | | | | O | O | | O | O |
+| `ILLUSTRATION_DEFAULT_*` | | | | O | O | | O | O |
+| `ILLUSTRATION_DIR` | | | | O | O | | O | O |
+| `IMAGE_PROVIDER_PRIORITY` | | | | O | O | | O | O |
+| `OPENAI_API_KEY` | | | | O | O | | O | O |
+| `STABILITY_AI_API_KEY` | | | | O | O | | O | O |
+| `MIDJOURNEY_API_KEY` / `_ENDPOINT` | | | | O | O | | O | O |
+| `OPENAI_COMPAT_*` | | | | O | O | | O | O |
 
 **Legend:** **V** = validated at startup (must be non-empty), **U** = used at runtime, **O** = optional (provider or feature skipped if missing), blank = not used.
+
+> **Illustration variables are runtime-optional:** when `ILLUSTRATION_ENABLED=true` and no image-provider key is set, `generate`/`sync` still succeeds -- articles are produced without illustrations and a warning is logged. To guarantee an illustration per article, set at least one provider's keys (DALL-E 3 is the recommended default).
 
 ## Common Configuration Patterns
 

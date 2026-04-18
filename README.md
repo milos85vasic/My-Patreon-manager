@@ -94,6 +94,17 @@ Each provider also supports a `_SECONDARY` token for failover (e.g., `GITHUB_TOK
 | `GITFLIC_ORGS` | *personal repos* | Comma-separated GitFlic organization names |
 | `GITVERSE_ORGS` | *personal repos* | Comma-separated GitVerse organization names |
 
+#### Illustration Providers (set at least one to generate per-article images)
+
+| Variable | Description |
+|----------|-------------|
+| `OPENAI_API_KEY` | Enables the DALL-E 3 provider |
+| `STABILITY_AI_API_KEY` | Enables the Stability AI (SDXL) provider |
+| `MIDJOURNEY_API_KEY` + `MIDJOURNEY_ENDPOINT` | Enables the Midjourney proxy provider (both required) |
+| `OPENAI_COMPAT_API_KEY` + `OPENAI_COMPAT_BASE_URL` | Enables an OpenAI-compatible image endpoint (Venice, Together, etc.); `OPENAI_COMPAT_MODEL` optional |
+
+Illustration behavior is controlled by `ILLUSTRATION_ENABLED` (default `true`), `IMAGE_PROVIDER_PRIORITY` (default `dalle,stability,midjourney,openai_compat`), `ILLUSTRATION_DEFAULT_STYLE`, `ILLUSTRATION_DEFAULT_SIZE`, `ILLUSTRATION_DEFAULT_QUALITY`, and `ILLUSTRATION_DIR`. See [Illustration Generation](docs/guides/configuration.md#illustration-generation) and [Image Providers](docs/guides/configuration.md#image-providers) for full reference.
+
 #### LLMsVerifier (required for content generation)
 
 | Variable | Description |
