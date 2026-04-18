@@ -198,6 +198,15 @@ func (s *contentRevisionStore) MaxVersion(ctx context.Context, repoID string) (i
 	return int(v.Int64), nil
 }
 
+// UpdateStatus transitions a revision's status atomically. The UPDATE
+// predicate includes the expected current status so that concurrent
+// callers cannot both observe the same starting state and both win; the
+// predicate turns a check-then-act sequence into a conditional write.
+//
+// If zero rows are affected, the row either vanished or its status
+// already changed out from under us (another writer won the race). We
+// re-read to decide which error to surface so the caller still sees the
+// two distinct error kinds (not-found vs illegal transition).
 func (s *contentRevisionStore) UpdateStatus(ctx context.Context, id, newStatus string) error {
 	cur, err := s.GetByID(ctx, id)
 	if err != nil {
@@ -209,8 +218,29 @@ func (s *contentRevisionStore) UpdateStatus(ctx context.Context, id, newStatus s
 	if !models.IsLegalRevisionStatusTransition(cur.Status, newStatus) {
 		return fmt.Errorf("%w: %s -> %s", ErrIllegalStatusTransition, cur.Status, newStatus)
 	}
-	_, err = s.db.ExecContext(ctx, s.rebind(`UPDATE content_revisions SET status = ? WHERE id = ?`), newStatus, id)
-	return err
+	res, err := s.db.ExecContext(ctx,
+		s.rebind(`UPDATE content_revisions SET status = ? WHERE id = ? AND status = ?`),
+		newStatus, id, cur.Status)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		// Another writer won the race (or the row was deleted between
+		// the read and the UPDATE). Re-read to classify the failure.
+		reread, rerr := s.GetByID(ctx, id)
+		if rerr != nil {
+			return rerr
+		}
+		if reread == nil {
+			return fmt.Errorf("revision %s not found", id)
+		}
+		return fmt.Errorf("%w: %s -> %s", ErrIllegalStatusTransition, reread.Status, newStatus)
+	}
+	return nil
 }
 
 func (s *contentRevisionStore) ListByRepoStatus(ctx context.Context, repoID, status string) ([]*models.ContentRevision, error) {
@@ -240,7 +270,7 @@ func (s *contentRevisionStore) ListForRetention(ctx context.Context, repoID stri
 		if r.PublishedToPatreonAt != nil {
 			continue
 		}
-		if r.Status == "approved" || r.Status == "pending_review" {
+		if r.Status == models.RevisionStatusApproved || r.Status == models.RevisionStatusPendingReview {
 			continue
 		}
 		candidates = append(candidates, r)

@@ -110,6 +110,38 @@ func TestContentRevisions_UpdateStatus_ForwardOnly(t *testing.T) {
 	}
 }
 
+// TestContentRevisions_UpdateStatus_RaceBothAttempted simulates the
+// outcome of two concurrent writers that both observed status
+// "pending_review". After the first call wins (pending_review ->
+// approved), the second call's attempt (pending_review -> rejected) must
+// fail with ErrIllegalStatusTransition rather than silently overwriting.
+// The atomic-predicate UPDATE catches the lost race.
+func TestContentRevisions_UpdateStatus_RaceBothAttempted(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	seedRepo(t, db, "r1")
+	if err := db.ContentRevisions().Create(ctx, mkRev("a", "r1", 1, "pending_review")); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	// First call wins and transitions to approved.
+	if err := db.ContentRevisions().UpdateStatus(ctx, "a", "approved"); err != nil {
+		t.Fatalf("first: %v", err)
+	}
+	// Second call attempts pending_review -> rejected, but actual current
+	// status is already "approved" (won by first call). Must return
+	// ErrIllegalStatusTransition, not succeed silently.
+	err := db.ContentRevisions().UpdateStatus(ctx, "a", "rejected")
+	if !errors.Is(err, database.ErrIllegalStatusTransition) {
+		t.Fatalf("want ErrIllegalStatusTransition after race, got %v", err)
+	}
+	// Row must still be "approved".
+	got, _ := db.ContentRevisions().GetByID(ctx, "a")
+	if got == nil || got.Status != "approved" {
+		t.Fatalf("status changed despite rejection: %+v", got)
+	}
+}
+
 func TestContentRevisions_UpdateStatus_NotFound(t *testing.T) {
 	db := testhelpers.OpenMigratedSQLite(t)
 	err := db.ContentRevisions().UpdateStatus(context.Background(), "nope", "approved")
