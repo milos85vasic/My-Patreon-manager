@@ -43,12 +43,14 @@ The codebase follows a provider/service layering where the CLI and server are th
 **`internal/providers/`** — pluggable external integrations behind Go interfaces (see `.specify/memory/constitution.md` principle I):
 - `git/` — `RepositoryProvider` implementations for GitHub/GitLab/GitFlic/GitVerse with per-service auth, pagination, rate limiting, mirror detection, and `.repoignore` filtering
 - `llm/` — `LLMProvider` with fallback + verifier (quality gates)
+- `image/` — `ImageProvider` for DALL-E, Midjourney, Stability, and OpenAI-compatible endpoints, behind a fallback chain
 - `patreon/` — Patreon API client with tier gating
 - `renderer/` — `FormatRenderer` for Markdown/HTML/PDF (and planned video)
 
 **`internal/services/`** — orchestration layered on top of providers:
 - `sync/` — `Orchestrator` is the top-level coordinator wiring providers + generator + db + metrics; consumed by both `cmd/cli` and `cmd/server`
 - `content/` — content `Generator` and `TierMapper`
+- `illustration/` — per-article image generation (prompt, style, generator) that sits on top of `providers/image`
 - `filter/` — repo selection / `.repoignore`
 - `access/`, `audit/` — tier access control, audit logging
 
@@ -73,4 +75,10 @@ The codebase follows a provider/service layering where the CLI and server are th
 
 ## Git Mirrors
 
-The repo mirrors to GitHub, GitLab, GitFlic, and GitVerse. Push helper scripts live in `Upstreams/` (one per service). Branch protection may be enabled — prefer merge requests over force-pushing to protected branches. Any history rewrite (e.g. credential purge) must be force-pushed to **all four** remotes.
+The repo mirrors to GitHub, GitLab, GitFlic, and GitVerse. `push_all.sh` at the repo root pushes `main` to all four remotes in sequence (with fetch-and-merge handling for GitLab); per-service helpers live in `Upstreams/`. Branch protection may be enabled — prefer merge requests over force-pushing to protected branches. Any history rewrite (e.g. credential purge) must be force-pushed to **all four** remotes.
+
+The repo also pulls in five Git submodules (`Challenges`, `LLMGateway`, `LLMProvider`, `LLMsVerifier`, `Models`) from `github.com/vasic-digital`. Remember `git submodule update --init --recursive` on fresh clones, and commit submodule pointer bumps separately from code changes.
+
+## CI
+
+All GitHub Actions / GitLab CI workflows (`ci.yml`, `docs.yml`, `release.yml`, `security.yml`) are **`workflow_dispatch`-only** — no `push`, `pull_request`, `schedule`, or `tag` triggers. Do not add automatic triggers when editing workflow files.
