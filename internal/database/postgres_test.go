@@ -197,7 +197,8 @@ func TestPostgresRepositoryStore_Create(t *testing.T) {
 			repo.Description, repo.READMEContent, repo.READMEFormat, []byte(`["go"]`),
 			repo.PrimaryLanguage, []byte(`{"Go":100}`), repo.Stars, repo.Forks,
 			repo.LastCommitSHA, repo.LastCommitAt, repo.IsArchived,
-			repo.CreatedAt, repo.UpdatedAt).
+			repo.CreatedAt, repo.UpdatedAt,
+			nil, nil, "idle", nil).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	err := store.Create(ctx, repo)
@@ -210,10 +211,10 @@ func TestPostgresRepositoryStore_GetByID(t *testing.T) {
 	ctx := context.Background()
 	store := pg.Repositories().(*PostgresRepositoryStore)
 
-	mock.ExpectQuery("SELECT id, service, owner, name, url, https_url, description, readme_content, readme_format, topics::text, primary_language, language_stats::text, stars, forks, last_commit_sha, last_commit_at, is_archived, created_at, updated_at FROM repositories WHERE id=\\$1").
+	mock.ExpectQuery("SELECT id, service, owner, name, url, https_url, description, readme_content, readme_format, topics::text, primary_language, language_stats::text, stars, forks, last_commit_sha, last_commit_at, is_archived, created_at, updated_at, current_revision_id, published_revision_id, process_state, last_processed_at FROM repositories WHERE id=\\$1").
 		WithArgs("test-1").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "service", "owner", "name", "url", "https_url", "description", "readme_content", "readme_format", "topics", "primary_language", "language_stats", "stars", "forks", "last_commit_sha", "last_commit_at", "is_archived", "created_at", "updated_at"}).
-			AddRow("test-1", "github", "owner", "repo", "git@github.com:owner/repo.git", "https://github.com/owner/repo", "desc", "", "", `["go"]`, "Go", `{"Go":100}`, 10, 2, "abc", time.Now(), false, time.Now(), time.Now()))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "service", "owner", "name", "url", "https_url", "description", "readme_content", "readme_format", "topics", "primary_language", "language_stats", "stars", "forks", "last_commit_sha", "last_commit_at", "is_archived", "created_at", "updated_at", "current_revision_id", "published_revision_id", "process_state", "last_processed_at"}).
+			AddRow("test-1", "github", "owner", "repo", "git@github.com:owner/repo.git", "https://github.com/owner/repo", "desc", "", "", `["go"]`, "Go", `{"Go":100}`, 10, 2, "abc", time.Now(), false, time.Now(), time.Now(), nil, nil, "idle", nil))
 
 	repo, err := store.GetByID(ctx, "test-1")
 	assert.NoError(t, err)
@@ -245,8 +246,8 @@ func TestPostgresRepositoryStore_GetByServiceOwnerName(t *testing.T) {
 
 	mock.ExpectQuery("SELECT.*WHERE service=\\$1 AND owner=\\$2 AND name=\\$3").
 		WithArgs("github", "owner", "repo").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "service", "owner", "name", "url", "https_url", "description", "readme_content", "readme_format", "topics", "primary_language", "language_stats", "stars", "forks", "last_commit_sha", "last_commit_at", "is_archived", "created_at", "updated_at"}).
-			AddRow("test-1", "github", "owner", "repo", "git@github.com:owner/repo.git", "https://github.com/owner/repo", "desc", "", "", `["go"]`, "Go", `{"Go":100}`, 10, 2, "abc", time.Now(), false, time.Now(), time.Now()))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "service", "owner", "name", "url", "https_url", "description", "readme_content", "readme_format", "topics", "primary_language", "language_stats", "stars", "forks", "last_commit_sha", "last_commit_at", "is_archived", "created_at", "updated_at", "current_revision_id", "published_revision_id", "process_state", "last_processed_at"}).
+			AddRow("test-1", "github", "owner", "repo", "git@github.com:owner/repo.git", "https://github.com/owner/repo", "desc", "", "", `["go"]`, "Go", `{"Go":100}`, 10, 2, "abc", time.Now(), false, time.Now(), time.Now(), nil, nil, "idle", nil))
 
 	repo, err := store.GetByServiceOwnerName(ctx, "github", "owner", "repo")
 	assert.NoError(t, err)
@@ -281,7 +282,9 @@ func TestPostgresRepositoryStore_Update(t *testing.T) {
 		WithArgs(repo.Service, repo.Owner, repo.Name, repo.URL, repo.HTTPSURL,
 			repo.Description, repo.READMEContent, repo.READMEFormat, []byte(`["go","test"]`),
 			repo.PrimaryLanguage, []byte(`{"Go":100}`), repo.Stars, repo.Forks,
-			repo.LastCommitSHA, repo.LastCommitAt, repo.IsArchived, repo.ID).
+			repo.LastCommitSHA, repo.LastCommitAt, repo.IsArchived,
+			nil, nil, "idle", nil,
+			repo.ID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	err := store.Update(ctx, repo)
@@ -302,6 +305,68 @@ func TestPostgresRepositoryStore_Delete(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TestPostgresRepositoryStore_SetRevisionPointers_BothPath exercises the
+// branch where publishedID is non-empty so both current and published
+// columns are written.
+func TestPostgresRepositoryStore_SetRevisionPointers_BothPath(t *testing.T) {
+	pg, mock, cleanup := setupMockPostgres(t)
+	defer cleanup()
+	ctx := context.Background()
+	store := pg.Repositories().(*PostgresRepositoryStore)
+
+	mock.ExpectExec("UPDATE repositories SET current_revision_id=\\$1, published_revision_id=\\$2 WHERE id=\\$3").
+		WithArgs("cur", "pub", "r").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	err := store.SetRevisionPointers(ctx, "r", "cur", "pub")
+	assert.NoError(t, err)
+}
+
+// TestPostgresRepositoryStore_SetRevisionPointers_CurrentOnlyPath verifies
+// the empty-publishedID branch writes only current_revision_id.
+func TestPostgresRepositoryStore_SetRevisionPointers_CurrentOnlyPath(t *testing.T) {
+	pg, mock, cleanup := setupMockPostgres(t)
+	defer cleanup()
+	ctx := context.Background()
+	store := pg.Repositories().(*PostgresRepositoryStore)
+
+	mock.ExpectExec("UPDATE repositories SET current_revision_id=\\$1 WHERE id=\\$2").
+		WithArgs("cur", "r").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	err := store.SetRevisionPointers(ctx, "r", "cur", "")
+	assert.NoError(t, err)
+}
+
+func TestPostgresRepositoryStore_SetProcessState(t *testing.T) {
+	pg, mock, cleanup := setupMockPostgres(t)
+	defer cleanup()
+	ctx := context.Background()
+	store := pg.Repositories().(*PostgresRepositoryStore)
+
+	mock.ExpectExec("UPDATE repositories SET process_state=\\$1 WHERE id=\\$2").
+		WithArgs("processing", "r").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	err := store.SetProcessState(ctx, "r", "processing")
+	assert.NoError(t, err)
+}
+
+func TestPostgresRepositoryStore_SetLastProcessedAt(t *testing.T) {
+	pg, mock, cleanup := setupMockPostgres(t)
+	defer cleanup()
+	ctx := context.Background()
+	store := pg.Repositories().(*PostgresRepositoryStore)
+
+	now := time.Now()
+	mock.ExpectExec("UPDATE repositories SET last_processed_at=\\$1 WHERE id=\\$2").
+		WithArgs(now, "r").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	err := store.SetLastProcessedAt(ctx, "r", now)
+	assert.NoError(t, err)
+}
+
 func TestPostgresRepositoryStore_List(t *testing.T) {
 	pg, mock, cleanup := setupMockPostgres(t)
 	defer cleanup()
@@ -309,8 +374,8 @@ func TestPostgresRepositoryStore_List(t *testing.T) {
 	store := pg.Repositories().(*PostgresRepositoryStore)
 
 	mock.ExpectQuery("SELECT id, service, owner, name, url, https_url").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "service", "owner", "name", "url", "https_url", "description", "readme_content", "readme_format", "topics", "primary_language", "language_stats", "stars", "forks", "last_commit_sha", "last_commit_at", "is_archived", "created_at", "updated_at"}).
-			AddRow("r1", "github", "owner", "repo", "git@github.com:owner/repo.git", "https://github.com/owner/repo", "desc", "", "", `["go"]`, "Go", `{"Go":100}`, 10, 2, "abc", time.Now(), false, time.Now(), time.Now()))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "service", "owner", "name", "url", "https_url", "description", "readme_content", "readme_format", "topics", "primary_language", "language_stats", "stars", "forks", "last_commit_sha", "last_commit_at", "is_archived", "created_at", "updated_at", "current_revision_id", "published_revision_id", "process_state", "last_processed_at"}).
+			AddRow("r1", "github", "owner", "repo", "git@github.com:owner/repo.git", "https://github.com/owner/repo", "desc", "", "", `["go"]`, "Go", `{"Go":100}`, 10, 2, "abc", time.Now(), false, time.Now(), time.Now(), nil, nil, "idle", nil))
 
 	repos, err := store.List(ctx, RepositoryFilter{})
 	assert.NoError(t, err)

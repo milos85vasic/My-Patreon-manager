@@ -42,6 +42,28 @@ func TestContentRevisions_QueryList_RowsErr(t *testing.T) {
 	}
 }
 
+// TestContentRevisions_CountAll_QueryError covers the branch where the
+// underlying driver returns an error. Real driver errors on COUNT(*) are
+// nearly impossible to provoke from SQLite in-memory, so we use sqlmock.
+func TestContentRevisions_CountAll_QueryError(t *testing.T) {
+	mockDB, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New: %v", err)
+	}
+	defer mockDB.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT COUNT(*) FROM content_revisions")).
+		WillReturnError(errors.New("count boom"))
+
+	store := NewSQLiteContentRevisionStore(mockDB)
+	if _, err := store.CountAll(context.Background()); err == nil {
+		t.Fatal("want count error")
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
 // pendingReviewRow builds a single-row sqlmock.Rows result whose status
 // column is "pending_review"; every other field is a dummy value just
 // rich enough to scan cleanly.

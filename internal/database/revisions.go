@@ -24,6 +24,10 @@ type ContentRevisionStore interface {
 	ListForRetention(ctx context.Context, repoID string, keepTop int) ([]*models.ContentRevision, error)
 	Delete(ctx context.Context, id string) error
 	ListAll(ctx context.Context, repoID string) ([]*models.ContentRevision, error)
+	// CountAll returns the total number of content_revisions rows across
+	// every repository and status. Used by the first-run importer to
+	// decide whether the DB is already populated.
+	CountAll(ctx context.Context) (int, error)
 }
 
 // ErrIllegalStatusTransition is returned by ContentRevisionStore.UpdateStatus
@@ -297,6 +301,18 @@ func (s *contentRevisionStore) ListForRetention(ctx context.Context, repoID stri
 func (s *contentRevisionStore) Delete(ctx context.Context, id string) error {
 	_, err := s.db.ExecContext(ctx, s.rebind(`DELETE FROM content_revisions WHERE id = ?`), id)
 	return err
+}
+
+// CountAll returns the total row count from content_revisions, ignoring
+// repo, status, and source. Used as a cheap "is this DB already
+// populated?" check by the first-run importer.
+func (s *contentRevisionStore) CountAll(ctx context.Context) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM content_revisions`).Scan(&n)
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
 }
 
 // queryList runs a SELECT with a shared column list and scans rows.

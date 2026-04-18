@@ -6,26 +6,30 @@ import (
 )
 
 type Repository struct {
-	ID              string             `json:"id" db:"id"`
-	Service         string             `json:"service" db:"service"`
-	Owner           string             `json:"owner" db:"owner"`
-	Name            string             `json:"name" db:"name"`
-	URL             string             `json:"url" db:"url"`
-	HTTPSURL        string             `json:"https_url" db:"https_url"`
-	Description     string             `json:"description" db:"description"`
-	READMEContent   string             `json:"readme_content" db:"readme_content"`
-	READMEFormat    string             `json:"readme_format" db:"readme_format"`
-	Topics          []string           `json:"topics" db:"topics"`
-	PrimaryLanguage string             `json:"primary_language" db:"primary_language"`
-	LanguageStats   map[string]float64 `json:"language_stats" db:"language_stats"`
-	Stars           int                `json:"stars" db:"stars"`
-	Forks           int                `json:"forks" db:"forks"`
-	LastCommitSHA   string             `json:"last_commit_sha" db:"last_commit_sha"`
-	LastCommitAt    time.Time          `json:"last_commit_at" db:"last_commit_at"`
-	IsPrivate       bool               `json:"is_private" db:"is_private"`
-	IsArchived      bool               `json:"is_archived" db:"is_archived"`
-	CreatedAt       time.Time          `json:"created_at" db:"created_at"`
-	UpdatedAt       time.Time          `json:"updated_at" db:"updated_at"`
+	ID                  string             `json:"id" db:"id"`
+	Service             string             `json:"service" db:"service"`
+	Owner               string             `json:"owner" db:"owner"`
+	Name                string             `json:"name" db:"name"`
+	URL                 string             `json:"url" db:"url"`
+	HTTPSURL            string             `json:"https_url" db:"https_url"`
+	Description         string             `json:"description" db:"description"`
+	READMEContent       string             `json:"readme_content" db:"readme_content"`
+	READMEFormat        string             `json:"readme_format" db:"readme_format"`
+	Topics              []string           `json:"topics" db:"topics"`
+	PrimaryLanguage     string             `json:"primary_language" db:"primary_language"`
+	LanguageStats       map[string]float64 `json:"language_stats" db:"language_stats"`
+	Stars               int                `json:"stars" db:"stars"`
+	Forks               int                `json:"forks" db:"forks"`
+	LastCommitSHA       string             `json:"last_commit_sha" db:"last_commit_sha"`
+	LastCommitAt        time.Time          `json:"last_commit_at" db:"last_commit_at"`
+	IsPrivate           bool               `json:"is_private" db:"is_private"`
+	IsArchived          bool               `json:"is_archived" db:"is_archived"`
+	CreatedAt           time.Time          `json:"created_at" db:"created_at"`
+	UpdatedAt           time.Time          `json:"updated_at" db:"updated_at"`
+	CurrentRevisionID   *string            `json:"current_revision_id" db:"current_revision_id"`
+	PublishedRevisionID *string            `json:"published_revision_id" db:"published_revision_id"`
+	ProcessState        string             `json:"process_state" db:"process_state"`
+	LastProcessedAt     *time.Time         `json:"last_processed_at" db:"last_processed_at"`
 }
 
 type SyncState struct {

@@ -519,3 +519,38 @@ func TestContentRevisions_ScanEmptyPublishedAt(t *testing.T) {
 		t.Fatalf("empty published_at should scan as nil, got %+v", got)
 	}
 }
+
+// TestContentRevisions_CountAll covers the cross-repo count used by the
+// first-run importer. It should return 0 on an empty DB and reflect every
+// row regardless of status once revisions exist.
+func TestContentRevisions_CountAll(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+
+	n, err := db.ContentRevisions().CountAll(ctx)
+	if err != nil {
+		t.Fatalf("count empty: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("empty count: %d", n)
+	}
+
+	seedRepo(t, db, "r1")
+	seedRepo(t, db, "r2")
+	if err := db.ContentRevisions().Create(ctx, mkRev("c1", "r1", 1, "approved")); err != nil {
+		t.Fatalf("create c1: %v", err)
+	}
+	if err := db.ContentRevisions().Create(ctx, mkRev("c2", "r1", 2, "pending_review")); err != nil {
+		t.Fatalf("create c2: %v", err)
+	}
+	if err := db.ContentRevisions().Create(ctx, mkRev("c3", "r2", 1, "approved")); err != nil {
+		t.Fatalf("create c3: %v", err)
+	}
+	n, err = db.ContentRevisions().CountAll(ctx)
+	if err != nil {
+		t.Fatalf("count populated: %v", err)
+	}
+	if n != 3 {
+		t.Fatalf("populated count: %d", n)
+	}
+}

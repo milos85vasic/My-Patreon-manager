@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/milos85vasic/My-Patreon-Manager/internal/database"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/models"
@@ -166,6 +167,11 @@ func (f *fakeRepoStore) List(context.Context, database.RepositoryFilter) ([]*mod
 }
 func (f *fakeRepoStore) Update(context.Context, *models.Repository) error { return nil }
 func (f *fakeRepoStore) Delete(context.Context, string) error             { return nil }
+func (f *fakeRepoStore) SetRevisionPointers(context.Context, string, string, string) error {
+	return nil
+}
+func (f *fakeRepoStore) SetProcessState(context.Context, string, string) error  { return nil }
+func (f *fakeRepoStore) SetLastProcessedAt(context.Context, string, time.Time) error { return nil }
 
 type fakeContentStore struct {
 	latest *models.GeneratedContent

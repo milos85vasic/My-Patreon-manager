@@ -3,6 +3,7 @@ package mocks
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/milos85vasic/My-Patreon-Manager/internal/database"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/models"
@@ -199,6 +200,18 @@ func (m *MockRepositoryStore) Delete(ctx context.Context, id string) error {
 	if m.DeleteFunc != nil {
 		return m.DeleteFunc(ctx, id)
 	}
+	return nil
+}
+
+func (m *MockRepositoryStore) SetRevisionPointers(ctx context.Context, repoID, currentID, publishedID string) error {
+	return nil
+}
+
+func (m *MockRepositoryStore) SetProcessState(ctx context.Context, repoID, state string) error {
+	return nil
+}
+
+func (m *MockRepositoryStore) SetLastProcessedAt(ctx context.Context, repoID string, t time.Time) error {
 	return nil
 }
 

@@ -47,6 +47,14 @@ type RepositoryStore interface {
 	List(ctx context.Context, filter RepositoryFilter) ([]*models.Repository, error)
 	Update(ctx context.Context, repo *models.Repository) error
 	Delete(ctx context.Context, id string) error
+	// SetRevisionPointers updates current_revision_id and (optionally)
+	// published_revision_id for a repository. If publishedID is empty,
+	// published_revision_id is left unchanged; otherwise it is overwritten.
+	SetRevisionPointers(ctx context.Context, repoID, currentID, publishedID string) error
+	// SetProcessState overwrites the process_state column.
+	SetProcessState(ctx context.Context, repoID, state string) error
+	// SetLastProcessedAt overwrites the last_processed_at column.
+	SetLastProcessedAt(ctx context.Context, repoID string, t time.Time) error
 }
 
 type RepositoryFilter struct {

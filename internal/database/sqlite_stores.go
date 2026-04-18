@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"time"
 
 	"github.com/milos85vasic/My-Patreon-Manager/internal/models"
 )
@@ -12,46 +13,102 @@ type SQLiteRepositoryStore struct {
 	db *sql.DB
 }
 
+// repoColumnList lists every column returned by repository SELECTs. The
+// column order must match scanRepository below.
+const sqliteRepoColumnList = `id, service, owner, name, url, https_url, description, readme_content, readme_format, topics, primary_language, language_stats, stars, forks, last_commit_sha, last_commit_at, is_archived, created_at, updated_at, current_revision_id, published_revision_id, process_state, last_processed_at`
+
+// scanSQLiteRepository scans a single row into a *models.Repository. It
+// reads the two nullable TEXT columns (current_revision_id,
+// published_revision_id, last_processed_at) via sql.NullString / sql.NullTime
+// so TEXT-affinity storage on SQLite works uniformly.
+func scanSQLiteRepository(scan func(dest ...interface{}) error) (*models.Repository, error) {
+	repo := &models.Repository{}
+	var topics, langStats []byte
+	var currentRev, publishedRev sql.NullString
+	var lastProcessed sql.NullString
+	var lastCommitAt sql.NullTime
+	if err := scan(&repo.ID, &repo.Service, &repo.Owner, &repo.Name, &repo.URL, &repo.HTTPSURL,
+		&repo.Description, &repo.READMEContent, &repo.READMEFormat,
+		&topics, &repo.PrimaryLanguage, &langStats,
+		&repo.Stars, &repo.Forks, &repo.LastCommitSHA, &lastCommitAt, &repo.IsArchived,
+		&repo.CreatedAt, &repo.UpdatedAt,
+		&currentRev, &publishedRev, &repo.ProcessState, &lastProcessed); err != nil {
+		return nil, err
+	}
+	_ = json.Unmarshal(topics, &repo.Topics)
+	_ = json.Unmarshal(langStats, &repo.LanguageStats)
+	if lastCommitAt.Valid {
+		repo.LastCommitAt = lastCommitAt.Time
+	}
+	if currentRev.Valid && currentRev.String != "" {
+		s := currentRev.String
+		repo.CurrentRevisionID = &s
+	}
+	if publishedRev.Valid && publishedRev.String != "" {
+		s := publishedRev.String
+		repo.PublishedRevisionID = &s
+	}
+	if lastProcessed.Valid && lastProcessed.String != "" {
+		t, err := parseTimeString(lastProcessed.String)
+		if err != nil {
+			return nil, err
+		}
+		if !t.IsZero() {
+			repo.LastProcessedAt = &t
+		}
+	}
+	return repo, nil
+}
+
 func (s *SQLiteRepositoryStore) Create(ctx context.Context, repo *models.Repository) error {
 	topics, _ := json.Marshal(repo.Topics)
 	langStats, _ := json.Marshal(repo.LanguageStats)
-	_, err := s.db.ExecContext(ctx, `INSERT INTO repositories (id, service, owner, name, url, https_url, description, readme_content, readme_format, topics, primary_language, language_stats, stars, forks, last_commit_sha, last_commit_at, is_archived, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		repo.ID, repo.Service, repo.Owner, repo.Name, repo.URL, repo.HTTPSURL, repo.Description, repo.READMEContent, repo.READMEFormat, string(topics), repo.PrimaryLanguage, string(langStats), repo.Stars, repo.Forks, repo.LastCommitSHA, repo.LastCommitAt, repo.IsArchived, repo.CreatedAt, repo.UpdatedAt)
+	processState := repo.ProcessState
+	if processState == "" {
+		processState = "idle"
+	}
+	var currentRev, publishedRev interface{}
+	if repo.CurrentRevisionID != nil {
+		currentRev = *repo.CurrentRevisionID
+	}
+	if repo.PublishedRevisionID != nil {
+		publishedRev = *repo.PublishedRevisionID
+	}
+	var lastProcessed interface{}
+	if repo.LastProcessedAt != nil {
+		lastProcessed = formatTime(*repo.LastProcessedAt)
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO repositories (id, service, owner, name, url, https_url, description, readme_content, readme_format, topics, primary_language, language_stats, stars, forks, last_commit_sha, last_commit_at, is_archived, created_at, updated_at, current_revision_id, published_revision_id, process_state, last_processed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		repo.ID, repo.Service, repo.Owner, repo.Name, repo.URL, repo.HTTPSURL, repo.Description, repo.READMEContent, repo.READMEFormat, string(topics), repo.PrimaryLanguage, string(langStats), repo.Stars, repo.Forks, repo.LastCommitSHA, repo.LastCommitAt, repo.IsArchived, repo.CreatedAt, repo.UpdatedAt, currentRev, publishedRev, processState, lastProcessed)
 	return err
 }
 
 func (s *SQLiteRepositoryStore) GetByID(ctx context.Context, id string) (*models.Repository, error) {
-	repo := &models.Repository{}
-	var topics, langStats []byte
-	err := s.db.QueryRowContext(ctx, "SELECT id, service, owner, name, url, https_url, description, readme_content, readme_format, topics, primary_language, language_stats, stars, forks, last_commit_sha, last_commit_at, is_archived, created_at, updated_at FROM repositories WHERE id = ?", id).Scan(&repo.ID, &repo.Service, &repo.Owner, &repo.Name, &repo.URL, &repo.HTTPSURL, &repo.Description, &repo.READMEContent, &repo.READMEFormat, &topics, &repo.PrimaryLanguage, &langStats, &repo.Stars, &repo.Forks, &repo.LastCommitSHA, &repo.LastCommitAt, &repo.IsArchived, &repo.CreatedAt, &repo.UpdatedAt)
+	row := s.db.QueryRowContext(ctx, "SELECT "+sqliteRepoColumnList+" FROM repositories WHERE id = ?", id)
+	repo, err := scanSQLiteRepository(row.Scan)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	json.Unmarshal(topics, &repo.Topics)
-	json.Unmarshal(langStats, &repo.LanguageStats)
 	return repo, nil
 }
 
 func (s *SQLiteRepositoryStore) GetByServiceOwnerName(ctx context.Context, service, owner, name string) (*models.Repository, error) {
-	repo := &models.Repository{}
-	var topics, langStats []byte
-	err := s.db.QueryRowContext(ctx, "SELECT id, service, owner, name, url, https_url, description, readme_content, readme_format, topics, primary_language, language_stats, stars, forks, last_commit_sha, last_commit_at, is_archived, created_at, updated_at FROM repositories WHERE service=? AND owner=? AND name=?", service, owner, name).Scan(&repo.ID, &repo.Service, &repo.Owner, &repo.Name, &repo.URL, &repo.HTTPSURL, &repo.Description, &repo.READMEContent, &repo.READMEFormat, &topics, &repo.PrimaryLanguage, &langStats, &repo.Stars, &repo.Forks, &repo.LastCommitSHA, &repo.LastCommitAt, &repo.IsArchived, &repo.CreatedAt, &repo.UpdatedAt)
+	row := s.db.QueryRowContext(ctx, "SELECT "+sqliteRepoColumnList+" FROM repositories WHERE service=? AND owner=? AND name=?", service, owner, name)
+	repo, err := scanSQLiteRepository(row.Scan)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	json.Unmarshal(topics, &repo.Topics)
-	json.Unmarshal(langStats, &repo.LanguageStats)
 	return repo, nil
 }
 
 func (s *SQLiteRepositoryStore) List(ctx context.Context, filter RepositoryFilter) ([]*models.Repository, error) {
-	query := "SELECT id, service, owner, name, url, https_url, description, readme_content, readme_format, topics, primary_language, language_stats, stars, forks, last_commit_sha, last_commit_at, is_archived, created_at, updated_at FROM repositories WHERE 1=1"
+	query := "SELECT " + sqliteRepoColumnList + " FROM repositories WHERE 1=1"
 	args := []interface{}{}
 	if filter.Service != "" {
 		query += " AND service=?"
@@ -72,13 +129,10 @@ func (s *SQLiteRepositoryStore) List(ctx context.Context, filter RepositoryFilte
 	defer rows.Close()
 	var repos []*models.Repository
 	for rows.Next() {
-		repo := &models.Repository{}
-		var topics, langStats []byte
-		if err := rows.Scan(&repo.ID, &repo.Service, &repo.Owner, &repo.Name, &repo.URL, &repo.HTTPSURL, &repo.Description, &repo.READMEContent, &repo.READMEFormat, &topics, &repo.PrimaryLanguage, &langStats, &repo.Stars, &repo.Forks, &repo.LastCommitSHA, &repo.LastCommitAt, &repo.IsArchived, &repo.CreatedAt, &repo.UpdatedAt); err != nil {
+		repo, err := scanSQLiteRepository(rows.Scan)
+		if err != nil {
 			return nil, err
 		}
-		json.Unmarshal(topics, &repo.Topics)
-		json.Unmarshal(langStats, &repo.LanguageStats)
 		repos = append(repos, repo)
 	}
 	return repos, nil
@@ -87,13 +141,62 @@ func (s *SQLiteRepositoryStore) List(ctx context.Context, filter RepositoryFilte
 func (s *SQLiteRepositoryStore) Update(ctx context.Context, repo *models.Repository) error {
 	topics, _ := json.Marshal(repo.Topics)
 	langStats, _ := json.Marshal(repo.LanguageStats)
-	_, err := s.db.ExecContext(ctx, "UPDATE repositories SET service=?, owner=?, name=?, url=?, https_url=?, description=?, readme_content=?, readme_format=?, topics=?, primary_language=?, language_stats=?, stars=?, forks=?, last_commit_sha=?, last_commit_at=?, is_archived=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-		repo.Service, repo.Owner, repo.Name, repo.URL, repo.HTTPSURL, repo.Description, repo.READMEContent, repo.READMEFormat, string(topics), repo.PrimaryLanguage, string(langStats), repo.Stars, repo.Forks, repo.LastCommitSHA, repo.LastCommitAt, repo.IsArchived, repo.ID)
+	processState := repo.ProcessState
+	if processState == "" {
+		processState = "idle"
+	}
+	var currentRev, publishedRev interface{}
+	if repo.CurrentRevisionID != nil {
+		currentRev = *repo.CurrentRevisionID
+	}
+	if repo.PublishedRevisionID != nil {
+		publishedRev = *repo.PublishedRevisionID
+	}
+	var lastProcessed interface{}
+	if repo.LastProcessedAt != nil {
+		lastProcessed = formatTime(*repo.LastProcessedAt)
+	}
+	_, err := s.db.ExecContext(ctx, "UPDATE repositories SET service=?, owner=?, name=?, url=?, https_url=?, description=?, readme_content=?, readme_format=?, topics=?, primary_language=?, language_stats=?, stars=?, forks=?, last_commit_sha=?, last_commit_at=?, is_archived=?, current_revision_id=?, published_revision_id=?, process_state=?, last_processed_at=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+		repo.Service, repo.Owner, repo.Name, repo.URL, repo.HTTPSURL, repo.Description, repo.READMEContent, repo.READMEFormat, string(topics), repo.PrimaryLanguage, string(langStats), repo.Stars, repo.Forks, repo.LastCommitSHA, repo.LastCommitAt, repo.IsArchived, currentRev, publishedRev, processState, lastProcessed, repo.ID)
 	return err
 }
 
 func (s *SQLiteRepositoryStore) Delete(ctx context.Context, id string) error {
 	_, err := s.db.ExecContext(ctx, "DELETE FROM repositories WHERE id=?", id)
+	return err
+}
+
+// SetRevisionPointers updates current_revision_id and (conditionally)
+// published_revision_id. An empty publishedID leaves published_revision_id
+// unchanged; a non-empty value overwrites it. The currentID pointer is
+// always written, even if empty.
+func (s *SQLiteRepositoryStore) SetRevisionPointers(ctx context.Context, repoID, currentID, publishedID string) error {
+	if publishedID == "" {
+		_, err := s.db.ExecContext(ctx,
+			"UPDATE repositories SET current_revision_id=? WHERE id=?",
+			currentID, repoID)
+		return err
+	}
+	_, err := s.db.ExecContext(ctx,
+		"UPDATE repositories SET current_revision_id=?, published_revision_id=? WHERE id=?",
+		currentID, publishedID, repoID)
+	return err
+}
+
+// SetProcessState overwrites the process_state column.
+func (s *SQLiteRepositoryStore) SetProcessState(ctx context.Context, repoID, state string) error {
+	_, err := s.db.ExecContext(ctx,
+		"UPDATE repositories SET process_state=? WHERE id=?",
+		state, repoID)
+	return err
+}
+
+// SetLastProcessedAt overwrites last_processed_at, stamping it with the
+// given time (serialized via formatTime for uniform parsing on the way back).
+func (s *SQLiteRepositoryStore) SetLastProcessedAt(ctx context.Context, repoID string, t time.Time) error {
+	_, err := s.db.ExecContext(ctx,
+		"UPDATE repositories SET last_processed_at=? WHERE id=?",
+		formatTime(t), repoID)
 	return err
 }
 

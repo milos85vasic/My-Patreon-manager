@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	_ "github.com/lib/pq"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/models"
@@ -352,46 +353,95 @@ type PostgresContentTemplateStore struct{ db *sql.DB }
 type PostgresPostStore struct{ db *sql.DB }
 type PostgresAuditEntryStore struct{ db *sql.DB }
 
+// postgresRepoColumnList lists every column returned by repository SELECTs.
+// The order must match scanPostgresRepository below.
+const postgresRepoColumnList = `id, service, owner, name, url, https_url, description, readme_content, readme_format, topics::text, primary_language, language_stats::text, stars, forks, last_commit_sha, last_commit_at, is_archived, created_at, updated_at, current_revision_id, published_revision_id, process_state, last_processed_at`
+
+// scanPostgresRepository scans a single repository row. Nullable columns
+// are read via sql.NullString / sql.NullTime.
+func scanPostgresRepository(scan func(dest ...interface{}) error) (*models.Repository, error) {
+	repo := &models.Repository{}
+	var topics, langStats []byte
+	var currentRev, publishedRev sql.NullString
+	var lastProcessed sql.NullTime
+	var lastCommitAt sql.NullTime
+	if err := scan(&repo.ID, &repo.Service, &repo.Owner, &repo.Name, &repo.URL, &repo.HTTPSURL,
+		&repo.Description, &repo.READMEContent, &repo.READMEFormat,
+		&topics, &repo.PrimaryLanguage, &langStats,
+		&repo.Stars, &repo.Forks, &repo.LastCommitSHA, &lastCommitAt, &repo.IsArchived,
+		&repo.CreatedAt, &repo.UpdatedAt,
+		&currentRev, &publishedRev, &repo.ProcessState, &lastProcessed); err != nil {
+		return nil, err
+	}
+	_ = json.Unmarshal(topics, &repo.Topics)
+	_ = json.Unmarshal(langStats, &repo.LanguageStats)
+	if lastCommitAt.Valid {
+		repo.LastCommitAt = lastCommitAt.Time
+	}
+	if currentRev.Valid && currentRev.String != "" {
+		s := currentRev.String
+		repo.CurrentRevisionID = &s
+	}
+	if publishedRev.Valid && publishedRev.String != "" {
+		s := publishedRev.String
+		repo.PublishedRevisionID = &s
+	}
+	if lastProcessed.Valid {
+		t := lastProcessed.Time
+		repo.LastProcessedAt = &t
+	}
+	return repo, nil
+}
+
 func (s *PostgresRepositoryStore) Create(ctx context.Context, repo *models.Repository) error {
 	topics, _ := json.Marshal(repo.Topics)
 	langStats, _ := json.Marshal(repo.LanguageStats)
-	_, err := s.db.ExecContext(ctx, `INSERT INTO repositories (id, service, owner, name, url, https_url, description, readme_content, readme_format, topics, primary_language, language_stats, stars, forks, last_commit_sha, last_commit_at, is_archived, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
-		repo.ID, repo.Service, repo.Owner, repo.Name, repo.URL, repo.HTTPSURL, repo.Description, repo.READMEContent, repo.READMEFormat, topics, repo.PrimaryLanguage, langStats, repo.Stars, repo.Forks, repo.LastCommitSHA, repo.LastCommitAt, repo.IsArchived, repo.CreatedAt, repo.UpdatedAt)
+	processState := repo.ProcessState
+	if processState == "" {
+		processState = "idle"
+	}
+	var currentRev, publishedRev interface{}
+	if repo.CurrentRevisionID != nil {
+		currentRev = *repo.CurrentRevisionID
+	}
+	if repo.PublishedRevisionID != nil {
+		publishedRev = *repo.PublishedRevisionID
+	}
+	var lastProcessed interface{}
+	if repo.LastProcessedAt != nil {
+		lastProcessed = *repo.LastProcessedAt
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO repositories (id, service, owner, name, url, https_url, description, readme_content, readme_format, topics, primary_language, language_stats, stars, forks, last_commit_sha, last_commit_at, is_archived, created_at, updated_at, current_revision_id, published_revision_id, process_state, last_processed_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)`,
+		repo.ID, repo.Service, repo.Owner, repo.Name, repo.URL, repo.HTTPSURL, repo.Description, repo.READMEContent, repo.READMEFormat, topics, repo.PrimaryLanguage, langStats, repo.Stars, repo.Forks, repo.LastCommitSHA, repo.LastCommitAt, repo.IsArchived, repo.CreatedAt, repo.UpdatedAt, currentRev, publishedRev, processState, lastProcessed)
 	return err
 }
 
 func (s *PostgresRepositoryStore) GetByID(ctx context.Context, id string) (*models.Repository, error) {
-	repo := &models.Repository{}
-	var topics, langStats []byte
-	err := s.db.QueryRowContext(ctx, "SELECT id, service, owner, name, url, https_url, description, readme_content, readme_format, topics::text, primary_language, language_stats::text, stars, forks, last_commit_sha, last_commit_at, is_archived, created_at, updated_at FROM repositories WHERE id=$1", id).Scan(&repo.ID, &repo.Service, &repo.Owner, &repo.Name, &repo.URL, &repo.HTTPSURL, &repo.Description, &repo.READMEContent, &repo.READMEFormat, &topics, &repo.PrimaryLanguage, &langStats, &repo.Stars, &repo.Forks, &repo.LastCommitSHA, &repo.LastCommitAt, &repo.IsArchived, &repo.CreatedAt, &repo.UpdatedAt)
+	row := s.db.QueryRowContext(ctx, "SELECT "+postgresRepoColumnList+" FROM repositories WHERE id=$1", id)
+	repo, err := scanPostgresRepository(row.Scan)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	json.Unmarshal(topics, &repo.Topics)
-	json.Unmarshal(langStats, &repo.LanguageStats)
 	return repo, nil
 }
 
 func (s *PostgresRepositoryStore) GetByServiceOwnerName(ctx context.Context, service, owner, name string) (*models.Repository, error) {
-	repo := &models.Repository{}
-	var topics, langStats []byte
-	err := s.db.QueryRowContext(ctx, "SELECT id, service, owner, name, url, https_url, description, readme_content, readme_format, topics::text, primary_language, language_stats::text, stars, forks, last_commit_sha, last_commit_at, is_archived, created_at, updated_at FROM repositories WHERE service=$1 AND owner=$2 AND name=$3", service, owner, name).Scan(&repo.ID, &repo.Service, &repo.Owner, &repo.Name, &repo.URL, &repo.HTTPSURL, &repo.Description, &repo.READMEContent, &repo.READMEFormat, &topics, &repo.PrimaryLanguage, &langStats, &repo.Stars, &repo.Forks, &repo.LastCommitSHA, &repo.LastCommitAt, &repo.IsArchived, &repo.CreatedAt, &repo.UpdatedAt)
+	row := s.db.QueryRowContext(ctx, "SELECT "+postgresRepoColumnList+" FROM repositories WHERE service=$1 AND owner=$2 AND name=$3", service, owner, name)
+	repo, err := scanPostgresRepository(row.Scan)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	json.Unmarshal(topics, &repo.Topics)
-	json.Unmarshal(langStats, &repo.LanguageStats)
 	return repo, nil
 }
 
 func (s *PostgresRepositoryStore) List(ctx context.Context, filter RepositoryFilter) ([]*models.Repository, error) {
-	query := "SELECT id, service, owner, name, url, https_url, description, readme_content, readme_format, topics::text, primary_language, language_stats::text, stars, forks, last_commit_sha, last_commit_at, is_archived, created_at, updated_at FROM repositories WHERE 1=1"
+	query := "SELECT " + postgresRepoColumnList + " FROM repositories WHERE 1=1"
 	args := []interface{}{}
 	argIdx := 1
 	if filter.Service != "" {
@@ -416,13 +466,10 @@ func (s *PostgresRepositoryStore) List(ctx context.Context, filter RepositoryFil
 	defer rows.Close()
 	var repos []*models.Repository
 	for rows.Next() {
-		repo := &models.Repository{}
-		var topics, langStats []byte
-		if err := rows.Scan(&repo.ID, &repo.Service, &repo.Owner, &repo.Name, &repo.URL, &repo.HTTPSURL, &repo.Description, &repo.READMEContent, &repo.READMEFormat, &topics, &repo.PrimaryLanguage, &langStats, &repo.Stars, &repo.Forks, &repo.LastCommitSHA, &repo.LastCommitAt, &repo.IsArchived, &repo.CreatedAt, &repo.UpdatedAt); err != nil {
+		repo, err := scanPostgresRepository(rows.Scan)
+		if err != nil {
 			return nil, err
 		}
-		json.Unmarshal(topics, &repo.Topics)
-		json.Unmarshal(langStats, &repo.LanguageStats)
 		repos = append(repos, repo)
 	}
 	return repos, nil
@@ -431,13 +478,60 @@ func (s *PostgresRepositoryStore) List(ctx context.Context, filter RepositoryFil
 func (s *PostgresRepositoryStore) Update(ctx context.Context, repo *models.Repository) error {
 	topics, _ := json.Marshal(repo.Topics)
 	langStats, _ := json.Marshal(repo.LanguageStats)
-	_, err := s.db.ExecContext(ctx, "UPDATE repositories SET service=$1, owner=$2, name=$3, url=$4, https_url=$5, description=$6, readme_content=$7, readme_format=$8, topics=$9, primary_language=$10, language_stats=$11, stars=$12, forks=$13, last_commit_sha=$14, last_commit_at=$15, is_archived=$16, updated_at=CURRENT_TIMESTAMP WHERE id=$17",
-		repo.Service, repo.Owner, repo.Name, repo.URL, repo.HTTPSURL, repo.Description, repo.READMEContent, repo.READMEFormat, topics, repo.PrimaryLanguage, langStats, repo.Stars, repo.Forks, repo.LastCommitSHA, repo.LastCommitAt, repo.IsArchived, repo.ID)
+	processState := repo.ProcessState
+	if processState == "" {
+		processState = "idle"
+	}
+	var currentRev, publishedRev interface{}
+	if repo.CurrentRevisionID != nil {
+		currentRev = *repo.CurrentRevisionID
+	}
+	if repo.PublishedRevisionID != nil {
+		publishedRev = *repo.PublishedRevisionID
+	}
+	var lastProcessed interface{}
+	if repo.LastProcessedAt != nil {
+		lastProcessed = *repo.LastProcessedAt
+	}
+	_, err := s.db.ExecContext(ctx, "UPDATE repositories SET service=$1, owner=$2, name=$3, url=$4, https_url=$5, description=$6, readme_content=$7, readme_format=$8, topics=$9, primary_language=$10, language_stats=$11, stars=$12, forks=$13, last_commit_sha=$14, last_commit_at=$15, is_archived=$16, current_revision_id=$17, published_revision_id=$18, process_state=$19, last_processed_at=$20, updated_at=CURRENT_TIMESTAMP WHERE id=$21",
+		repo.Service, repo.Owner, repo.Name, repo.URL, repo.HTTPSURL, repo.Description, repo.READMEContent, repo.READMEFormat, topics, repo.PrimaryLanguage, langStats, repo.Stars, repo.Forks, repo.LastCommitSHA, repo.LastCommitAt, repo.IsArchived, currentRev, publishedRev, processState, lastProcessed, repo.ID)
 	return err
 }
 
 func (s *PostgresRepositoryStore) Delete(ctx context.Context, id string) error {
 	_, err := s.db.ExecContext(ctx, "DELETE FROM repositories WHERE id=$1", id)
+	return err
+}
+
+// SetRevisionPointers updates current_revision_id (always) and
+// published_revision_id (only when publishedID is non-empty). Pass an
+// empty publishedID when you want to leave the published pointer alone.
+func (s *PostgresRepositoryStore) SetRevisionPointers(ctx context.Context, repoID, currentID, publishedID string) error {
+	if publishedID == "" {
+		_, err := s.db.ExecContext(ctx,
+			"UPDATE repositories SET current_revision_id=$1 WHERE id=$2",
+			currentID, repoID)
+		return err
+	}
+	_, err := s.db.ExecContext(ctx,
+		"UPDATE repositories SET current_revision_id=$1, published_revision_id=$2 WHERE id=$3",
+		currentID, publishedID, repoID)
+	return err
+}
+
+// SetProcessState overwrites the process_state column.
+func (s *PostgresRepositoryStore) SetProcessState(ctx context.Context, repoID, state string) error {
+	_, err := s.db.ExecContext(ctx,
+		"UPDATE repositories SET process_state=$1 WHERE id=$2",
+		state, repoID)
+	return err
+}
+
+// SetLastProcessedAt overwrites the last_processed_at column.
+func (s *PostgresRepositoryStore) SetLastProcessedAt(ctx context.Context, repoID string, t time.Time) error {
+	_, err := s.db.ExecContext(ctx,
+		"UPDATE repositories SET last_processed_at=$1 WHERE id=$2",
+		t, repoID)
 	return err
 }
 

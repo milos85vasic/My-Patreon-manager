@@ -511,3 +511,145 @@ func TestSQLiteAuditEntryStore_CRUD(t *testing.T) {
 		t.Errorf("expected 1 purged, got %d", purged)
 	}
 }
+
+// seedBareRepo inserts a minimal repositories row via raw SQL, exercising
+// the database defaults (process_state='idle', both revision pointers NULL).
+// Shared by the SetRevisionPointers / SetProcessState / SetLastProcessedAt
+// tests below.
+func seedBareRepo(t *testing.T, db *SQLiteDB, id string) {
+	t.Helper()
+	ctx := context.Background()
+	_, err := db.DB().ExecContext(ctx,
+		`INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES (?,?,?,?,?,?)`,
+		id, "github", "o", "n", "u", "h")
+	if err != nil {
+		t.Fatalf("seed %s: %v", id, err)
+	}
+}
+
+func TestRepositoryStore_SetRevisionPointers(t *testing.T) {
+	db := setupSQLite(t)
+	ctx := context.Background()
+	seedBareRepo(t, db, "r")
+
+	if err := db.Repositories().SetRevisionPointers(ctx, "r", "cur", "pub"); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	repo, _ := db.Repositories().GetByID(ctx, "r")
+	if repo.CurrentRevisionID == nil || *repo.CurrentRevisionID != "cur" {
+		t.Fatalf("current: %v", repo.CurrentRevisionID)
+	}
+	if repo.PublishedRevisionID == nil || *repo.PublishedRevisionID != "pub" {
+		t.Fatalf("published: %v", repo.PublishedRevisionID)
+	}
+	// Second call with empty published should NOT clear it.
+	if err := db.Repositories().SetRevisionPointers(ctx, "r", "cur2", ""); err != nil {
+		t.Fatalf("set2: %v", err)
+	}
+	repo, _ = db.Repositories().GetByID(ctx, "r")
+	if *repo.CurrentRevisionID != "cur2" {
+		t.Fatalf("current not updated: %s", *repo.CurrentRevisionID)
+	}
+	if repo.PublishedRevisionID == nil || *repo.PublishedRevisionID != "pub" {
+		t.Fatalf("published should be preserved: %v", repo.PublishedRevisionID)
+	}
+}
+
+func TestRepositoryStore_SetProcessState(t *testing.T) {
+	db := setupSQLite(t)
+	ctx := context.Background()
+	seedBareRepo(t, db, "r")
+
+	if err := db.Repositories().SetProcessState(ctx, "r", "processing"); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	repo, _ := db.Repositories().GetByID(ctx, "r")
+	if repo.ProcessState != "processing" {
+		t.Fatalf("state: %s", repo.ProcessState)
+	}
+}
+
+func TestRepositoryStore_SetLastProcessedAt(t *testing.T) {
+	db := setupSQLite(t)
+	ctx := context.Background()
+	seedBareRepo(t, db, "r")
+
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	if err := db.Repositories().SetLastProcessedAt(ctx, "r", now); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	repo, _ := db.Repositories().GetByID(ctx, "r")
+	if repo.LastProcessedAt == nil || !repo.LastProcessedAt.Equal(now) {
+		t.Fatalf("lpa: want %v got %v", now, repo.LastProcessedAt)
+	}
+}
+
+// TestRepositoryStore_RoundTripRepositoryPointers_ViaUpdate makes sure the
+// store's Update path round-trips the four new columns (not just the
+// dedicated setters).
+func TestRepositoryStore_RoundTripRepositoryPointers_ViaUpdate(t *testing.T) {
+	db := setupSQLite(t)
+	ctx := context.Background()
+	store := db.Repositories()
+
+	cur := "cur"
+	pub := "pub"
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	repo := &models.Repository{
+		ID:                  "rr",
+		Service:             "github",
+		Owner:               "owner",
+		Name:                "repo",
+		URL:                 "u",
+		HTTPSURL:            "h",
+		CreatedAt:           time.Now(),
+		UpdatedAt:           time.Now(),
+		CurrentRevisionID:   &cur,
+		PublishedRevisionID: &pub,
+		ProcessState:        "processing",
+		LastProcessedAt:     &now,
+	}
+	if err := store.Create(ctx, repo); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	got, err := store.GetByID(ctx, "rr")
+	if err != nil || got == nil {
+		t.Fatalf("get: %v %+v", err, got)
+	}
+	if got.CurrentRevisionID == nil || *got.CurrentRevisionID != "cur" {
+		t.Fatalf("current after create: %+v", got.CurrentRevisionID)
+	}
+	if got.PublishedRevisionID == nil || *got.PublishedRevisionID != "pub" {
+		t.Fatalf("published after create: %+v", got.PublishedRevisionID)
+	}
+	if got.ProcessState != "processing" {
+		t.Fatalf("state after create: %s", got.ProcessState)
+	}
+	if got.LastProcessedAt == nil || !got.LastProcessedAt.Equal(now) {
+		t.Fatalf("lpa after create: %+v", got.LastProcessedAt)
+	}
+
+	// Update path: swap values to a new shape.
+	cur2 := "cur2"
+	later := now.Add(1 * time.Hour)
+	got.CurrentRevisionID = &cur2
+	got.PublishedRevisionID = nil
+	got.ProcessState = "ready"
+	got.LastProcessedAt = &later
+	if err := store.Update(ctx, got); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	got2, _ := store.GetByID(ctx, "rr")
+	if *got2.CurrentRevisionID != "cur2" {
+		t.Fatalf("current after update: %+v", got2.CurrentRevisionID)
+	}
+	if got2.PublishedRevisionID != nil {
+		t.Fatalf("published should be nil: %+v", got2.PublishedRevisionID)
+	}
+	if got2.ProcessState != "ready" {
+		t.Fatalf("state after update: %s", got2.ProcessState)
+	}
+	if got2.LastProcessedAt == nil || !got2.LastProcessedAt.Equal(later) {
+		t.Fatalf("lpa after update: %+v", got2.LastProcessedAt)
+	}
+}
