@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -50,6 +51,29 @@ func (m *mockMetricsCollector) RecordPostUpdated(tier string)                   
 func (m *mockMetricsCollector) RecordWebhookEvent(service, eventType string)                      {}
 func (m *mockMetricsCollector) SetActiveSyncs(count int)                                          {}
 func (m *mockMetricsCollector) SetBudgetUtilization(percent float64)                              {}
+
+// safeBuf is a goroutine-safe bytes.Buffer wrapper for slog.NewTextHandler.
+// runServer spawns a goroutine that calls logger.Info before blocking in
+// ListenAndServe; without synchronization, a fast-cancelled context can
+// trigger a race between that goroutine and the test reading the buffer
+// with String(). safeBuf serializes writes and reads so the -race detector
+// stays quiet regardless of shutdown timing.
+type safeBuf struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (s *safeBuf) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.Write(p)
+}
+
+func (s *safeBuf) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.String()
+}
 
 // mockExit captures calls to osExit
 type mockExit struct {
@@ -711,15 +735,22 @@ func TestRunServer_WarnsEmptyAdminKey(t *testing.T) {
 	newMetricsCollector = func() metrics.MetricsCollector { return &mockMetricsCollector{} }
 	defer func() { newMetricsCollector = originalNewMetricsCollector }()
 
-	os.Unsetenv("ADMIN_KEY")
+	// t.Setenv automatically restores the previous value on test end and
+	// fails the test if another goroutine mutates the environment, which
+	// keeps this test's view of ADMIN_KEY isolated from siblings.
+	t.Setenv("ADMIN_KEY", "")
 	cfg := &config.Config{
 		GinMode:           "test",
 		Port:              0,
 		AdminKey:          "",
 		WebhookHMACSecret: "",
 	}
-	var buf bytes.Buffer
-	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	// Use a goroutine-safe sink so that the runServer serve goroutine and
+	// the test reader can't race on the underlying buffer. runServer now
+	// waits for that goroutine before returning, but we keep the safeBuf
+	// belt-and-suspenders for callers that inspect the log mid-flight.
+	buf := &safeBuf{}
+	logger := slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()

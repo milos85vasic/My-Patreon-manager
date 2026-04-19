@@ -10,6 +10,7 @@ import (
 	"net/http/pprof"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -153,7 +154,15 @@ func runServer(ctx context.Context, cfg *config.Config, addr string, logger *slo
 		Handler: r,
 	}
 
+	// Track the serve goroutine so we don't return from runServer while it
+	// may still write to the logger sink. Without this, a fast-cancelled
+	// context can reach srv.Shutdown before the goroutine has called
+	// logger.Info("server starting"), which then races with the caller
+	// reading the log output after runServer returns.
+	var serveWG sync.WaitGroup
+	serveWG.Add(1)
 	go func() {
+		defer serveWG.Done()
 		logger.Info("server starting", slog.String("addr", addr))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Error("server listen failed", slog.String("error", err.Error()))
@@ -166,8 +175,13 @@ func runServer(ctx context.Context, cfg *config.Config, addr string, logger *slo
 	defer cancel()
 
 	logger.Info("server shutting down")
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("shutdown failed: %w", err)
+	shutdownErr := srv.Shutdown(shutdownCtx)
+	// Wait for the serve goroutine to exit before returning so that any
+	// log writes it performs are flushed (and ordered) before the caller
+	// inspects the log sink.
+	serveWG.Wait()
+	if shutdownErr != nil {
+		return fmt.Errorf("shutdown failed: %w", shutdownErr)
 	}
 
 	return nil
