@@ -202,7 +202,10 @@ func main() {
 			PatreonClient: patreonClient,
 			SyncOpts:      syncOpts,
 		}
-		if err := runProcess(ctx, cfg, db, buildProcessDeps(cfg, db, logger, depsIn)); err != nil {
+		deps := buildProcessDeps(cfg, db, logger, depsIn)
+		if schedule != "" {
+			runProcessScheduledFunc(ctx, cfg, db, deps, schedule, logger)
+		} else if err := runProcess(ctx, cfg, db, deps); err != nil {
 			logger.Error("process failed", slog.String("error", err.Error()))
 			osExit(1)
 		}
@@ -217,7 +220,10 @@ func main() {
 			PatreonClient: patreonClient,
 			SyncOpts:      syncOpts,
 		}
-		if err := runProcess(ctx, cfg, db, buildProcessDeps(cfg, db, logger, depsIn)); err != nil {
+		deps := buildProcessDeps(cfg, db, logger, depsIn)
+		if schedule != "" {
+			runProcessScheduledFunc(ctx, cfg, db, deps, schedule, logger)
+		} else if err := runProcess(ctx, cfg, db, deps); err != nil {
 			logger.Error("process failed", slog.String("error", err.Error()))
 			osExit(1)
 		}

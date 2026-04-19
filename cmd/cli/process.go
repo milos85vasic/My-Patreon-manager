@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/milos85vasic/My-Patreon-Manager/internal/config"
@@ -15,6 +17,7 @@ import (
 	"github.com/milos85vasic/My-Patreon-Manager/internal/services/content"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/services/process"
 	syncsvc "github.com/milos85vasic/My-Patreon-Manager/internal/services/sync"
+	"github.com/robfig/cron/v3"
 )
 
 // processDeps bundles the externally-supplied collaborators used by the
@@ -292,4 +295,50 @@ func buildProcessDeps(_ *config.Config, _ database.Database, logger *slog.Logger
 		IllustrationGen: nil,
 		Logger:          logger,
 	}
+}
+
+// runProcessScheduledFunc is the package-level variable wrapping
+// runProcessScheduled so tests can swap it out.
+var runProcessScheduledFunc = runProcessScheduled
+
+// runProcessScheduled runs the process pipeline on a cron schedule. It
+// exits cleanly on SIGINT/SIGTERM or when ctx is canceled. Individual
+// run errors are logged but don't stop the scheduler — the next tick
+// fires regardless.
+func runProcessScheduled(
+	ctx context.Context,
+	cfg *config.Config,
+	db database.Database,
+	deps processDeps,
+	schedule string,
+	logger *slog.Logger,
+) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		logger.Info("received shutdown signal, stopping scheduler")
+		cancel()
+	}()
+
+	c := cron.New()
+	if _, err := c.AddFunc(schedule, func() {
+		if err := runProcess(ctx, cfg, db, deps); err != nil {
+			logger.Error("scheduled process tick failed", slog.String("error", err.Error()))
+		}
+	}); err != nil {
+		logger.Error("invalid cron schedule", slog.String("schedule", schedule), slog.String("error", err.Error()))
+		osExit(1)
+		return
+	}
+	c.Start()
+	logger.Info("process scheduler started", slog.String("schedule", schedule))
+
+	<-ctx.Done()
+	stopCtx := c.Stop()
+	<-stopCtx.Done()
+	logger.Info("process scheduler stopped")
 }
