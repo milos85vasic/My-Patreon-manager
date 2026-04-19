@@ -165,6 +165,67 @@ Controls the `process` command -- the top-level versioned-content pipeline (repl
 | `DRIFT_CHECK_SKIP_MINUTES` | No | `30` | Skip the Patreon drift check if the post was verified within this window. Set to `0` to always re-check. |
 | `PROCESS_LOCK_HEARTBEAT_SECONDS` | No | `30` | Heartbeat interval for the `process_runs` lock row. Stale rows whose heartbeat exceeds ~10x this value are reclaimable as `crashed`. |
 
+#### Overview
+
+`process` is the top-level pipeline that replaces the legacy `sync` flow. A single invocation runs: scan Git providers → first-run Patreon import (once per campaign, idempotent) → generate new drafts for eligible repos → illustrate → land drafts as `pending_review` `content_revisions` rows → prune old history. The command holds a single-runner lock (`process_runs`) with a heartbeat, so two concurrent invocations never overlap and a crashed run is reclaimable.
+
+Core design decisions enforced by this pipeline:
+
+- **Immutable revisions.** `content_revisions.body`, `title`, and `fingerprint` are insert-only. Edits create a new row that supersedes the source; approvals and publishes only flip `status`, `patreon_post_id`, and `published_to_patreon_at` via forward-only transitions.
+- **Per-repo cap.** `MAX_ARTICLES_PER_REPO` bounds the number of outstanding `pending_review` drafts per repo. Defaults to `1` so a human reviews each alternative before another is generated.
+- **Global run cap.** `MAX_ARTICLES_PER_RUN` rate-limits LLM spend per cron tick across the whole campaign.
+- **Fingerprint dedup.** A content fingerprint is computed before generation; if an existing revision with the same fingerprint already exists, generation is skipped. `GENERATOR_VERSION` is part of the cache key -- bump it to force re-generation after prompt/model changes.
+- **Single-runner lock.** `PROCESS_LOCK_HEARTBEAT_SECONDS` drives the `process_runs` heartbeat. Stale rows (~10x heartbeat) are reclaimable as `crashed`, so operators don't have to intervene manually after an ungraceful exit.
+- **Drift detection.** Before republishing, `publish` verifies the live Patreon post matches the last known revision. `DRIFT_CHECK_SKIP_MINUTES` caches a recent successful check; any mismatch halts that repo until an operator resolves the drift via the preview UI.
+
+#### Interaction with Other Commands
+
+| Command | Relationship |
+|---------|--------------|
+| `process` | Top-level entry point. All operators should run this. |
+| `sync` | Deprecation alias. Prints a warning to stderr and falls through to the same pipeline. Kept so existing cron entries and scripts keep working. |
+| `publish` | Revision-aware. Only `approved` revisions are eligible to publish. Drift detection halts a repo until resolved. |
+| `scan` | Low-level helper -- discovery only, no generation or publish. Useful for debugging provider/auth issues. |
+| `generate` | Low-level helper -- runs one pass of content generation without lock/cap orchestration. |
+| `verify` | Low-level helper -- exercises LLMsVerifier connectivity and model ranking. |
+
+The low-level helpers are retained for debugging and operator spot-checks; they do not participate in the revision/cap/lock machinery.
+
+#### Example Configurations
+
+**Conservative: review every draft, 1 per repo, 1 per run.** Good for a solo creator who wants to proofread each alternative.
+
+```env
+MAX_ARTICLES_PER_REPO=1
+MAX_ARTICLES_PER_RUN=1
+MAX_REVISIONS=20
+DRIFT_CHECK_SKIP_MINUTES=30
+```
+
+**Parallel cron with run-cap throttle.** A team running `process --schedule` every hour with a tighter LLM budget. The run cap limits cost per tick; the per-repo cap still forces approval.
+
+```env
+MAX_ARTICLES_PER_REPO=1
+MAX_ARTICLES_PER_RUN=5
+LLM_DAILY_TOKEN_BUDGET=200000
+GENERATOR_VERSION=v1
+PROCESS_LOCK_HEARTBEAT_SECONDS=30
+```
+
+**High-trust auto-ramp-up.** Multiple alternative drafts per repo to pick from, no run cap, shorter drift cache for quicker reaction to manual edits on Patreon.
+
+```env
+MAX_ARTICLES_PER_REPO=3
+MAX_ARTICLES_PER_RUN=
+MAX_REVISIONS=50
+DRIFT_CHECK_SKIP_MINUTES=5
+```
+
+#### References
+
+- Design: [`docs/superpowers/specs/2026-04-18-process-command-design.md`](../superpowers/specs/2026-04-18-process-command-design.md)
+- Implementation plan: [`docs/superpowers/plans/2026-04-18-process-command.md`](../superpowers/plans/2026-04-18-process-command.md)
+
 ### LLMsVerifier
 
 All LLM calls route through the LLMsVerifier service, which tests providers, scores models, and returns a ranked list. This is a required dependency for commands that perform content generation.
