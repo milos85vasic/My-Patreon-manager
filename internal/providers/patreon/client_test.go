@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/milos85vasic/My-Patreon-Manager/internal/errors"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/models"
@@ -361,3 +362,270 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
 }
+
+func TestClient_GetPost_Success(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method)
+		assert.Equal(t, "/posts/post-123", r.URL.Path)
+		assert.Equal(t, "fields[post]=title,content,url,published_at", r.URL.RawQuery)
+		assert.Equal(t, "Bearer test-access-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": map[string]interface{}{
+				"id": "post-123",
+				"attributes": map[string]interface{}{
+					"title":        "Hello World",
+					"content":      "<p>body</p>",
+					"url":          "https://www.patreon.com/posts/post-123",
+					"published_at": "2024-01-02T03:04:05Z",
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	post, err := client.GetPost(context.Background(), "post-123")
+	require.NoError(t, err)
+	require.NotNil(t, post)
+	assert.Equal(t, "post-123", post.ID)
+	assert.Equal(t, "Hello World", post.Title)
+	assert.Equal(t, "<p>body</p>", post.Content)
+	assert.Equal(t, 2024, post.PublishedAt.Year())
+	assert.Equal(t, time.January, post.PublishedAt.Month())
+	assert.Equal(t, 2, post.PublishedAt.Day())
+}
+
+func TestClient_GetPost_NotFound(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	post, err := client.GetPost(context.Background(), "missing")
+	require.NoError(t, err)
+	assert.Nil(t, post)
+}
+
+func TestClient_GetPost_UnexpectedStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	_, err := client.GetPost(context.Background(), "post-1")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unexpected status 403")
+}
+
+func TestClient_GetPost_MalformedJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": { "id": "bad"`))
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	_, err := client.GetPost(context.Background(), "post-1")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "decode post")
+}
+
+func TestClient_GetPost_InvalidPublishedAt(t *testing.T) {
+	// Unparseable published_at should not fail the call; PublishedAt stays zero.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": map[string]interface{}{
+				"id": "post-xyz",
+				"attributes": map[string]interface{}{
+					"title":        "T",
+					"content":      "C",
+					"published_at": "not-a-date",
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	post, err := client.GetPost(context.Background(), "post-xyz")
+	require.NoError(t, err)
+	require.NotNil(t, post)
+	assert.True(t, post.PublishedAt.IsZero())
+}
+
+func TestClient_GetPost_NetworkError(t *testing.T) {
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return nil, fmt.Errorf("boom")
+	})
+	client := newTestClient(t, "http://dummy")
+	client.SetTransport(transport)
+	_, err := client.GetPost(context.Background(), "post-1")
+	require.Error(t, err)
+	var pe errors.ProviderError
+	require.ErrorAs(t, err, &pe)
+	assert.Equal(t, "network_timeout", pe.Code())
+}
+
+func TestClient_ListCampaignPosts_Empty(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/campaigns/test-campaign-id/posts", r.URL.Path)
+		assert.Contains(t, r.URL.RawQuery, "fields[post]=title,content,url,published_at")
+		assert.Contains(t, r.URL.RawQuery, "page[size]=20")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data":  []interface{}{},
+			"links": map[string]interface{}{},
+		})
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	posts, err := client.ListCampaignPosts(context.Background(), "test-campaign-id")
+	require.NoError(t, err)
+	require.NotNil(t, posts)
+	assert.Len(t, posts, 0)
+}
+
+func TestClient_ListCampaignPosts_SinglePage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]interface{}{
+				{
+					"id": "p-1",
+					"attributes": map[string]interface{}{
+						"title":        "One",
+						"content":      "c1",
+						"url":          "u1",
+						"published_at": "2024-02-03T00:00:00Z",
+					},
+				},
+				{
+					"id": "p-2",
+					"attributes": map[string]interface{}{
+						"title":   "Two",
+						"content": "c2",
+					},
+				},
+			},
+			"links": map[string]interface{}{},
+		})
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	posts, err := client.ListCampaignPosts(context.Background(), "test-campaign-id")
+	require.NoError(t, err)
+	require.Len(t, posts, 2)
+	assert.Equal(t, "p-1", posts[0].ID)
+	assert.Equal(t, "One", posts[0].Title)
+	assert.Equal(t, "c1", posts[0].Content)
+	assert.Equal(t, 2024, posts[0].PublishedAt.Year())
+	assert.Equal(t, "p-2", posts[1].ID)
+	assert.Equal(t, "Two", posts[1].Title)
+	assert.True(t, posts[1].PublishedAt.IsZero())
+}
+
+func TestClient_ListCampaignPosts_MultiPage(t *testing.T) {
+	var nextURL string
+	var hits int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		// First call: path /campaigns/test-campaign-id/posts; second call: /page2
+		if r.URL.Path == "/page2" {
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"data": []map[string]interface{}{
+					{"id": "p-3", "attributes": map[string]interface{}{"title": "Three", "content": "c3"}},
+				},
+				"links": map[string]interface{}{},
+			})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]interface{}{
+				{"id": "p-1", "attributes": map[string]interface{}{"title": "One", "content": "c1"}},
+				{"id": "p-2", "attributes": map[string]interface{}{"title": "Two", "content": "c2"}},
+			},
+			"links": map[string]interface{}{
+				"next": nextURL,
+			},
+		})
+	}))
+	defer server.Close()
+	nextURL = server.URL + "/page2"
+
+	client := newTestClient(t, server.URL)
+	posts, err := client.ListCampaignPosts(context.Background(), "test-campaign-id")
+	require.NoError(t, err)
+	require.Len(t, posts, 3)
+	assert.Equal(t, "p-1", posts[0].ID)
+	assert.Equal(t, "p-2", posts[1].ID)
+	assert.Equal(t, "p-3", posts[2].ID)
+	assert.Equal(t, 2, hits)
+}
+
+func TestClient_ListCampaignPosts_ErrorMidPagination(t *testing.T) {
+	var nextURL string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/page2" {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]interface{}{
+				{"id": "p-1", "attributes": map[string]interface{}{"title": "One", "content": "c1"}},
+			},
+			"links": map[string]interface{}{"next": nextURL},
+		})
+	}))
+	defer server.Close()
+	nextURL = server.URL + "/page2"
+
+	client := newTestClient(t, server.URL)
+	_, err := client.ListCampaignPosts(context.Background(), "test-campaign-id")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unexpected status 403")
+}
+
+func TestClient_ListCampaignPosts_MalformedJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": [`))
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	_, err := client.ListCampaignPosts(context.Background(), "test-campaign-id")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "decode campaign posts")
+}
+
+func TestClient_ListCampaignPosts_NetworkError(t *testing.T) {
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return nil, fmt.Errorf("down")
+	})
+	client := newTestClient(t, "http://dummy")
+	client.SetTransport(transport)
+	_, err := client.ListCampaignPosts(context.Background(), "cid")
+	require.Error(t, err)
+	var pe errors.ProviderError
+	require.ErrorAs(t, err, &pe)
+	assert.Equal(t, "network_timeout", pe.Code())
+}
+
+// time import used by GetPost success assertion.
+var _ = time.RFC3339

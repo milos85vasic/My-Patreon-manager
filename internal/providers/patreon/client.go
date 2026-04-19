@@ -337,6 +337,129 @@ func (c *Client) deletePostRaw(ctx context.Context, postID string) error {
 	return nil
 }
 
+// postFieldsQuery is the common ?include/&fields[post] query fragment
+// used by GetPost and ListCampaignPosts. Keeping one definition
+// guarantees the two endpoints return the same field set, which
+// matters for importer/publisher callers that round-trip between
+// them.
+const postFieldsQuery = "fields[post]=title,content,url,published_at"
+
+// GetPost fetches a single Patreon post by ID. On HTTP 404 it returns
+// (nil, nil) so callers can treat "post no longer exists" as a
+// non-error state — this mirrors the store-layer "not found" idiom
+// used elsewhere in the codebase. All other non-2xx statuses and
+// network errors propagate. Malformed JSON propagates as a decode
+// error.
+func (c *Client) GetPost(ctx context.Context, postID string) (*models.Post, error) {
+	url := c.buildURL(fmt.Sprintf("/posts/%s?%s", postID, postFieldsQuery))
+	resp, err := c.doWithBackoff(ctx, "GET", url, nil, c.maxRetries)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, errors.NewProviderError(
+			fmt.Sprintf("patreon get post: unexpected status %d", resp.StatusCode),
+			"unexpected_status", false, time.Time{},
+		)
+	}
+
+	var result struct {
+		Data postData `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode post: %w", err)
+	}
+	return result.Data.toModel(), nil
+}
+
+// postData is the JSON:API `data` envelope for a single post record.
+// Shared by GetPost and ListCampaignPosts (which nests a slice of
+// these under `data`).
+type postData struct {
+	ID         string `json:"id"`
+	Attributes struct {
+		Title       string `json:"title"`
+		Content     string `json:"content"`
+		URL         string `json:"url"`
+		PublishedAt string `json:"published_at"`
+	} `json:"attributes"`
+}
+
+// toModel converts the JSON:API post payload into the internal
+// models.Post. models.Post has no URL field, so the URL from Patreon
+// is dropped here — callers that need the URL (e.g. the first-run
+// importer) read it via the ListCampaignPosts process-side wrapper
+// that exposes it on process.PatreonPost.
+func (d postData) toModel() *models.Post {
+	p := &models.Post{
+		ID:      d.ID,
+		Title:   d.Attributes.Title,
+		Content: d.Attributes.Content,
+	}
+	if d.Attributes.PublishedAt != "" {
+		if t, err := time.Parse(time.RFC3339, d.Attributes.PublishedAt); err == nil {
+			p.PublishedAt = t
+		}
+	}
+	return p
+}
+
+// ListCampaignPosts enumerates every post belonging to the given
+// campaign. It follows JSON:API `links.next` pagination until the
+// API stops providing a next link, then returns the merged slice.
+// An empty campaign yields an empty (non-nil) slice.
+func (c *Client) ListCampaignPosts(ctx context.Context, campaignID string) ([]models.Post, error) {
+	posts := make([]models.Post, 0)
+	url := c.buildURL(fmt.Sprintf("/campaigns/%s/posts?%s&page[size]=20", campaignID, postFieldsQuery))
+	for url != "" {
+		page, next, err := c.listCampaignPostsPage(ctx, url)
+		if err != nil {
+			return nil, err
+		}
+		posts = append(posts, page...)
+		url = next
+	}
+	return posts, nil
+}
+
+// listCampaignPostsPage fetches a single page of campaign posts and
+// returns the decoded slice plus the absolute URL of the next page
+// (empty when this is the last page).
+func (c *Client) listCampaignPostsPage(ctx context.Context, url string) ([]models.Post, string, error) {
+	resp, err := c.doWithBackoff(ctx, "GET", url, nil, c.maxRetries)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, "", errors.NewProviderError(
+			fmt.Sprintf("patreon list campaign posts: unexpected status %d", resp.StatusCode),
+			"unexpected_status", false, time.Time{},
+		)
+	}
+
+	var result struct {
+		Data  []postData `json:"data"`
+		Links struct {
+			Next string `json:"next"`
+		} `json:"links"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, "", fmt.Errorf("decode campaign posts: %w", err)
+	}
+	out := make([]models.Post, len(result.Data))
+	for i, d := range result.Data {
+		out[i] = *d.toModel()
+	}
+	return out, result.Links.Next, nil
+}
+
 func (c *Client) AssociateTiers(ctx context.Context, postID string, tierIDs []string) error {
 	return c.execMutation(func() error {
 		return c.associateTiersRaw(ctx, postID, tierIDs)
