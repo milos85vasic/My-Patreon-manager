@@ -78,7 +78,7 @@ The codebase follows a provider/service layering where the CLI and server are th
 
 - `.specify/memory/constitution.md` — architectural principles (I–VII). Read before non-trivial changes; these are enforced, not aspirational.
 - `specs/001-patreon-manager-app/tasks.md` — active implementation tasks and user stories
-- `AGENTS.md` — companion reference; may lag behind current code state, verify before trusting
+- `AGENTS.md` — companion reference kept in sync with CLAUDE.md; cross-check when in doubt
 
 ## Feature Workflow
 
@@ -93,6 +93,12 @@ The repo mirrors to GitHub, GitLab, GitFlic, and GitVerse. `push_all.sh` at the 
 
 The repo also pulls in five Git submodules (`Challenges`, `LLMGateway`, `LLMProvider`, `LLMsVerifier`, `Models`) from `github.com/vasic-digital`. Remember `git submodule update --init --recursive` on fresh clones, and commit submodule pointer bumps separately from code changes.
 
+Submodule `LLMProvider` and `Models` intentionally do **not** mirror to `GitFlic` or `GitVerse` — the corresponding repositories don't exist on those services, so the remotes were removed from each submodule's `.git/config` (not a tracked file). The remaining mirrors (GitHub, GitLab) still receive pushes normally. Do not re-add the dead remotes; if either repository is ever created on GitFlic or GitVerse, add the remote back via `git -C LLMProvider remote add GitFlic <url>` and push manually. The other three submodules (`Challenges`, `LLMGateway`, `LLMsVerifier`) retain full four-mirror configurations.
+
 ## CI
 
 All GitHub Actions / GitLab CI workflows (`ci.yml`, `docs.yml`, `release.yml`, `security.yml`) are **`workflow_dispatch`-only** — no `push`, `pull_request`, `schedule`, or `tag` triggers. Do not add automatic triggers when editing workflow files.
+
+## Developer environment
+
+The `post-tool-cli-scan` Semgrep hook in `.claude/settings.json` (user-scoped) requires `SEMGREP_APP_TOKEN` or a Semgrep CLI login. If you see repeated `No SEMGREP_APP_TOKEN found` warnings during `Edit`/`Write`, either run `semgrep login` or disable the hook. The warnings are non-blocking — the edits still land.
