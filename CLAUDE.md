@@ -94,9 +94,7 @@ The codebase follows a provider/service layering where the CLI and server are th
 
 The repo mirrors to GitHub, GitLab, GitFlic, and GitVerse. `push_all.sh` at the repo root pushes `main` to all four remotes in sequence (with fetch-and-merge handling for GitLab); per-service helpers live in `Upstreams/`. Branch protection may be enabled — prefer merge requests over force-pushing to protected branches. Any history rewrite (e.g. credential purge) must be force-pushed to **all four** remotes.
 
-The repo also pulls in five Git submodules (`Challenges`, `LLMGateway`, `LLMProvider`, `LLMsVerifier`, `Models`) from `github.com/vasic-digital`. Remember `git submodule update --init --recursive` on fresh clones, and commit submodule pointer bumps separately from code changes.
-
-Submodule `LLMProvider` and `Models` intentionally do **not** mirror to `GitFlic` or `GitVerse` — the corresponding repositories don't exist on those services, so the remotes were removed from each submodule's `.git/config` (not a tracked file). The remaining mirrors (GitHub, GitLab) still receive pushes normally. Do not re-add the dead remotes; if either repository is ever created on GitFlic or GitVerse, add the remote back via `git -C LLMProvider remote add GitFlic <url>` and push manually. The other three submodules (`Challenges`, `LLMGateway`, `LLMsVerifier`) retain full four-mirror configurations.
+The repo also pulls in five Git submodules (`Challenges`, `LLMGateway`, `LLMProvider`, `LLMsVerifier`, `Models`) from `github.com/vasic-digital`. Remember `git submodule update --init --recursive` on fresh clones, and commit submodule pointer bumps separately from code changes. `LLMProvider` and `Models` mirror only to GitHub/GitLab (the GitFlic/GitVerse repos don't exist server-side); details and history in `docs/KNOWN-ISSUES.md` §2.3.
 
 ## CI
 

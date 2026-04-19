@@ -41,7 +41,12 @@ Maintained alongside the code — treat this as the canonical "what's not done a
 5. [Environmental caveats (not bugs)](#5-environmental-caveats-not-bugs)
     - [5.1 Semgrep hook requires auth](#51-semgrep-hook-requires-auth)
     - [5.2 `scripts/coverage.sh` default `COVERAGE_MIN=100`](#52-scriptscoveragesh-default-coverage_min100)
-6. [How to contribute fixes for these](#6-how-to-contribute-fixes-for-these)
+6. [Repository housekeeping](#6-repository-housekeeping)
+    - [6.1 Stale local feature branches (all merged)](#61-stale-local-feature-branches-all-merged)
+    - [6.2 Stale `.worktrees/feat-multi-org-support/` worktree](#62-stale-worktreesfeat-multi-org-support-worktree)
+    - [6.3 `specs/001-patreon-manager-app/tasks.md` is fully checked off](#63-specs001-patreon-manager-apptasksmd-is-fully-checked-off)
+    - [6.4 `.gitignore` lists `/cli` but not `/server`](#64-gitignore-lists-cli-but-not-server)
+7. [How to contribute fixes for these](#7-how-to-contribute-fixes-for-these)
 
 ---
 
@@ -378,7 +383,87 @@ Noted in `CLAUDE.md` and this document's §2.2.
 
 ---
 
-## 6. How to contribute fixes for these
+## 6. Repository housekeeping
+
+These are not bugs and don't affect runtime behavior, but they're useful state to know about before opening the project for the first time.
+
+### 6.1 Stale local feature branches (all merged)
+
+**Category:** Known-quirk
+**Affects:** Local clone only; no remote impact
+**Status:** Cosmetic
+
+Five local branches are present alongside `main` but are fully merged and have stopped receiving commits:
+
+| Branch | Last commit | Merged via |
+|---|---|---|
+| `001-patreon-manager-app` | `e0d5361` "Achieve 100% test coverage…" | rolled into `main` during initial scaffolding |
+| `cleaned-history` | `cdf9691` "Security: redact tokens from git history…" | the credential-purge merge to `main` |
+| `feat/illustration-generation` | `0092956` "feat(illustration): enterprise-grade…" | landed in `main` via the illustration spec |
+| `feat/multi-org-support` | `2ffb08c` "Add multi-org support documentation" | merge commit `ca810b4` |
+| `feature/workspace-preview-2026-04-16` | `e1fe568` "feat: workspace-preview…" | landed in `main` via the workspace-preview spec |
+
+`git rev-list --left-right --count main...feat/multi-org-support` returns `80 0` — `main` is 80 commits ahead, the branch is 0 ahead. Same shape for the others.
+
+**Why it's this way:** Branches were left in place after merging in case follow-up work surfaced. None did.
+
+**Workaround:** None needed.
+
+**Future work:** Run `git branch -d <branch>` for each (the safe `-d` flag, not `-D`) once a maintainer is comfortable that no in-flight local work depends on them. Single-commit cleanup.
+
+---
+
+### 6.2 Stale `.worktrees/feat-multi-org-support/` worktree
+
+**Category:** Known-quirk
+**Affects:** Local clone only
+**Status:** Cosmetic
+
+The directory `.worktrees/feat-multi-org-support/` is a `git worktree` rooted at the merged `feat/multi-org-support` branch (see §6.1). Anyone who runs `git worktree list` or browses the filesystem will see it and may assume it represents in-flight work — it does not.
+
+The worktree's only working-tree change is `modified: LLMGateway`, which is a stale submodule pointer drift, not a code change.
+
+**Why it's this way:** The worktree was created during the multi-org feature development and never removed after the branch merged.
+
+**Workaround:** None needed for runtime; just be aware.
+
+**Future work:** `git worktree remove .worktrees/feat-multi-org-support` then `git branch -d feat/multi-org-support` (covered by §6.1). The `.worktrees/` directory itself is gitignored, so removal is local-only.
+
+---
+
+### 6.3 `specs/001-patreon-manager-app/tasks.md` is fully checked off
+
+**Category:** Known-quirk (documentation)
+**Affects:** Anyone reading `CLAUDE.md` § Feature Workflow
+**Status:** Documented intentionally; pointer is now historical
+
+`CLAUDE.md` § Feature Workflow says step 1 is "Find the relevant user story in `specs/001-patreon-manager-app/tasks.md`." That document has 173 tasks, **all** marked `[X]` (zero open `[ ]`). It is now historical — the v1 implementation program is complete.
+
+**Why it's this way:** The spec served as the original v1 task tracker. New work moved to `docs/superpowers/specs/*.md` (per-feature design docs) and `docs/superpowers/plans/*.md` (per-feature implementation plans). The CLAUDE.md pointer was not updated when this transition happened.
+
+**Workaround:** For new feature work, look at `docs/superpowers/specs/` for the most recent design doc (`2026-04-18-process-command-design.md`, `2026-04-18-migration-system-refactor.md`, etc.) and the corresponding plan in `docs/superpowers/plans/`. The 001 spec stays as the historical record of what shipped.
+
+**Future work:** Either (a) edit `CLAUDE.md` § Feature Workflow to point at `docs/superpowers/specs/` for active work and label the 001 spec as historical, or (b) start a `specs/002-…/tasks.md` track for the next major epoch and re-point. Pick one before starting any new feature program.
+
+---
+
+### 6.4 `.gitignore` lists `/cli` but not `/server`
+
+**Category:** Known-quirk
+**Affects:** Anyone running `go build ./cmd/server` from the repo root
+**Status:** Inconsistency
+
+`.gitignore` has `/cli` in the build-artifacts block but not `/server`. Both `cmd/cli` and `cmd/server` produce binaries at the repo root with those names by default. A `go build ./cmd/server` leaves a 47 MB `server` file in the working tree that `git status` will offer to stage.
+
+**Why it's this way:** The CLI binary entry was added when only `cmd/cli` existed at the root; `cmd/server` was added later without updating `.gitignore`.
+
+**Workaround:** `go build -o /tmp/server ./cmd/server` (build outside the repo), or rely on operator discipline to not `git add` it.
+
+**Future work:** Add `/server` to `.gitignore` next to `/cli`. One-line change.
+
+---
+
+## 7. How to contribute fixes for these
 
 For anyone picking up one of the items above:
 
