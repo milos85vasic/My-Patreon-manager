@@ -41,6 +41,8 @@ go vet ./...                                    # static analysis
 bash scripts/coverage.sh                        # full coverage run — gates commits
 ```
 
+The SQLite driver requires `CGO_ENABLED=1` (default on Linux/macOS; off in the server Dockerfile). Tests and CLI runs against the default SQLite backend need CGO — with `CGO_ENABLED=0` the SQLite driver is absent, so either set `DB_DRIVER=postgres` or rebuild with CGO.
+
 ## Safety Invariants
 
 - **`content_revisions` is insert-only for content.** Never `UPDATE content_revisions.body`, `content_revisions.title`, or `content_revisions.fingerprint` — these three columns are immutable once the row is inserted. Edits materialize as a **new** `pending_review` row whose `edited_from_revision_id` points back at the source; the original is left literally untouched.
@@ -78,6 +80,7 @@ The codebase follows a provider/service layering where the CLI and server are th
 
 - `.specify/memory/constitution.md` — architectural principles (I–VII). Read before non-trivial changes; these are enforced, not aspirational.
 - `specs/001-patreon-manager-app/tasks.md` — active implementation tasks and user stories
+- `docs/KNOWN-ISSUES.md` — canonical "what's not done and why" document. Check before proposing features that look missing; many are deliberate non-goals.
 - `AGENTS.md` — companion reference kept in sync with CLAUDE.md; cross-check when in doubt
 
 ## Feature Workflow

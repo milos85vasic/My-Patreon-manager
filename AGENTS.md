@@ -216,6 +216,7 @@ When making non-trivial changes, read these in order:
 2. `specs/001-patreon-manager-app/tasks.md` — active implementation tasks and user stories.
 3. `CLAUDE.md` — build commands and architecture overview.
 4. `docs/main_specification.md` — full system specification.
+5. `docs/KNOWN-ISSUES.md` — canonical "what's not done and why" (deliberate non-goals, deferred enhancements, environmental caveats). Check before proposing features that appear missing.
 
 ## Mirrors
 
