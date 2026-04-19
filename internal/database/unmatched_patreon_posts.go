@@ -45,10 +45,10 @@ func NewSQLiteUnmatchedPatreonPostStore(db *sql.DB) UnmatchedPatreonPostStore {
 }
 
 // NewPostgresUnmatchedPatreonPostStore returns an UnmatchedPatreonPostStore
-// bound to a Postgres *sql.DB. The shared rebindToPostgres helper rewrites
+// bound to a Postgres *sql.DB. The shared RebindToPostgres helper rewrites
 // each "?" to "$N".
 func NewPostgresUnmatchedPatreonPostStore(db *sql.DB) UnmatchedPatreonPostStore {
-	return &unmatchedPatreonPostStore{db: db, rebind: rebindToPostgres}
+	return &unmatchedPatreonPostStore{db: db, rebind: RebindToPostgres}
 }
 
 // Record inserts a new unmatched post. If p.DiscoveredAt is the zero time

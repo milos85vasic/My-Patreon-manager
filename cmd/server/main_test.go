@@ -756,3 +756,4 @@ func (f *failDB) IsLocked(_ context.Context) (bool, *database.SyncLock, error) {
 	return false, nil, nil
 }
 func (f *failDB) BeginTx(_ context.Context) (*sql.Tx, error) { return nil, nil }
+func (f *failDB) Dialect() string                            { return "sqlite" }

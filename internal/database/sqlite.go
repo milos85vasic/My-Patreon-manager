@@ -321,6 +321,11 @@ func (db *SQLiteDB) BeginTx(ctx context.Context) (*sql.Tx, error) {
 	return db.db.BeginTx(ctx, nil)
 }
 
+// Dialect reports the SQL dialect identifier for this driver. Callers
+// that need to build raw SQL outside the store layer use this to choose
+// between "?" and "$N" placeholders. See database.Database.Dialect.
+func (db *SQLiteDB) Dialect() string { return "sqlite" }
+
 func (db *SQLiteDB) Repositories() RepositoryStore {
 	return &SQLiteRepositoryStore{db: db.db}
 }

@@ -287,17 +287,17 @@ func TestRebindToPostgres(t *testing.T) {
 	// The Postgres rebind closure is exercised only when a Postgres driver
 	// is wired up; unit-test the helper directly to guarantee 100% coverage
 	// on the dialect helper regardless of environment.
-	got := database.TestOnlyRebindToPostgres("SELECT ? FROM t WHERE a = ? AND b = ?")
+	got := database.RebindToPostgres("SELECT ? FROM t WHERE a = ? AND b = ?")
 	want := "SELECT $1 FROM t WHERE a = $2 AND b = $3"
 	if got != want {
 		t.Fatalf("rebind: got %q want %q", got, want)
 	}
 	// Empty input returns empty.
-	if out := database.TestOnlyRebindToPostgres(""); out != "" {
+	if out := database.RebindToPostgres(""); out != "" {
 		t.Fatalf("rebind empty: got %q", out)
 	}
 	// No placeholders returns identity.
-	if out := database.TestOnlyRebindToPostgres("SELECT 1"); out != "SELECT 1" {
+	if out := database.RebindToPostgres("SELECT 1"); out != "SELECT 1" {
 		t.Fatalf("rebind no-params: got %q", out)
 	}
 }

@@ -66,3 +66,4 @@ logs/
 **/patreon_manager.db
 /server
 /user/
+.claude/

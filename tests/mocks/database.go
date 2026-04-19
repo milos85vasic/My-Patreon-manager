@@ -28,6 +28,7 @@ type MockDatabase struct {
 	ReleaseLockFunc       func(ctx context.Context) error
 	IsLockedFunc          func(ctx context.Context) (bool, *database.SyncLock, error)
 	BeginTxFunc           func(ctx context.Context) (*sql.Tx, error)
+	DialectFunc           func() string
 }
 
 func (m *MockDatabase) Connect(ctx context.Context, dsn string) error {
@@ -154,6 +155,13 @@ func (m *MockDatabase) BeginTx(ctx context.Context) (*sql.Tx, error) {
 		return m.BeginTxFunc(ctx)
 	}
 	return nil, nil
+}
+
+func (m *MockDatabase) Dialect() string {
+	if m.DialectFunc != nil {
+		return m.DialectFunc()
+	}
+	return "sqlite"
 }
 
 type MockRepositoryStore struct {

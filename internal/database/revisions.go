@@ -58,13 +58,15 @@ func NewSQLiteContentRevisionStore(db *sql.DB) ContentRevisionStore {
 // a Postgres *sql.DB. Postgres uses "$N" positional placeholders, so the
 // rebind closure rewrites each "?" to "$1", "$2", ....
 func NewPostgresContentRevisionStore(db *sql.DB) ContentRevisionStore {
-	return &contentRevisionStore{db: db, rebind: rebindToPostgres}
+	return &contentRevisionStore{db: db, rebind: RebindToPostgres}
 }
 
-// rebindToPostgres converts "?,?,?" into "$1,$2,$3". Simple positional
+// RebindToPostgres converts "?,?,?" into "$1,$2,$3". Simple positional
 // replacement — the store never embeds literal '?' in SQL strings, so
-// scanning for the byte is sufficient.
-func rebindToPostgres(q string) string {
+// scanning for the byte is sufficient. Exported so the process-command
+// pipeline can reuse the exact same binder inside its per-run
+// transaction without duplicating the logic.
+func RebindToPostgres(q string) string {
 	var b []byte
 	n := 0
 	for i := 0; i < len(q); i++ {
@@ -78,10 +80,6 @@ func rebindToPostgres(q string) string {
 	}
 	return string(b)
 }
-
-// TestOnlyRebindToPostgres exposes rebindToPostgres for cross-package tests.
-// Not intended for production callers.
-func TestOnlyRebindToPostgres(q string) string { return rebindToPostgres(q) }
 
 // timeFormats lists the formats accepted when parsing TEXT timestamps
 // produced by either SQLite's CURRENT_TIMESTAMP ("2006-01-02 15:04:05")

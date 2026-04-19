@@ -38,6 +38,12 @@ type Database interface {
 	IsLocked(ctx context.Context) (bool, *SyncLock, error)
 
 	BeginTx(ctx context.Context) (*sql.Tx, error)
+
+	// Dialect identifies the underlying SQL dialect so callers that need
+	// to build raw SQL outside the store layer (e.g. the process-command
+	// pipeline's per-run transaction) can pick the right placeholder
+	// syntax. Returns "sqlite" or "postgres".
+	Dialect() string
 }
 
 type RepositoryStore interface {

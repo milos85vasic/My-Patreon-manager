@@ -284,6 +284,11 @@ func (db *PostgresDB2) BeginTx(ctx context.Context) (*sql.Tx, error) {
 	return db.db.BeginTx(ctx, nil)
 }
 
+// Dialect reports the SQL dialect identifier for this driver. Callers
+// that need to build raw SQL outside the store layer use this to choose
+// between "?" and "$N" placeholders. See database.Database.Dialect.
+func (db *PostgresDB2) Dialect() string { return "postgres" }
+
 func (db *PostgresDB2) Repositories() RepositoryStore { return &PostgresRepositoryStore{db: db.db} }
 func (db *PostgresDB2) SyncStates() SyncStateStore    { return &PostgresSyncStateStore{db: db.db} }
 func (db *PostgresDB2) MirrorMaps() MirrorMapStore    { return &PostgresMirrorMapStore{db: db.db} }

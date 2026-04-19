@@ -62,9 +62,9 @@ func NewSQLiteProcessRunStore(db *sql.DB) ProcessRunStore {
 }
 
 // NewPostgresProcessRunStore returns a ProcessRunStore bound to a Postgres
-// *sql.DB. The shared rebindToPostgres helper rewrites each "?" to "$N".
+// *sql.DB. The shared RebindToPostgres helper rewrites each "?" to "$N".
 func NewPostgresProcessRunStore(db *sql.DB) ProcessRunStore {
-	return &processRunStore{db: db, rebind: rebindToPostgres}
+	return &processRunStore{db: db, rebind: RebindToPostgres}
 }
 
 // Acquire inserts a new process_runs row in status='running'. The partial

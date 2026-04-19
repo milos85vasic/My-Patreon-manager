@@ -194,6 +194,7 @@ func (m *mockDatabase) IsLocked(ctx context.Context) (bool, *database.SyncLock, 
 	return false, nil, nil
 }
 func (m *mockDatabase) BeginTx(ctx context.Context) (*sql.Tx, error) { return nil, nil }
+func (m *mockDatabase) Dialect() string                              { return "sqlite" }
 
 func withMockExit(t *testing.T, f func()) (exited bool, code int) {
 	original := osExit
