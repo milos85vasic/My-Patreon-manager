@@ -390,8 +390,8 @@ These are sub-choices that only become load-bearing during the plan. Implementat
    4. **Case-insensitive substring** in title — the original v1 heuristic, kept as a fuzzy fallback.
 
    No numeric threshold: layers are deterministic, and posts that still miss all four go to `unmatched_patreon_posts` for manual linking (unchanged). Operators who want reliable matching from day one can add a `repo:<id>` tag to Patreon post bodies before the first `process` run.
-2. **Preview UI authentication.** Does `ADMIN_KEY` gate Approve/Reject, or do we introduce a lower-privilege `REVIEWER_KEY`? Current `/admin/*` routes already require `ADMIN_KEY`; cheapest is reusing it.
-3. **Multi-tenancy.** The preview UI and `process_runs` assume one campaign per installation. Confirm single-tenant stays; multi-tenant is out of scope for v1 of this design.
+2. **Preview UI authentication.** Does `ADMIN_KEY` gate Approve/Reject, or do we introduce a lower-privilege `REVIEWER_KEY`? **RESOLVED (PUNTED)** — single `ADMIN_KEY` suffices for v1; the existing `/admin/*` auth is reused for preview Approve/Reject. A `REVIEWER_KEY` (or full RBAC layer) can be added in a future revision if operator workflows need a lower-privilege role separate from the full admin. No code change required until then.
+3. **Multi-tenancy.** The preview UI and `process_runs` assume one campaign per installation. **RESOLVED (INTENTIONAL NON-GOAL)** — single-tenant is the committed v1 design. Multi-tenant operation (multiple Patreon campaigns behind one deployment) is an explicit non-goal; a future design revision would need to revisit the `process_runs` locking model, the preview UI's assumed campaign context, and `cfg.PatreonCampaignID`'s singleton shape. See "Non-Goals" below.
 
 ## Non-Goals (explicit)
 
@@ -400,6 +400,8 @@ These are sub-choices that only become load-bearing during the plan. Implementat
 - Rollback-to-arbitrary-revision via CLI. Possible in v2; v1 resolves via preview UI's "Supersede with new draft" action.
 - Webhooks that push drafts into Patreon automatically on Approve. Explicit `publish` command stays.
 - Article scheduling (publish at date X). Out of scope.
+- Multi-tenant operation (multiple Patreon campaigns behind one deployment). See Open Question #3: explicitly out of scope for v1.
+- A separate `REVIEWER_KEY` / RBAC layer for preview Approve/Reject. See Open Question #2: punted — v1 reuses `ADMIN_KEY`.
 
 ## Related
 
