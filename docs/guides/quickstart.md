@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-This guide walks you through getting My Patreon Manager up and running in under ten minutes. By the end you will have validated your configuration, previewed a dry-run, and understood the full sync workflow.
+This guide walks you through getting My Patreon Manager up and running in under ten minutes. By the end you will have validated your configuration, previewed a dry-run, and understood the full `process` workflow (scan → generate → illustrate → review → publish).
 
 ## Prerequisites
 
@@ -90,7 +90,7 @@ GITVERSE_ORGS=team-alpha,team-beta
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `LLMSVERIFIER_ENDPOINT` | *(empty)* | Base URL of the LLMsVerifier service. Required for `sync`, `generate`, and `verify` commands. |
+| `LLMSVERIFIER_ENDPOINT` | *(empty)* | Base URL of the LLMsVerifier service. Required for `process`, `generate`, and `verify` commands. |
 | `LLMSVERIFIER_API_KEY` | *(empty)* | Authentication token for LLMsVerifier. Auto-populated by `scripts/llmsverifier.sh`. |
 | `CONTENT_QUALITY_THRESHOLD` | `0.75` | Minimum quality score (0.0--1.0) for generated content. Content below this threshold is discarded. |
 | `LLM_DAILY_TOKEN_BUDGET` | `100000` | Daily token budget for LLM API calls. Generation pauses when exceeded. |
@@ -165,7 +165,7 @@ If validation fails, the output identifies which variable is missing or malforme
 
 ## Step 4 -- Start LLMsVerifier (Optional, for Content Generation)
 
-The LLMsVerifier service is required for `sync`, `generate`, and `verify` commands. If you are only running `validate` or `scan`, you can skip this step.
+The LLMsVerifier service is required for `process`, `generate`, and `verify` commands. If you are only running `validate` or `scan`, you can skip this step.
 
 ```sh
 bash scripts/llmsverifier.sh
@@ -181,12 +181,12 @@ go run ./cmd/cli verify
 
 This contacts the LLMsVerifier service and displays the ranked list of available LLM models.
 
-## Step 5 -- Dry-Run Sync
+## Step 5 -- Dry-Run the Pipeline
 
-Preview what a full sync would do without making any API calls to Patreon or generating any content:
+Preview what a full `process` run would do without making any API calls to Patreon or generating any content:
 
 ```sh
-go run ./cmd/cli sync --dry-run
+go run ./cmd/cli process --dry-run
 ```
 
 This fetches repository metadata from all configured Git providers, applies filtering, and reports the number of repositories discovered and estimated content generation costs.
@@ -195,13 +195,13 @@ Narrow the scope with filters:
 
 ```sh
 # Scan a single organization
-go run ./cmd/cli sync --dry-run --org my-org
+go run ./cmd/cli process --dry-run --org my-org
 
 # Scan a specific repository
-go run ./cmd/cli sync --dry-run --repo my-org/my-repo
+go run ./cmd/cli process --dry-run --repo my-org/my-repo
 
 # Machine-readable JSON output
-go run ./cmd/cli sync --dry-run --json
+go run ./cmd/cli process --dry-run --json
 ```
 
 Expected output (abridged):
@@ -212,28 +212,66 @@ Expected output (abridged):
 [INFO] Dry-run complete. No changes were made.
 ```
 
-## Step 6 -- Generate and Review Content
+> `sync --dry-run` still works as a deprecated alias and prints a warning to stderr; both commands drive the same pipeline.
 
-Run the content generation pipeline. This calls LLMs, applies quality gates, and stores results locally. **Patreon is not contacted.**
+## Step 6 -- Generate and Land Drafts
+
+Run the full pipeline. This scans repos, calls LLMs, applies quality gates, produces illustrations, and lands each draft as a `pending_review` `content_revisions` row. **Patreon is not contacted during this step.**
 
 ```sh
-go run ./cmd/cli generate
+go run ./cmd/cli process
 ```
 
-Review the generated content in your local database before publishing.
+The run is bounded by `MAX_ARTICLES_PER_REPO` (default `1`) and `MAX_ARTICLES_PER_RUN` (default unlimited) -- see the [Process Pipeline configuration reference](configuration.md#process-pipeline) to tune these caps.
+
+## Step 6a -- Review and Approve Drafts in the Preview UI
+
+Drafts landed by `process` are held in `pending_review` until a human approves them. Start the HTTP server and browse the preview UI:
+
+```sh
+go run ./cmd/server
+# Server listens on http://localhost:8080
+```
+
+Open the dashboard at [http://localhost:8080/preview](http://localhost:8080/preview) to see every repo's latest revision; click through to `/preview/repo/<repo_id>` for the revision history of a single repo.
+
+All write endpoints require the `X-Admin-Key` header matching the `ADMIN_KEY` in your `.env`. Approve, reject, or edit a revision via `curl`:
+
+```sh
+# Approve a pending revision (by content_revisions.id)
+curl -X POST http://localhost:8080/preview/revision/<id>/approve \
+  -H "X-Admin-Key: $ADMIN_KEY"
+
+# Reject a pending revision
+curl -X POST http://localhost:8080/preview/revision/<id>/reject \
+  -H "X-Admin-Key: $ADMIN_KEY"
+
+# Edit a revision. This creates a NEW pending_review row that
+# supersedes <id> -- the original revision's body, title, and
+# fingerprint are never mutated.
+curl -X POST http://localhost:8080/preview/revision/<id>/edit \
+  -H "X-Admin-Key: $ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"New title","body":"New body","author":"you@example.com"}'
+```
+
+Only `approved` revisions become eligible for publishing in the next step. If `process` also detected drift on the live Patreon post, that repo stays halted until you resolve it via `POST /preview/<repo_id>/resolve-drift` (same `X-Admin-Key` header).
 
 ## Step 7 -- Publish
 
-Once you have reviewed the generated content and are satisfied with its quality:
+Publish every approved revision to Patreon:
 
 ```sh
 go run ./cmd/cli publish
 ```
 
-Or run the full pipeline end-to-end (scan, generate, and publish in one command):
+`publish` is revision-aware -- it considers only `approved` revisions and will refuse to republish a repo that currently shows Patreon drift.
+
+To run the pipeline on a schedule, pass `--schedule` with a cron expression:
 
 ```sh
-go run ./cmd/cli sync
+# Every hour at :00
+go run ./cmd/cli process --schedule "0 * * * *"
 ```
 
 ## Running the HTTP Server
