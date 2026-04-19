@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/config"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/database"
+	"github.com/milos85vasic/My-Patreon-Manager/internal/models"
 )
 
 type PreviewHandler struct {
@@ -168,7 +170,63 @@ func (h *PreviewHandler) RegisterRoutes(r *gin.Engine) {
 		preview.GET("/edit/:id", h.EditArticle)
 		preview.POST("/edit/:id", h.EditArticle)
 		preview.POST("/toggle/:id/:action", h.ToggleArticle)
+		preview.POST("/revision/:id/approve", h.ApproveRevision)
+		preview.POST("/revision/:id/reject", h.RejectRevision)
 	}
+}
+
+// ApproveRevision transitions a ContentRevision from pending_review to
+// approved. Requires X-Admin-Key to match cfg.AdminKey. Returns:
+//   - 200 with {"status":"approved","id":<id>} on success,
+//   - 400 if the current status forbids the transition,
+//   - 401 if the admin key is missing or wrong,
+//   - 404 if the revision does not exist,
+//   - 500 on any other store error.
+//
+// The handler is a thin wrapper over ContentRevisionStore.UpdateStatus,
+// which enforces the forward-only status graph. Body/title/fingerprint
+// are never touched.
+func (h *PreviewHandler) ApproveRevision(c *gin.Context) {
+	h.transitionRevision(c, models.RevisionStatusApproved, "approved")
+}
+
+// RejectRevision transitions a ContentRevision from pending_review to
+// rejected. Same semantics as ApproveRevision; see that doc for the
+// response shape and error codes.
+func (h *PreviewHandler) RejectRevision(c *gin.Context) {
+	h.transitionRevision(c, models.RevisionStatusRejected, "rejected")
+}
+
+// transitionRevision is the shared implementation of ApproveRevision and
+// RejectRevision. The responseStatus parameter is the string returned to
+// the client in the "status" JSON field on success; it mirrors the store
+// status but is kept as a separate argument so the caller controls the
+// wire shape explicitly.
+func (h *PreviewHandler) transitionRevision(c *gin.Context, newStatus, responseStatus string) {
+	if c.GetHeader("X-Admin-Key") != h.config.AdminKey {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	id := c.Param("id")
+	ctx := c.Request.Context()
+	cur, err := h.db.ContentRevisions().GetByID(ctx, id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if cur == nil {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	if err := h.db.ContentRevisions().UpdateStatus(ctx, id, newStatus); err != nil {
+		if errors.Is(err, database.ErrIllegalStatusTransition) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": responseStatus, "id": id})
 }
 
 type ArticleView struct {
