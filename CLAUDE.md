@@ -17,22 +17,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Go 1.26.1 application that scans Git repositories across GitHub, GitLab, GitFlic, and GitVerse, generates content via an LLM pipeline with quality gates, and publishes tier-gated posts to Patreon. Module: `github.com/milos85vasic/My-Patreon-Manager`. HTTP framework: Gin.
 
 Two entrypoints:
-- `cmd/cli` (`patreon-manager`) — primary interface; subcommands `sync`, `scan`, `generate`, `validate`, `publish`. Supports `--dry-run`, `--schedule` (cron), `--org`, `--repo`, `--pattern`, `--json`, `--log-level`.
-- `cmd/server` — Gin HTTP server on `:8080` exposing health, metrics (Prometheus), and webhook handlers.
+- `cmd/cli` (`patreon-manager`) — primary interface; top-level subcommand is `process` (scan → generate → illustrate → land drafts as `pending_review` revisions → prune). Low-level helpers: `scan`, `generate`, `validate`, `publish`, `verify`. `sync` is a **deprecated alias** for `process` — it prints a warning to stderr and falls through to the same pipeline. Supports `--dry-run`, `--schedule` (cron), `--org`, `--repo`, `--pattern`, `--json`, `--log-level`.
+- `cmd/server` — Gin HTTP server on `:8080` exposing health, metrics (Prometheus), webhook handlers, and the preview UI (`/preview`, `/preview/repo/:repo_id`, `/preview/revision/:id/{approve,reject,edit}`, `/preview/:repo_id/resolve-drift`) for reviewing `pending_review` drafts.
 
 ## Common Commands
 
 ```sh
 go build ./...                                  # build all packages
-go run ./cmd/cli sync --dry-run                 # dry-run a sync
+go run ./cmd/cli process --dry-run              # dry-run the pipeline (sync is a deprecated alias)
+go run ./cmd/cli process                        # full pipeline: scan, generate, illustrate, land drafts
+go run ./cmd/cli publish                        # publish approved revisions to Patreon
 go run ./cmd/cli validate                       # validate config/env
-go run ./cmd/server                             # run HTTP server
+go run ./cmd/server                             # run HTTP server + preview UI
 go test ./internal/... ./cmd/... ./tests/...    # run full test suite
 go test ./internal/services/sync/... -run TestOrchestrator_Run -v   # single test
 go test -race ./...                             # race detector
 go vet ./...                                    # static analysis
 bash scripts/coverage.sh                        # full coverage run — gates commits
 ```
+
+## Safety Invariants
+
+- **`content_revisions` is insert-only for content.** Never `UPDATE content_revisions.body`, `content_revisions.title`, or `content_revisions.fingerprint` — these three columns are immutable once the row is inserted. Edits materialize as a **new** `pending_review` row whose `edited_from_revision_id` points back at the source; the original is left literally untouched.
+- The `status`, `patreon_post_id`, and `published_to_patreon_at` columns may be updated, but only via forward-only status transitions (`pending_review` → `approved` → `published`, or `pending_review` → `rejected`; never backwards). Everything else in `content_revisions` is insert-only.
+- Task 28's contract test (`tests/contract/`) enforces this invariant — do not weaken or skip it.
+- The `process` run holds a single-runner lock (`process_runs`) with a heartbeat (`PROCESS_LOCK_HEARTBEAT_SECONDS`). Stale rows are reclaimable as `crashed`; do not remove this reclaim path when refactoring.
 
 `scripts/coverage.sh` runs `go test -race` with `-coverpkg=./internal/...,./cmd/...` across `./internal/... ./cmd/... ./tests/...`, writes HTML + func coverage reports to `coverage/`, and hard-fails via `scripts/coverdiff` if any package or the total drops below `COVERAGE_MIN` (default **100.0**, lowerable during phased ramp-up with `COVERAGE_MIN=<n>`). Run it before committing.
 

@@ -8,8 +8,8 @@ My-Patreon-Manager is a Go 1.26.1 application that scans Git repositories across
 - **Module:** `github.com/milos85vasic/My-Patreon-Manager`
 - **HTTP Framework:** Gin (`github.com/gin-gonic/gin`)
 - **Entrypoints:**
-  - `cmd/cli/main.go` (`patreon-manager`) — CLI with subcommands `sync`, `scan`, `generate`, `validate`, `publish`, `verify`
-  - `cmd/server/main.go` — Gin HTTP server on `:8080` with health, Prometheus metrics, admin endpoints, webhook handlers, and signed-URL downloads
+  - `cmd/cli/main.go` (`patreon-manager`) — CLI. Top-level subcommand is `process` (scan → generate → illustrate → land drafts as `pending_review` revisions → prune). Low-level helpers retained for debugging: `scan`, `generate`, `validate`, `publish`, `verify`. `sync` is a **deprecated alias** for `process`; it prints a warning to stderr and falls through to the same pipeline.
+  - `cmd/server/main.go` — Gin HTTP server on `:8080` with health, Prometheus metrics, admin endpoints, webhook handlers, signed-URL downloads, and the preview UI (`/preview`, `/preview/repo/:repo_id`, `/preview/revision/:id/{approve,reject,edit}`, `/preview/:repo_id/resolve-drift`). Write endpoints require `X-Admin-Key`.
 
 ## Technology Stack
 
@@ -108,13 +108,22 @@ The project maintains **100% per-package test coverage**.
 ```sh
 go build ./...                                  # build all packages (CGO may be needed for sqlite)
 go run ./cmd/cli validate                       # validate config/env
-go run ./cmd/cli sync --dry-run                 # dry-run a sync
-go run ./cmd/server                             # run HTTP server on :8080
+go run ./cmd/cli process --dry-run              # dry-run the pipeline (sync is a deprecated alias)
+go run ./cmd/cli process                        # full pipeline: scan, generate, illustrate, land drafts
+go run ./cmd/cli publish                        # publish approved revisions to Patreon
+go run ./cmd/server                             # run HTTP server + preview UI on :8080
 go test ./internal/... ./cmd/... ./tests/...    # run full test suite
 go test -race ./...                             # race detector
 go vet ./...                                    # static analysis
 bash scripts/coverage.sh                        # full coverage run (gates at 100%)
 ```
+
+### Safety Invariants
+
+- **`content_revisions` is insert-only for content.** Never `UPDATE content_revisions.body`, `content_revisions.title`, or `content_revisions.fingerprint` — these three columns are immutable once the row is inserted. Edits materialize as a **new** `pending_review` row whose `edited_from_revision_id` points back at the source; the original is left literally untouched.
+- The `status`, `patreon_post_id`, and `published_to_patreon_at` columns may be updated, but only via forward-only status transitions (`pending_review` → `approved` → `published`, or `pending_review` → `rejected`; never backwards). Everything else in `content_revisions` is insert-only.
+- Task 28's contract test (`tests/contract/`) enforces this invariant — do not weaken or skip it.
+- `process` holds a single-runner lock (`process_runs`) with a heartbeat (`PROCESS_LOCK_HEARTBEAT_SECONDS`). Stale rows are reclaimable as `crashed`; preserve this reclaim path when refactoring.
 
 ### Docker
 ```sh
