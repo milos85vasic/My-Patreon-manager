@@ -83,6 +83,7 @@ func main() {
 		fmt.Println("  generate  — run content pipeline, persist GeneratedContent; no Patreon publish")
 		fmt.Println("  publish   — publish existing generated content to Patreon with tier gating")
 		fmt.Println("  migrate   — apply pending SQL migrations or print status")
+		fmt.Println("  merge-history <old-repo-id> <new-repo-id> — merge revisions from a renamed repo into its replacement")
 		fmt.Println("  validate  — validate configuration and environment")
 		fmt.Println("  verify    — test LLMsVerifier connection, list and score all available models")
 		osExit(1)
@@ -244,6 +245,11 @@ func main() {
 	case "migrate":
 		if err := runMigrate(ctx, db, args[1:], migrateOutWriter); err != nil {
 			logger.Error("migrate failed", slog.String("error", err.Error()))
+			osExit(1)
+		}
+	case "merge-history":
+		if err := runMergeHistory(ctx, db, args[1:], mergeHistoryOutWriter, logger); err != nil {
+			logger.Error("merge-history failed", slog.String("error", err.Error()))
 			osExit(1)
 		}
 	default:

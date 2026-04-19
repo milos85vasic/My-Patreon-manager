@@ -656,6 +656,16 @@ go run ./cmd/cli migrate down <NNNN> --force  # execute the rollback (destructiv
 
 `migrate down` rolls back every applied migration whose version is strictly greater than `<NNNN>` (4-digit zero-padded, e.g. `0003`), in descending order. Without `--force` the command only prints the plan (the list of versions it would roll back) and exits 0 — so you can review before pulling the trigger. **`--force` is required to actually execute; rollback is destructive.** Every rolled-back version must have a matching `.down.sql` file; otherwise the command aborts with `missing down migration`. Edit a `.sql` file after it has been applied and the next `migrate up` will fail with a checksum mismatch — add a new migration instead.
 
+## Merging History After a Repo Rename
+
+When a repository is renamed or moved between orgs, the next scan produces a fresh `repositories` row with an empty history. Re-parent every `content_revisions` row from the old ID onto the new one:
+
+```sh
+go run ./cmd/cli merge-history <old-repo-id> <new-repo-id>
+```
+
+The command refuses with a descriptive error if either repo ID is unknown, if the new repo already has at least one revision (the merge would be ambiguous), or if the old repo is currently `process_state='processing'` (wait for the active run to finish). On success it prints `merged N revisions from <old> into <new>`. Pointers (`current_revision_id`, `published_revision_id`) are transferred only when the new row's field is NULL — existing pointers are preserved. The old `repositories` row is deleted; FK cascades clean up `sync_states`, `mirror_maps`, etc.
+
 ## Overriding via Command Line
 
 Most configuration can be overridden by command-line flags. For example, `--log-level debug` overrides `LOG_LEVEL`, and `--org my-org` overrides the provider org list for a single run. See the CLI reference for the complete flag list.

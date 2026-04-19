@@ -31,6 +31,7 @@ go run ./cmd/cli migrate up                     # apply pending SQL migrations
 go run ./cmd/cli migrate down 0003              # print rollback plan for versions > 0003 (no --force, no changes)
 go run ./cmd/cli migrate down 0003 --force      # actually roll back; destructive — required flag
 go run ./cmd/cli migrate status                 # list applied/pending migrations
+go run ./cmd/cli merge-history <old> <new>      # re-parent revisions after a repo rename/move
 go run ./cmd/cli validate                       # validate config/env
 go run ./cmd/server                             # run HTTP server + preview UI
 go test ./internal/... ./cmd/... ./tests/...    # run full test suite
