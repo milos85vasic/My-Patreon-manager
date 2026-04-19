@@ -23,7 +23,13 @@ type Illustration struct {
 }
 
 func (i *Illustration) GenerateID() string {
-	h := sha256.Sum256([]byte(i.GeneratedContentID + i.RepositoryID))
+	// Include the fingerprint (prompt+style digest) so illustrations for the
+	// same (content, repo) pair but different prompts/styles don't collide
+	// on ID. Also important for the revision-based pipeline where
+	// GeneratedContentID is empty and many illustrations share a
+	// RepositoryID — without the fingerprint those would all hash to the
+	// same ID and collide on the primary key.
+	h := sha256.Sum256([]byte(i.GeneratedContentID + "|" + i.RepositoryID + "|" + i.Fingerprint))
 	i.ID = "ill_" + hex.EncodeToString(h[:])[:32]
 	return i.ID
 }

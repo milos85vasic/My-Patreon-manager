@@ -657,52 +657,84 @@ type SQLiteIllustrationStore struct {
 	db *sql.DB
 }
 
+// illustrationContentIDArg converts an empty GeneratedContentID to a SQL
+// NULL so the nullable FK column added by migration 0008 can be written.
+// A non-empty value is passed through so rows that do have a matching
+// generated_contents row still get the proper FK linkage.
+func illustrationContentIDArg(id string) any {
+	if id == "" {
+		return nil
+	}
+	return id
+}
+
+// illustrationContentIDScanner returns a sql.NullString destination for
+// scanning the generated_content_id column. After scanning, callers should
+// apply the result back to models.Illustration.GeneratedContentID via
+// applyIllustrationContentID so empty/NULL columns map to the Go empty
+// string.
+func illustrationContentIDScanner() *sql.NullString { return &sql.NullString{} }
+
+func applyIllustrationContentID(ill *models.Illustration, ns *sql.NullString) {
+	if ns.Valid {
+		ill.GeneratedContentID = ns.String
+	} else {
+		ill.GeneratedContentID = ""
+	}
+}
+
 func (s *SQLiteIllustrationStore) Create(ctx context.Context, ill *models.Illustration) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO illustrations (id, generated_content_id, repository_id, file_path, image_url, prompt, style, provider_used, format, size, content_hash, fingerprint, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		ill.ID, ill.GeneratedContentID, ill.RepositoryID, ill.FilePath, ill.ImageURL, ill.Prompt, ill.Style, ill.ProviderUsed, ill.Format, ill.Size, ill.ContentHash, ill.Fingerprint, ill.CreatedAt)
+		ill.ID, illustrationContentIDArg(ill.GeneratedContentID), ill.RepositoryID, ill.FilePath, ill.ImageURL, ill.Prompt, ill.Style, ill.ProviderUsed, ill.Format, ill.Size, ill.ContentHash, ill.Fingerprint, ill.CreatedAt)
 	return err
 }
 
 func (s *SQLiteIllustrationStore) GetByID(ctx context.Context, id string) (*models.Illustration, error) {
 	ill := &models.Illustration{}
+	gcID := illustrationContentIDScanner()
 	err := s.db.QueryRowContext(ctx,
 		"SELECT id, generated_content_id, repository_id, file_path, image_url, prompt, style, provider_used, format, size, content_hash, fingerprint, created_at FROM illustrations WHERE id = ?",
-		id).Scan(&ill.ID, &ill.GeneratedContentID, &ill.RepositoryID, &ill.FilePath, &ill.ImageURL, &ill.Prompt, &ill.Style, &ill.ProviderUsed, &ill.Format, &ill.Size, &ill.ContentHash, &ill.Fingerprint, &ill.CreatedAt)
+		id).Scan(&ill.ID, gcID, &ill.RepositoryID, &ill.FilePath, &ill.ImageURL, &ill.Prompt, &ill.Style, &ill.ProviderUsed, &ill.Format, &ill.Size, &ill.ContentHash, &ill.Fingerprint, &ill.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	applyIllustrationContentID(ill, gcID)
 	return ill, nil
 }
 
 func (s *SQLiteIllustrationStore) GetByContentID(ctx context.Context, contentID string) (*models.Illustration, error) {
 	ill := &models.Illustration{}
+	gcID := illustrationContentIDScanner()
 	err := s.db.QueryRowContext(ctx,
 		"SELECT id, generated_content_id, repository_id, file_path, image_url, prompt, style, provider_used, format, size, content_hash, fingerprint, created_at FROM illustrations WHERE generated_content_id = ?",
-		contentID).Scan(&ill.ID, &ill.GeneratedContentID, &ill.RepositoryID, &ill.FilePath, &ill.ImageURL, &ill.Prompt, &ill.Style, &ill.ProviderUsed, &ill.Format, &ill.Size, &ill.ContentHash, &ill.Fingerprint, &ill.CreatedAt)
+		contentID).Scan(&ill.ID, gcID, &ill.RepositoryID, &ill.FilePath, &ill.ImageURL, &ill.Prompt, &ill.Style, &ill.ProviderUsed, &ill.Format, &ill.Size, &ill.ContentHash, &ill.Fingerprint, &ill.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	applyIllustrationContentID(ill, gcID)
 	return ill, nil
 }
 
 func (s *SQLiteIllustrationStore) GetByFingerprint(ctx context.Context, fingerprint string) (*models.Illustration, error) {
 	ill := &models.Illustration{}
+	gcID := illustrationContentIDScanner()
 	err := s.db.QueryRowContext(ctx,
 		"SELECT id, generated_content_id, repository_id, file_path, image_url, prompt, style, provider_used, format, size, content_hash, fingerprint, created_at FROM illustrations WHERE fingerprint = ?",
-		fingerprint).Scan(&ill.ID, &ill.GeneratedContentID, &ill.RepositoryID, &ill.FilePath, &ill.ImageURL, &ill.Prompt, &ill.Style, &ill.ProviderUsed, &ill.Format, &ill.Size, &ill.ContentHash, &ill.Fingerprint, &ill.CreatedAt)
+		fingerprint).Scan(&ill.ID, gcID, &ill.RepositoryID, &ill.FilePath, &ill.ImageURL, &ill.Prompt, &ill.Style, &ill.ProviderUsed, &ill.Format, &ill.Size, &ill.ContentHash, &ill.Fingerprint, &ill.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	applyIllustrationContentID(ill, gcID)
 	return ill, nil
 }
 
@@ -717,9 +749,11 @@ func (s *SQLiteIllustrationStore) ListByRepository(ctx context.Context, repoID s
 	var result []*models.Illustration
 	for rows.Next() {
 		ill := &models.Illustration{}
-		if err := rows.Scan(&ill.ID, &ill.GeneratedContentID, &ill.RepositoryID, &ill.FilePath, &ill.ImageURL, &ill.Prompt, &ill.Style, &ill.ProviderUsed, &ill.Format, &ill.Size, &ill.ContentHash, &ill.Fingerprint, &ill.CreatedAt); err != nil {
+		gcID := illustrationContentIDScanner()
+		if err := rows.Scan(&ill.ID, gcID, &ill.RepositoryID, &ill.FilePath, &ill.ImageURL, &ill.Prompt, &ill.Style, &ill.ProviderUsed, &ill.Format, &ill.Size, &ill.ContentHash, &ill.Fingerprint, &ill.CreatedAt); err != nil {
 			return nil, err
 		}
+		applyIllustrationContentID(ill, gcID)
 		result = append(result, ill)
 	}
 	return result, nil

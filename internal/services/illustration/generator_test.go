@@ -180,7 +180,7 @@ func TestGenerator_GenerateForRevision_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, ill)
 	assert.Equal(t, "r1", ill.RepositoryID)
-	assert.Equal(t, "r1", ill.GeneratedContentID, "placeholder should be repo.ID")
+	assert.Empty(t, ill.GeneratedContentID, "revision pipeline leaves generated_content_id empty (NULL in DB per migration 0008)")
 	assert.NotEmpty(t, ill.FilePath)
 	assert.Equal(t, "png", ill.Format)
 	assert.Equal(t, "stub", ill.ProviderUsed)

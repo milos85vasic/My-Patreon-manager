@@ -55,8 +55,8 @@ func TestPostgresDB2_Migrate_Success(t *testing.T) {
 	mock.ExpectQuery(`SELECT version, applied_at, checksum, direction FROM schema_migrations`).
 		WillReturnRows(sqlmock.NewRows([]string{"version", "applied_at", "checksum", "direction"}))
 
-	// 2 EnsureTable execs + 7 migration-body execs + 7 DELETE + 7 INSERT = 23 Execs.
-	for i := 0; i < 23; i++ {
+	// 2 EnsureTable execs + 8 migration-body execs + 8 DELETE + 8 INSERT = 26 Execs.
+	for i := 0; i < 26; i++ {
 		mock.ExpectExec("").WillReturnResult(sqlmock.NewResult(0, 0))
 	}
 

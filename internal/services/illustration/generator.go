@@ -125,14 +125,10 @@ func (g *Generator) Generate(
 // callers who want the tag can format it themselves from the returned fields.
 //
 // The legacy generated_content_id FK is not populated (revisions don't have a
-// generated_contents row in the new pipeline). Because the current schema
-// declares that column as NOT NULL with a FK to generated_contents(id), we
-// set it to repo.ID as a transitional placeholder — documented here as a
-// migration wart to revisit when the FK is relaxed (tracked in
-// docs/superpowers/specs/2026-04-17-illustration-generation-design.md). The
-// placeholder keeps INSERT from violating the NOT NULL constraint while the
-// caller-visible Illustration.GeneratedContentID stays empty from the
-// pipeline's perspective.
+// generated_contents row in the new pipeline). Migration 0008 relaxed that
+// column to NULL-able and dropped the UNIQUE index on it, so the field is
+// left at its Go zero value here and the store writes SQL NULL (see
+// IllustrationStore.Create).
 //
 // On provider failure the method logs a warning and returns (nil, nil) so the
 // pipeline can treat it as "no illustration this run" and proceed — matching
@@ -189,19 +185,18 @@ func (g *Generator) GenerateForRevision(
 	}
 
 	ill := &models.Illustration{
-		// generated_content_id is NOT NULL + FK to generated_contents in the
-		// current schema; revisions have no generated_contents row, so we
-		// use repo.ID as a transitional placeholder. See method doc comment.
-		GeneratedContentID: repo.ID,
-		RepositoryID:       repo.ID,
-		FilePath:           filePath,
-		ImageURL:           result.URL,
-		Prompt:             prompt,
-		Style:              style,
-		ProviderUsed:       result.Provider,
-		Format:             result.Format,
-		ContentHash:        computeContentHash(imageData),
-		Fingerprint:        fingerprint,
+		// GeneratedContentID left at the zero value. Migration 0008 made
+		// illustrations.generated_content_id nullable; the store writes SQL
+		// NULL when this field is empty.
+		RepositoryID: repo.ID,
+		FilePath:     filePath,
+		ImageURL:     result.URL,
+		Prompt:       prompt,
+		Style:        style,
+		ProviderUsed: result.Provider,
+		Format:       result.Format,
+		ContentHash:  computeContentHash(imageData),
+		Fingerprint:  fingerprint,
 	}
 	ill.GenerateID()
 	ill.SetDefaults()

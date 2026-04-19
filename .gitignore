@@ -16,7 +16,7 @@
 /tmp/
 
 # Build artifacts
-/ cli
+/cli
 /patreon-manager
 *.cov
 .worktrees/

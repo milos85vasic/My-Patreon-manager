@@ -1,0 +1,12 @@
+-- 0008_illustrations_nullable_content_id.sqlite.down.sql
+--
+-- No down migration. Rolling back to a NOT NULL + UNIQUE column is unsafe
+-- because by the time this migration is in use the table may contain rows
+-- with NULL generated_content_id (the whole point of the migration). Any
+-- automated down path would need to either discard those rows or
+-- materialize synthetic values, neither of which is a decision the
+-- migrator should make silently.
+--
+-- Roll back by hand if the scenario ever arises: decide on a replacement
+-- value per row, update those rows, then recreate the table with the old
+-- schema.
