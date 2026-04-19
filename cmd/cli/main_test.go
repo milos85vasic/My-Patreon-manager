@@ -8,9 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"syscall"
 	"testing"
-	"time"
 
 	"github.com/milos85vasic/My-Patreon-Manager/internal/config"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/database"
@@ -96,17 +94,8 @@ func TestSetupProviders_Multiple(t *testing.T) {
 
 // mock orchestrator
 type mockOrchestrator struct {
-	runFunc      func(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error)
 	scanFunc     func(ctx context.Context, opts syncsvc.SyncOptions) ([]models.Repository, error)
 	generateFunc func(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error)
-	publishFunc  func(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error)
-}
-
-func (m *mockOrchestrator) Run(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error) {
-	if m.runFunc != nil {
-		return m.runFunc(ctx, opts)
-	}
-	return &syncsvc.SyncResult{}, nil
 }
 
 func (m *mockOrchestrator) ScanOnly(ctx context.Context, opts syncsvc.SyncOptions) ([]models.Repository, error) {
@@ -119,13 +108,6 @@ func (m *mockOrchestrator) ScanOnly(ctx context.Context, opts syncsvc.SyncOption
 func (m *mockOrchestrator) GenerateOnly(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error) {
 	if m.generateFunc != nil {
 		return m.generateFunc(ctx, opts)
-	}
-	return &syncsvc.SyncResult{}, nil
-}
-
-func (m *mockOrchestrator) PublishOnly(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error) {
-	if m.publishFunc != nil {
-		return m.publishFunc(ctx, opts)
 	}
 	return &syncsvc.SyncResult{}, nil
 }
@@ -219,82 +201,6 @@ func withMockExit(t *testing.T, f func()) (exited bool, code int) {
 	}()
 	f()
 	return
-}
-
-func TestRunSync_Success(t *testing.T) {
-	// mock orchestrator that returns success
-	mockOrch := &mockOrchestrator{
-		runFunc: func(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error) {
-			return &syncsvc.SyncResult{
-				Processed: 5,
-				Failed:    0,
-				Skipped:   2,
-			}, nil
-		},
-	}
-	// create a logger that captures output
-	var logOutput strings.Builder
-	logger := slog.New(slog.NewTextHandler(&logOutput, &slog.HandlerOptions{Level: slog.LevelDebug}))
-
-	// call runSync with mocked exit
-	exited, _ := withMockExit(t, func() {
-		runSync(context.Background(), mockOrch, syncsvc.SyncOptions{}, logger)
-	})
-	assert.False(t, exited, "runSync should not call osExit on success")
-	// ensure log contains expected output
-	assert.Contains(t, logOutput.String(), "sync result")
-}
-
-func TestRunSync_Error(t *testing.T) {
-	mockOrch := &mockOrchestrator{
-		runFunc: func(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error) {
-			return nil, fmt.Errorf("simulated error")
-		},
-	}
-	var logOutput strings.Builder
-	logger := slog.New(slog.NewTextHandler(&logOutput, &slog.HandlerOptions{Level: slog.LevelDebug}))
-
-	exited, code := withMockExit(t, func() {
-		runSync(context.Background(), mockOrch, syncsvc.SyncOptions{}, logger)
-	})
-	assert.True(t, exited, "runSync should call osExit on error")
-	assert.Equal(t, 1, code)
-	assert.Contains(t, logOutput.String(), "sync failed")
-}
-
-func TestRunScheduled(t *testing.T) {
-	var logOutput strings.Builder
-	logger := slog.New(slog.NewTextHandler(&logOutput, &slog.HandlerOptions{Level: slog.LevelDebug}))
-
-	// mock orchestrator that returns success
-	mockOrch := &mockOrchestrator{
-		runFunc: func(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error) {
-			return &syncsvc.SyncResult{Processed: 1, Failed: 0, Skipped: 0}, nil
-		},
-	}
-	// create a signal channel we can control
-	sigCh := make(chan os.Signal, 1)
-	// start runScheduled in a goroutine (it will block on sigCh)
-	done := make(chan struct{})
-	go func() {
-		runScheduled(context.Background(), mockOrch, syncsvc.SyncOptions{}, "@yearly", logger, sigCh)
-		close(done)
-	}()
-	// wait a bit for scheduler to start
-	time.Sleep(100 * time.Millisecond)
-	// send shutdown signal
-	sigCh <- syscall.SIGTERM
-	// wait for goroutine to finish
-	select {
-	case <-done:
-	case <-time.After(1 * time.Second):
-		t.Fatal("runScheduled did not shut down within 1 second")
-	}
-	// verify logs
-	logStr := logOutput.String()
-	assert.Contains(t, logStr, "scheduler started")
-	assert.Contains(t, logStr, "shutdown signal received")
-	assert.Contains(t, logStr, "scheduler stopped")
 }
 
 func TestMain_Validate(t *testing.T) {
@@ -470,145 +376,6 @@ func TestMain_UnknownCommand(t *testing.T) {
 	})
 	assert.True(t, exited, "unknown command should cause exit")
 	assert.Equal(t, 1, code)
-}
-
-func TestMain_SyncWithSchedule(t *testing.T) {
-	oldArgs := os.Args
-	defer func() { os.Args = oldArgs }()
-	os.Args = []string{"patreon-manager", "-schedule", "*/5 * * * *", "sync"}
-	oldFlag := flag.CommandLine
-	defer func() { flag.CommandLine = oldFlag }()
-	flag.CommandLine = flag.NewFlagSet("test", flag.ContinueOnError)
-	oldEnviron := os.Environ()
-	os.Clearenv()
-	defer func() {
-		for _, e := range oldEnviron {
-			parts := strings.SplitN(e, "=", 2)
-			if len(parts) == 2 {
-				os.Setenv(parts[0], parts[1])
-			}
-		}
-	}()
-	// set required env vars for config validation to pass
-	os.Setenv("DB_DRIVER", "sqlite")
-	os.Setenv("DB_DSN", ":memory:")
-	os.Setenv("PATREON_CLIENT_ID", "dummy")
-	os.Setenv("PATREON_CLIENT_SECRET", "dummy")
-	os.Setenv("PATREON_ACCESS_TOKEN", "dummy")
-	os.Setenv("PATREON_REFRESH_TOKEN", "dummy")
-	os.Setenv("PATREON_CAMPAIGN_ID", "dummy")
-	os.Setenv("HMAC_SECRET", "dummy")
-	os.Setenv("LLMSVERIFIER_ENDPOINT", "http://localhost:9099")
-	// mock LLMsVerifier auto-start (skip real network check)
-	oldEnsure := ensureLLMsVerifier
-	defer func() { ensureLLMsVerifier = oldEnsure }()
-	ensureLLMsVerifier = func(cfg *config.Config, logger *slog.Logger) error { return nil }
-	// mock database to succeed
-	oldNewDatabase := newDatabase
-	defer func() { newDatabase = oldNewDatabase }()
-	newDatabase = func(driver, dsn string) database.Database {
-		return &mockDatabase{}
-	}
-	// reset prometheus registry to avoid duplicate metric registration
-	cleanup := withMockPrometheusRegistry(t)
-	defer cleanup()
-	// mock orchestrator to track calls
-	var orchestratorCalled bool
-	var orchestratorOpts syncsvc.SyncOptions
-	oldNewOrchestrator := newOrchestrator
-	defer func() { newOrchestrator = oldNewOrchestrator }()
-	newOrchestrator = func(db database.Database, providers []git.RepositoryProvider, patreonClient patreon.Provider, generator *content.Generator, m metrics.MetricsCollector, logger *slog.Logger, tierMapper *content.TierMapper) orchestrator {
-		return &mockOrchestrator{
-			runFunc: func(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error) {
-				orchestratorCalled = true
-				orchestratorOpts = opts
-				return &syncsvc.SyncResult{Processed: 1, Failed: 0, Skipped: 0}, nil
-			},
-		}
-	}
-	// mock runScheduledFunc to track calls and avoid blocking
-	var runScheduledCalled bool
-	var runScheduledSchedule string
-	oldRunScheduledFunc := runScheduledFunc
-	defer func() { runScheduledFunc = oldRunScheduledFunc }()
-	runScheduledFunc = func(ctx context.Context, orch orchestrator, opts syncsvc.SyncOptions, schedule string, logger *slog.Logger, testSigCh ...chan os.Signal) {
-		runScheduledCalled = true
-		runScheduledSchedule = schedule
-		// do nothing, just return (simulating immediate shutdown)
-	}
-	// No need to capture log output; the orchestrator call is sufficient.
-	exited, code := withMockExit(t, func() {
-		main()
-	})
-	assert.False(t, exited, "sync with schedule command should not exit with error")
-	assert.Equal(t, 0, code)
-	assert.True(t, runScheduledCalled, "runScheduled should have been called")
-	assert.Equal(t, "*/5 * * * *", runScheduledSchedule)
-	assert.False(t, orchestratorCalled, "orchestrator should not be called because runScheduled mock returns early")
-	assert.False(t, orchestratorOpts.DryRun, "dry-run should default to false")
-}
-
-func TestMain_SyncCommand(t *testing.T) {
-	oldArgs := os.Args
-	defer func() { os.Args = oldArgs }()
-	os.Args = []string{"patreon-manager", "sync"}
-	oldFlag := flag.CommandLine
-	defer func() { flag.CommandLine = oldFlag }()
-	flag.CommandLine = flag.NewFlagSet("test", flag.ContinueOnError)
-	oldEnviron := os.Environ()
-	os.Clearenv()
-	defer func() {
-		for _, e := range oldEnviron {
-			parts := strings.SplitN(e, "=", 2)
-			if len(parts) == 2 {
-				os.Setenv(parts[0], parts[1])
-			}
-		}
-	}()
-	os.Setenv("DB_DRIVER", "sqlite")
-	os.Setenv("DB_DSN", ":memory:")
-	os.Setenv("PATREON_CLIENT_ID", "dummy")
-	os.Setenv("PATREON_CLIENT_SECRET", "dummy")
-	os.Setenv("PATREON_ACCESS_TOKEN", "dummy")
-	os.Setenv("PATREON_REFRESH_TOKEN", "dummy")
-	os.Setenv("PATREON_CAMPAIGN_ID", "dummy")
-	os.Setenv("HMAC_SECRET", "dummy")
-	os.Setenv("LLMSVERIFIER_ENDPOINT", "http://localhost:9099")
-	// mock LLMsVerifier auto-start (skip real network check)
-	oldEnsureSync := ensureLLMsVerifier
-	defer func() { ensureLLMsVerifier = oldEnsureSync }()
-	ensureLLMsVerifier = func(cfg *config.Config, logger *slog.Logger) error { return nil }
-	// mock database
-	oldNewDatabase := newDatabase
-	defer func() { newDatabase = oldNewDatabase }()
-	newDatabase = func(driver, dsn string) database.Database {
-		return &mockDatabase{}
-	}
-	// reset prometheus registry to avoid duplicate metric registration
-	cleanup := withMockPrometheusRegistry(t)
-	defer cleanup()
-	// mock orchestrator to track calls
-	var orchestratorCalled bool
-	var orchestratorOpts syncsvc.SyncOptions
-	oldNewOrchestrator := newOrchestrator
-	defer func() { newOrchestrator = oldNewOrchestrator }()
-	newOrchestrator = func(db database.Database, providers []git.RepositoryProvider, patreonClient patreon.Provider, generator *content.Generator, m metrics.MetricsCollector, logger *slog.Logger, tierMapper *content.TierMapper) orchestrator {
-		return &mockOrchestrator{
-			runFunc: func(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error) {
-				orchestratorCalled = true
-				orchestratorOpts = opts
-				return &syncsvc.SyncResult{Processed: 1, Failed: 0, Skipped: 0}, nil
-			},
-		}
-	}
-	// No need to capture log output; the orchestrator call is sufficient.
-	exited, code := withMockExit(t, func() {
-		main()
-	})
-	assert.False(t, exited, "sync command should not exit with error")
-	assert.Equal(t, 0, code)
-	assert.True(t, orchestratorCalled, "orchestrator should have been called")
-	assert.False(t, orchestratorOpts.DryRun, "dry-run should default to false")
 }
 
 func TestMain_GenerateCommand(t *testing.T) {

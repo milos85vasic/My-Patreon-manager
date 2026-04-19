@@ -10,25 +10,16 @@ import (
 // in well-known paths. Any new file that starts calling CreatePost or
 // UpdatePost is flagged here as a boundary violation.
 //
-// ALLOWLIST — three tiers:
+// ALLOWLIST:
 //
-//	Canonical (permanent): the new process.Publisher is the sole
-//	intended future path to Patreon writes.
+//	Canonical: process.Publisher is the sole path to Patreon writes.
 //	  - internal/services/process/publish.go + its test
 //	  - cmd/cli/publish.go + its test (thin adapter + CLI entry)
 //	  - internal/providers/patreon/ — the provider implementation itself
 //	  - tests/unit/providers/patreon/ — unit tests of the provider
 //	  - tests/contract/patreon_write_boundary_test.go — this file
 //
-//	Transitional (to be retired): the legacy sync orchestrator still
-//	issues Patreon writes from Orchestrator.Run and Orchestrator.PublishOnly.
-//	These should be removed once the process command fully supersedes sync.
-//	  - internal/services/sync/orchestrator.go
-//	  - tests for the legacy orchestrator (orchestrator_*_test.go)
-//
-//	Test fixtures: the e2e test exercises the legacy sync path and
-//	uses a mock patreon client that happens to expose CreatePost/UpdatePost.
-//	  - tests/e2e/full_sync_test.go
+//	Test fixtures: mocks that happen to expose CreatePost/UpdatePost.
 //	  - tests/mocks/ — mock implementations
 func TestPatreonWriteBoundary(t *testing.T) {
 	// Resolve repo root so the grep runs from a stable directory regardless
@@ -67,17 +58,7 @@ func TestPatreonWriteBoundary(t *testing.T) {
 		// This file (may reference the method names in comments/strings)
 		"tests/contract/patreon_write_boundary_test.go",
 
-		// TRANSITIONAL — legacy sync path, scheduled for retirement once
-		// the process command fully supersedes it.
-		// TODO(process-migration): remove once Orchestrator.Run and
-		// Orchestrator.PublishOnly no longer issue Patreon writes.
-		"internal/services/sync/orchestrator.go",
-		"internal/services/sync/orchestrator_split_test.go",
-		"internal/services/sync/orchestrator_coverage_test.go",
-
 		// Test fixtures
-		// TODO(process-migration): retire alongside the legacy sync path.
-		"tests/e2e/full_sync_test.go",
 		"tests/mocks/",
 	}
 

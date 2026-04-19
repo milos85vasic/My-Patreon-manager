@@ -13,20 +13,14 @@ import (
 )
 
 // TestRunGenerate_Success verifies that runGenerate invokes GenerateOnly and
-// does NOT call Run/ScanOnly/PublishOnly.
+// does NOT call ScanOnly.
 func TestRunGenerate_Success(t *testing.T) {
 	var (
 		scanCalled     bool
-		runCalled      bool
 		generateCalled bool
-		publishCalled  bool
 	)
 
 	mockOrch := &mockOrchestrator{
-		runFunc: func(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error) {
-			runCalled = true
-			return &syncsvc.SyncResult{}, nil
-		},
 		scanFunc: func(ctx context.Context, opts syncsvc.SyncOptions) ([]models.Repository, error) {
 			scanCalled = true
 			return nil, nil
@@ -34,10 +28,6 @@ func TestRunGenerate_Success(t *testing.T) {
 		generateFunc: func(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error) {
 			generateCalled = true
 			return &syncsvc.SyncResult{Processed: 3, Failed: 0, Skipped: 1}, nil
-		},
-		publishFunc: func(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error) {
-			publishCalled = true
-			return &syncsvc.SyncResult{}, nil
 		},
 	}
 
@@ -48,9 +38,7 @@ func TestRunGenerate_Success(t *testing.T) {
 	})
 	assert.False(t, exited, "runGenerate should not exit on success")
 	assert.True(t, generateCalled, "GenerateOnly should have been called")
-	assert.False(t, runCalled, "Run should NOT have been called by generate")
 	assert.False(t, scanCalled, "ScanOnly should NOT have been called by generate")
-	assert.False(t, publishCalled, "PublishOnly should NOT have been called by generate")
 	assert.Contains(t, logOutput.String(), "generate result")
 }
 

@@ -33,8 +33,9 @@ func (m *recordingMetrics) RecordWebhookEvent(_, _ string)              { m.webh
 func (m *recordingMetrics) SetActiveSyncs(_ int)                        { m.activeSyncsCalled = true }
 func (m *recordingMetrics) SetBudgetUtilization(_ float64)              { m.budgetUtilizationCalled = true }
 
-// TestOrchestratorEmitsMetrics verifies that after a Run, the orchestrator
-// records sync duration and sets active syncs via the MetricsCollector.
+// TestOrchestratorEmitsMetrics verifies that after GenerateOnly, the
+// orchestrator records sync duration and sets active syncs via the
+// MetricsCollector.
 func TestOrchestratorEmitsMetrics(t *testing.T) {
 	mc := &recordingMetrics{}
 	provider := &mocks.MockRepositoryProvider{
@@ -47,7 +48,7 @@ func TestOrchestratorEmitsMetrics(t *testing.T) {
 	logger := slog.Default()
 
 	orc := sync.NewOrchestrator(db, []git.RepositoryProvider{provider}, &mocks.PatreonClient{}, nil, mc, logger, nil)
-	result, err := orc.Run(context.Background(), sync.SyncOptions{})
+	result, err := orc.GenerateOnly(context.Background(), sync.SyncOptions{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -56,15 +57,15 @@ func TestOrchestratorEmitsMetrics(t *testing.T) {
 	}
 
 	if !mc.syncDurationCalled {
-		t.Error("expected RecordSyncDuration to be called after Run")
+		t.Error("expected RecordSyncDuration to be called after GenerateOnly")
 	}
 	if !mc.activeSyncsCalled {
-		t.Error("expected SetActiveSyncs to be called during Run")
+		t.Error("expected SetActiveSyncs to be called during GenerateOnly")
 	}
 }
 
 // TestOrchestratorEmitsMetrics_ScanOnly verifies ScanOnly does NOT set active
-// syncs (only Run/GenerateOnly/PublishOnly do) but completes without error.
+// syncs (only GenerateOnly does) but completes without error.
 func TestOrchestratorEmitsMetrics_ScanOnly(t *testing.T) {
 	mc := &recordingMetrics{}
 	provider := &mocks.MockRepositoryProvider{

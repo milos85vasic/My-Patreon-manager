@@ -606,30 +606,6 @@ func containsHelper(s, substr string) bool {
 
 // --- Orchestrator helper tests ---
 
-func TestGetPlatformLabel(t *testing.T) {
-	db := &mocks.MockDatabase{}
-	orc := NewOrchestrator(db, nil, nil, nil, nil, nil, nil)
-
-	tests := []struct {
-		service  string
-		expected string
-	}{
-		{"github", "Star and follow on GitHub"},
-		{"gitlab", "Contribute on GitLab"},
-		{"gitflic", "for Russian-speaking contributors"},
-		{"gitverse", "Fork on GitVerse"},
-		{"unknown", "View on unknown"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.service, func(t *testing.T) {
-			got := orc.getPlatformLabel(tt.service)
-			if got != tt.expected {
-				t.Errorf("getPlatformLabel(%q) = %q, want %q", tt.service, got, tt.expected)
-			}
-		})
-	}
-}
-
 func TestDetectRename(t *testing.T) {
 	db := &mocks.MockDatabase{}
 	orc := NewOrchestrator(db, nil, nil, nil, nil, nil, nil)
@@ -702,20 +678,5 @@ func TestShortErr_LongError(t *testing.T) {
 	short := shortErr(fmt.Errorf("%s", string(long)))
 	if len(short) > 96 {
 		t.Errorf("expected truncated to 96, got %d", len(short))
-	}
-}
-
-func TestIsNotFoundError(t *testing.T) {
-	if isNotFoundError(nil) {
-		t.Error("nil should not be not-found")
-	}
-	if !isNotFoundError(fmt.Errorf("resource 404 not found")) {
-		t.Error("expected true for 404 error")
-	}
-	if !isNotFoundError(fmt.Errorf("not found")) {
-		t.Error("expected true for 'not found'")
-	}
-	if isNotFoundError(fmt.Errorf("internal server error")) {
-		t.Error("expected false for non-404")
 	}
 }

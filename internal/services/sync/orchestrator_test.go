@@ -37,7 +37,10 @@ func (m *mockGenerator) GenerateForRepository(ctx context.Context, repo models.R
 
 func (m *mockGenerator) SetReviewQueue(rq *content.ReviewQueue) {}
 
-func TestOrchestrator_Run_NoRepos(t *testing.T) {
+// TestOrchestrator_ScanOnly_NoRepos exercises the zero-provider early-exit of
+// ScanOnly. This is the retained smoke test for the orchestrator constructor
+// + discovery wiring after the legacy Run/PublishOnly path was retired.
+func TestOrchestrator_ScanOnly_NoRepos(t *testing.T) {
 	ctx := context.Background()
 	db := &mocks.MockDatabase{}
 	providers := []git.RepositoryProvider{}
@@ -46,10 +49,7 @@ func TestOrchestrator_Run_NoRepos(t *testing.T) {
 	logger := slog.Default()
 
 	orc := NewOrchestrator(db, providers, patreon, nil, metrics, logger, nil)
-	result, err := orc.Run(ctx, SyncOptions{})
+	repos, err := orc.ScanOnly(ctx, SyncOptions{})
 	require.NoError(t, err)
-	assert.Equal(t, 0, result.Processed)
-	assert.Equal(t, 0, result.Failed)
-	assert.Equal(t, 0, result.Skipped)
-	assert.Len(t, result.Errors, 0)
+	assert.Empty(t, repos)
 }

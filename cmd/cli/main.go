@@ -8,8 +8,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	gw "digital.vasic.llmgateway"
@@ -39,10 +37,8 @@ var newOrchestrator orchestratorFactory = func(db database.Database, providers [
 }
 
 type orchestrator interface {
-	Run(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error)
 	ScanOnly(ctx context.Context, opts syncsvc.SyncOptions) ([]models.Repository, error)
 	GenerateOnly(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error)
-	PublishOnly(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error)
 	SetAuditStore(s audit.Store)
 	SetProviderOrgs(providerOrgs map[string][]string)
 	SetIllustrationGenerator(gen any)
@@ -215,10 +211,15 @@ func main() {
 		// Route it through runProcess so behavior converges; the alias will
 		// eventually be removed.
 		printSyncDeprecation(os.Stderr)
-		if schedule != "" {
-			runScheduledFunc(ctx, orchestrator, syncOpts, schedule, logger)
-		} else {
-			runSync(ctx, orchestrator, syncOpts, logger)
+		depsIn := processDepsInputs{
+			Orchestrator:  orchestrator,
+			Generator:     generator,
+			PatreonClient: patreonClient,
+			SyncOpts:      syncOpts,
+		}
+		if err := runProcess(ctx, cfg, db, buildProcessDeps(cfg, db, logger, depsIn)); err != nil {
+			logger.Error("process failed", slog.String("error", err.Error()))
+			osExit(1)
 		}
 	case "scan":
 		runScan(ctx, orchestrator, syncOpts, logger)
@@ -271,55 +272,6 @@ func buildProviderOrgs(cfg *config.Config) map[string][]string {
 	}
 	return orgs
 }
-
-func runSync(ctx context.Context, orch orchestrator, opts syncsvc.SyncOptions, logger *slog.Logger) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigCh
-		logger.Info("received shutdown signal")
-		cancel()
-	}()
-
-	result, err := orch.Run(ctx, opts)
-	if err != nil {
-		logger.Error("sync failed", slog.String("error", err.Error()))
-		osExit(1)
-	}
-	logger.Info("sync result",
-		slog.Int("processed", result.Processed),
-		slog.Int("failed", result.Failed),
-		slog.Int("skipped", result.Skipped),
-	)
-}
-
-func runScheduled(ctx context.Context, orch orchestrator, opts syncsvc.SyncOptions, schedule string, logger *slog.Logger, testSigCh ...chan os.Signal) {
-	alert := &syncsvc.LogAlert{}
-	scheduler := syncsvc.NewScheduler(orch, opts, alert, logger)
-	if err := scheduler.Start(ctx, schedule); err != nil {
-		logger.Error("failed to start scheduler", slog.String("error", err.Error()))
-		osExit(1)
-	}
-	logger.Info("scheduler started", slog.String("schedule", schedule))
-
-	var sigCh chan os.Signal
-	if len(testSigCh) > 0 && testSigCh[0] != nil {
-		sigCh = testSigCh[0]
-	} else {
-		sigCh = make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	}
-
-	<-sigCh
-	logger.Info("shutdown signal received, stopping scheduler")
-	scheduler.Stop()
-	logger.Info("scheduler stopped")
-}
-
-var runScheduledFunc = runScheduled
 
 // printSyncDeprecation writes the refined deprecation warning for the
 // legacy `sync` command. Factored into a helper so tests can assert the

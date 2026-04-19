@@ -13,21 +13,15 @@ import (
 )
 
 // TestRunScan_Success verifies that runScan invokes ScanOnly on the
-// orchestrator, does NOT invoke Run/GenerateOnly/PublishOnly, and logs the
-// discovered repositories.
+// orchestrator, does NOT invoke GenerateOnly, and logs the discovered
+// repositories.
 func TestRunScan_Success(t *testing.T) {
 	var (
 		scanCalled     bool
-		runCalled      bool
 		generateCalled bool
-		publishCalled  bool
 	)
 
 	mockOrch := &mockOrchestrator{
-		runFunc: func(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error) {
-			runCalled = true
-			return &syncsvc.SyncResult{}, nil
-		},
 		scanFunc: func(ctx context.Context, opts syncsvc.SyncOptions) ([]models.Repository, error) {
 			scanCalled = true
 			return []models.Repository{
@@ -37,10 +31,6 @@ func TestRunScan_Success(t *testing.T) {
 		},
 		generateFunc: func(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error) {
 			generateCalled = true
-			return &syncsvc.SyncResult{}, nil
-		},
-		publishFunc: func(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error) {
-			publishCalled = true
 			return &syncsvc.SyncResult{}, nil
 		},
 	}
@@ -53,9 +43,7 @@ func TestRunScan_Success(t *testing.T) {
 	})
 	assert.False(t, exited, "runScan should not call osExit on success")
 	assert.True(t, scanCalled, "ScanOnly should have been called")
-	assert.False(t, runCalled, "Run should NOT have been called by scan")
 	assert.False(t, generateCalled, "GenerateOnly should NOT have been called by scan")
-	assert.False(t, publishCalled, "PublishOnly should NOT have been called by scan")
 	out := logOutput.String()
 	assert.Contains(t, out, "scan discovered repositories")
 	assert.Contains(t, out, "discovered")
