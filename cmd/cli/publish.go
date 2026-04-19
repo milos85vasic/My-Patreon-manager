@@ -63,15 +63,12 @@ func runPublish(_ context.Context, db database.Database, patreonClient *patreon.
 }
 
 // patreonMutatorAdapter bridges the narrow process.PatreonMutator
-// contract onto the fat internal/providers/patreon.Client surface. Only
-// CreatePost and UpdatePost are wired to real Patreon calls; the
-// provider does not yet expose a "fetch post body by ID" endpoint, so
-// GetPostContent is a stub that returns ("", nil). Task 33 will replace
-// the stub with a real GET /posts/{id} call once the provider grows
-// that method; until then the publisher treats an empty return as
-// "no drift detected", which is safe because the drift-fingerprint of
-// our published body must also match the empty string for this to
-// spuriously clear drift — essentially never.
+// contract onto the fat internal/providers/patreon.Client surface. All
+// three methods (GetPostContent, CreatePost, UpdatePost) are wired to
+// real Patreon calls; a nil provider client is tolerated and every
+// method stubs out (empty body, empty ID, no-op update) so tests and
+// misconfigured environments can still drive the publish loop without
+// panicking.
 type patreonMutatorAdapter struct {
 	c *patreon.Client
 }
@@ -85,12 +82,20 @@ func newPatreonMutatorAdapter(c *patreon.Client) process.PatreonMutator {
 }
 
 func (a *patreonMutatorAdapter) GetPostContent(ctx context.Context, postID string) (string, error) {
-	// TODO(task-33): wire to a real GET /posts/{id} fetch once the
-	// provider exposes it. Returning ("", nil) means we conservatively
-	// treat the live content as an empty body; pairs with the
-	// DriftFingerprint comparison in the Publisher. Until the real
-	// fetch is in place, drift detection is effectively disabled.
-	return "", nil
+	if a.c == nil {
+		return "", nil
+	}
+	post, err := a.c.GetPost(ctx, postID)
+	if err != nil {
+		return "", err
+	}
+	if post == nil {
+		// 404 — caller treats an empty body as "no drift baseline", so
+		// a missing post simply bypasses drift detection rather than
+		// blocking the publish.
+		return "", nil
+	}
+	return post.Content, nil
 }
 
 func (a *patreonMutatorAdapter) CreatePost(ctx context.Context, title, body string, illustrationID *string) (string, error) {

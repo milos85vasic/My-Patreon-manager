@@ -200,7 +200,13 @@ func main() {
 
 	switch args[0] {
 	case "process":
-		if err := runProcess(ctx, cfg, db, buildProcessDeps(cfg, db, logger)); err != nil {
+		depsIn := processDepsInputs{
+			Orchestrator:  orchestrator,
+			Generator:     generator,
+			PatreonClient: patreonClient,
+			SyncOpts:      syncOpts,
+		}
+		if err := runProcess(ctx, cfg, db, buildProcessDeps(cfg, db, logger, depsIn)); err != nil {
 			logger.Error("process failed", slog.String("error", err.Error()))
 			osExit(1)
 		}

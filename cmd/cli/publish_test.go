@@ -102,17 +102,71 @@ func TestPatreonMutatorAdapter_NilClient_StubsEverything(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// TestPatreonMutatorAdapter_GetPostContent_Stub verifies the stub
-// contract for the non-nil client case: Task 33 will wire the real
-// endpoint; until then GetPostContent returns ("", nil). We need a
-// non-nil client for this branch, constructed without real credentials.
-func TestPatreonMutatorAdapter_GetPostContent_Stub(t *testing.T) {
-	oauth := patreon.NewOAuth2Manager("id", "secret", "access", "refresh")
-	c := patreon.NewClient(oauth, "cid")
+// TestPatreonMutatorAdapter_GetPostContent_RealClient verifies that the
+// adapter delegates to patreon.Client.GetPost when a non-nil client is
+// supplied and returns the Content field on the 200 path. The client is
+// pointed at an httptest.Server so no real network I/O occurs.
+func TestPatreonMutatorAdapter_GetPostContent_RealClient(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": map[string]interface{}{
+				"id": "pp-x",
+				"attributes": map[string]interface{}{
+					"title":   "Title",
+					"content": "live-body",
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	c := patreon.NewClient(patreon.NewOAuth2Manager("id", "sec", "tok", "ref"), "cid")
+	c.SetBaseURL(srv.URL)
+	c.SetMaxRetries(1)
+
 	a := newPatreonMutatorAdapter(c)
 	got, err := a.GetPostContent(context.Background(), "pp-x")
 	assert.NoError(t, err)
+	assert.Equal(t, "live-body", got)
+}
+
+// TestPatreonMutatorAdapter_GetPostContent_404 verifies the not-found
+// branch: a 404 response must surface as ("", nil) so the publisher
+// treats it as "no drift baseline" rather than a hard error.
+func TestPatreonMutatorAdapter_GetPostContent_404(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "not found", http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	c := patreon.NewClient(patreon.NewOAuth2Manager("id", "sec", "tok", "ref"), "cid")
+	c.SetBaseURL(srv.URL)
+	c.SetMaxRetries(1)
+
+	a := newPatreonMutatorAdapter(c)
+	got, err := a.GetPostContent(context.Background(), "pp-missing")
+	assert.NoError(t, err)
 	assert.Equal(t, "", got)
+}
+
+// TestPatreonMutatorAdapter_GetPostContent_Error verifies that a 5xx
+// from the upstream surfaces as a non-nil error.
+func TestPatreonMutatorAdapter_GetPostContent_Error(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	c := patreon.NewClient(patreon.NewOAuth2Manager("id", "sec", "tok", "ref"), "cid")
+	c.SetBaseURL(srv.URL)
+	c.SetMaxRetries(1)
+
+	a := newPatreonMutatorAdapter(c)
+	_, err := a.GetPostContent(context.Background(), "pp-x")
+	if err == nil {
+		t.Fatal("expected error from upstream 500")
+	}
 }
 
 // TestPatreonMutatorAdapter_CreatePost_NonNilClient exercises the

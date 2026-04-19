@@ -11,7 +11,10 @@ import (
 	"github.com/milos85vasic/My-Patreon-Manager/internal/config"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/database"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/models"
+	"github.com/milos85vasic/My-Patreon-Manager/internal/providers/patreon"
+	"github.com/milos85vasic/My-Patreon-Manager/internal/services/content"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/services/process"
+	syncsvc "github.com/milos85vasic/My-Patreon-Manager/internal/services/sync"
 )
 
 // processDeps bundles the externally-supplied collaborators used by the
@@ -145,35 +148,78 @@ func runProcess(ctx context.Context, cfg *config.Config, db database.Database, d
 }
 
 // patreonCampaignAdapter wraps the existing patreon.Client to satisfy the
-// process.PatreonCampaignClient interface. The existing client does not
-// yet expose a campaign-posts listing method; until one lands this adapter
-// returns an empty slice so the first-run importer no-ops. The Task 14
-// importer is already fully exercised via stubs in its own tests, and a
-// follow-up task can swap in a real implementation once the provider
-// surface grows a ListCampaignPosts method.
-//
-// TODO: wire a real Patreon `posts` endpoint call once the provider
-// gains a ListCampaignPosts method. Tracking in a follow-up task.
+// process.PatreonCampaignClient interface. It delegates to the real
+// ListCampaignPosts provider call and maps each returned *models.Post
+// into a process.PatreonPost. When `client` is nil the adapter returns
+// (nil, nil) so CLI invocations without Patreon credentials still run the
+// importer harmlessly (it no-ops on an empty slice).
 type patreonCampaignAdapter struct {
+	client *patreon.Client
 	logger *slog.Logger
 }
 
-func (a *patreonCampaignAdapter) ListCampaignPosts(_ context.Context, _ string) ([]process.PatreonPost, error) {
-	if a.logger != nil {
-		a.logger.Info("process: Patreon campaign-posts listing not wired yet; first-run import will be a no-op")
+func (a *patreonCampaignAdapter) ListCampaignPosts(ctx context.Context, campaignID string) ([]process.PatreonPost, error) {
+	if a.client == nil {
+		if a.logger != nil {
+			a.logger.Info("process: no Patreon client configured; skipping campaign-posts listing")
+		}
+		return nil, nil
 	}
-	return nil, nil
+	posts, err := a.client.ListCampaignPosts(ctx, campaignID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]process.PatreonPost, 0, len(posts))
+	for i := range posts {
+		p := &posts[i]
+		var publishedAt *time.Time
+		if !p.PublishedAt.IsZero() {
+			ts := p.PublishedAt
+			publishedAt = &ts
+		}
+		out = append(out, process.PatreonPost{
+			ID:      p.ID,
+			Title:   p.Title,
+			Content: p.Content,
+			// TODO: models.Post does not expose the post URL (the provider
+			// drops it at the model boundary). Extend models.Post with URL
+			// when drift detection or unmatched-post bookkeeping needs it.
+			URL:         "",
+			PublishedAt: publishedAt,
+		})
+	}
+	return out, nil
+}
+
+// contentArticleAdapter bridges the narrow process.ArticleGenerator
+// contract (returns a title/body pair) onto the richer
+// content.Generator.GenerateForRepository surface. We pass nil templates
+// and nil mirrorURLs — the generator falls back to its built-in default
+// template, mirroring what sync.Orchestrator already does.
+type contentArticleAdapter struct {
+	gen *content.Generator
+}
+
+func (a *contentArticleAdapter) Generate(ctx context.Context, repo *models.Repository) (string, string, error) {
+	if a == nil || a.gen == nil || repo == nil {
+		return "", "", fmt.Errorf("content generator not configured")
+	}
+	// content.Generator.GenerateForRepository is documented to return
+	// either (nil, err) on failure or (non-nil, nil) on success, so we
+	// treat a nil error as implying a non-nil result.
+	generated, err := a.gen.GenerateForRepository(ctx, *repo, nil, nil)
+	if err != nil {
+		return "", "", err
+	}
+	return generated.Title, generated.Body, nil
 }
 
 // stubArticleGenerator is a placeholder ArticleGenerator used by
-// buildProcessDeps when a real generator adapter is not yet available.
-// It is deliberately minimal so the `process` subcommand at least
-// compiles and exits cleanly on a first-time operator setup; the
-// production wire-up will replace this with an adapter over
-// internal/services/content/Generator.
-//
-// TODO: replace with a real adapter over internal/services/content/Generator
-// in a follow-up task.
+// buildProcessDeps when a real content generator is not available (e.g.
+// when the CLI is invoked without the full LLM wiring). It returns
+// (repo.Name, "", nil) so the `process` subcommand still compiles and
+// exercises the surrounding plumbing; tests override this with a
+// deterministic stub.
 type stubArticleGenerator struct{}
 
 func (stubArticleGenerator) Generate(_ context.Context, r *models.Repository) (string, string, error) {
@@ -184,19 +230,66 @@ func (stubArticleGenerator) Generate(_ context.Context, r *models.Repository) (s
 	return title, "", nil
 }
 
+// processDepsInputs bundles the real collaborators that buildProcessDeps
+// needs to wire the `process` subcommand. Keeping them in a struct avoids
+// an explosive parameter list on buildProcessDeps and makes it easy to
+// pass zero-valued inputs in tests (buildProcessDeps tolerates nil
+// orchestrator / generator / patreonClient and falls back to stubs).
+type processDepsInputs struct {
+	Orchestrator  orchestrator
+	Generator     *content.Generator
+	PatreonClient *patreon.Client
+	SyncOpts      syncsvc.SyncOptions
+}
+
 // buildProcessDeps constructs a processDeps with the available real
-// integrations; fields that cannot yet be wired are stubbed with a
-// TODO comment and logged as skipped. Keeping this helper scoped to
-// ~30 lines as the plan requests — production wiring lives in Task 33.
-func buildProcessDeps(_ *config.Config, _ database.Database, logger *slog.Logger) processDeps {
+// integrations. Any collaborator left nil on the inputs struct is
+// replaced with a safe stub (documented on the stub type) so the
+// subcommand still runs end-to-end on partial configurations — useful for
+// dev environments where Patreon credentials or LLM wiring are not yet in
+// place.
+func buildProcessDeps(_ *config.Config, _ database.Database, logger *slog.Logger, in processDepsInputs) processDeps {
 	if logger == nil {
 		logger = slog.Default()
 	}
+
+	var scanner func(context.Context) error
+	if in.Orchestrator != nil {
+		opts := in.SyncOpts
+		scanner = func(ctx context.Context) error {
+			_, err := in.Orchestrator.ScanOnly(ctx, opts)
+			return err
+		}
+	} else {
+		scanner = func(context.Context) error { return nil }
+	}
+
+	var articleGen process.ArticleGenerator
+	if in.Generator != nil {
+		articleGen = &contentArticleAdapter{gen: in.Generator}
+	} else {
+		articleGen = stubArticleGenerator{}
+	}
+
+	// IllustrationGen remains nil for now. The existing
+	// internal/services/illustration.Generator.Generate signature
+	// (repoID, repoName, repoDesc, repoLang, repoTopics, contentID,
+	// title, body) is materially different from
+	// process.IllustrationGenerator.Generate(ctx, *models.Repository,
+	// body). A real wrapper would need to pull the contentID (which
+	// the pipeline does not currently expose) and re-derive the repo
+	// metadata. Keeping nil avoids a >20-line adapter; the Pipeline
+	// handles nil by skipping illustration generation, which matches
+	// the documented contract on IllustrationGenerator.
+	// TODO: wire illustration.Generator once the pipeline exposes the
+	// generated content ID (or the illustration generator grows an
+	// overload that can derive it from the repo + body alone).
+
 	return processDeps{
-		PatreonClient:   &patreonCampaignAdapter{logger: logger},
-		Scanner:         func(context.Context) error { return nil }, // TODO: wire sync.Orchestrator.ScanOnly
-		Generator:       stubArticleGenerator{},                     // TODO: wire content.Generator
-		IllustrationGen: nil,                                        // TODO: wire illustration.Generator
+		PatreonClient:   &patreonCampaignAdapter{client: in.PatreonClient, logger: logger},
+		Scanner:         scanner,
+		Generator:       articleGen,
+		IllustrationGen: nil,
 		Logger:          logger,
 	}
 }

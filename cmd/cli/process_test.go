@@ -3,16 +3,22 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/milos85vasic/My-Patreon-Manager/internal/config"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/database"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/models"
+	"github.com/milos85vasic/My-Patreon-Manager/internal/providers/patreon"
+	"github.com/milos85vasic/My-Patreon-Manager/internal/services/content"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/services/process"
+	syncsvc "github.com/milos85vasic/My-Patreon-Manager/internal/services/sync"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/testhelpers"
 )
 
@@ -234,12 +240,12 @@ func TestRunProcess_ReclaimStaleError(t *testing.T) {
 }
 
 // TestBuildProcessDeps_ReturnsNonNil checks the constructor produces a
-// dependency set where every required field is non-nil. This keeps the
-// stub adapters from regressing into a panic at startup even if nothing
-// calls them in production yet.
+// dependency set where every required field is non-nil when no real
+// collaborators are supplied. This exercises the safe-fallback path for
+// dev environments where Patreon/LLM wiring is not yet configured.
 func TestBuildProcessDeps_ReturnsNonNil(t *testing.T) {
 	cfg := baseProcessCfg()
-	deps := buildProcessDeps(cfg, nil, discardProcessLogger())
+	deps := buildProcessDeps(cfg, nil, discardProcessLogger(), processDepsInputs{})
 	if deps.PatreonClient == nil {
 		t.Fatal("PatreonClient nil")
 	}
@@ -252,34 +258,46 @@ func TestBuildProcessDeps_ReturnsNonNil(t *testing.T) {
 	if deps.Logger == nil {
 		t.Fatal("Logger nil")
 	}
-	// Scanner must be a no-op in the stub form.
+	// Scanner must be a no-op when no orchestrator is supplied.
 	if err := deps.Scanner(context.Background()); err != nil {
 		t.Fatalf("Scanner stub returned err: %v", err)
 	}
-	// Generator stub returns (Name, "", nil) even for nil repo.
+	// Generator stub returns (Name, "", nil) even for nil repo when no
+	// real content.Generator is supplied.
 	if _, _, err := deps.Generator.Generate(context.Background(), nil); err != nil {
 		t.Fatalf("Generator stub returned err: %v", err)
 	}
 	if _, _, err := deps.Generator.Generate(context.Background(), &models.Repository{Name: "abc"}); err != nil {
 		t.Fatalf("Generator stub with repo returned err: %v", err)
 	}
-	// Adapter's ListCampaignPosts must return (nil, nil) until the real
-	// Patreon endpoint lands.
+	// Adapter's ListCampaignPosts must return (nil, nil) when no
+	// patreon.Client is supplied — the nil-client branch.
 	posts, err := deps.PatreonClient.ListCampaignPosts(context.Background(), "c1")
 	if err != nil || posts != nil {
 		t.Fatalf("PatreonClient stub: want (nil,nil), got (%v, %v)", posts, err)
 	}
 	// Also test nil-logger path of buildProcessDeps.
-	deps2 := buildProcessDeps(cfg, nil, nil)
+	deps2 := buildProcessDeps(cfg, nil, nil, processDepsInputs{})
 	if deps2.Logger == nil {
 		t.Fatal("Logger should fall back to slog.Default on nil input")
 	}
 }
 
-// TestPatreonCampaignAdapter_NilLogger exercises the nil-logger branch
-// of the adapter (keeps the TODO log call defensive).
-func TestPatreonCampaignAdapter_NilLogger(t *testing.T) {
-	a := &patreonCampaignAdapter{logger: nil}
+// TestPatreonCampaignAdapter_NilClient_NilLogger exercises the
+// nil-client + nil-logger branch of the adapter to keep both defensive
+// guards covered.
+func TestPatreonCampaignAdapter_NilClient_NilLogger(t *testing.T) {
+	a := &patreonCampaignAdapter{client: nil, logger: nil}
+	posts, err := a.ListCampaignPosts(context.Background(), "c1")
+	if err != nil || posts != nil {
+		t.Fatalf("want (nil, nil); got (%v, %v)", posts, err)
+	}
+}
+
+// TestPatreonCampaignAdapter_NilClient_WithLogger exercises the
+// nil-client + non-nil logger branch.
+func TestPatreonCampaignAdapter_NilClient_WithLogger(t *testing.T) {
+	a := &patreonCampaignAdapter{client: nil, logger: discardProcessLogger()}
 	posts, err := a.ListCampaignPosts(context.Background(), "c1")
 	if err != nil || posts != nil {
 		t.Fatalf("want (nil, nil); got (%v, %v)", posts, err)
@@ -481,5 +499,289 @@ func TestRunProcess_ReclaimErrorMessagePrefix(t *testing.T) {
 	}
 	if msg := fmt.Sprintf("%v", err); len(msg) == 0 {
 		t.Fatal("err message empty")
+	}
+}
+
+// newFakePatreonCampaignServer returns an httptest.Server that responds
+// to GET /campaigns/<id>/posts with a canned JSON:API list. A single
+// page is returned (no next link) so ListCampaignPosts terminates after
+// one request.
+func newFakePatreonCampaignServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]interface{}{
+				{
+					"id": "p1",
+					"attributes": map[string]interface{}{
+						"title":        "First",
+						"content":      "body-1",
+						"url":          "https://patreon.com/posts/p1",
+						"published_at": "2025-01-15T12:00:00Z",
+					},
+				},
+				{
+					"id": "p2",
+					"attributes": map[string]interface{}{
+						"title":   "Second",
+						"content": "body-2",
+					},
+				},
+				{
+					"id": "p3",
+					"attributes": map[string]interface{}{
+						"title":        "Third",
+						"content":      "body-3",
+						"published_at": "not-a-valid-date", // exercise the parse-fail path
+					},
+				},
+			},
+			"links": map[string]interface{}{},
+		})
+	}))
+}
+
+// TestPatreonCampaignAdapter_ListCampaignPosts_RealClient exercises the
+// wired-up adapter against a real *patreon.Client pointed at a stub
+// httptest server. Asserts three posts come back with correct field
+// mapping, URL blank (dropped at provider boundary), and PublishedAt
+// populated only when the upstream value parsed as RFC3339.
+func TestPatreonCampaignAdapter_ListCampaignPosts_RealClient(t *testing.T) {
+	srv := newFakePatreonCampaignServer(t)
+	defer srv.Close()
+
+	c := patreon.NewClient(patreon.NewOAuth2Manager("id", "sec", "tok", "ref"), "cid")
+	c.SetBaseURL(srv.URL)
+	c.SetMaxRetries(1)
+
+	a := &patreonCampaignAdapter{client: c, logger: discardProcessLogger()}
+	posts, err := a.ListCampaignPosts(context.Background(), "cid")
+	if err != nil {
+		t.Fatalf("ListCampaignPosts: %v", err)
+	}
+	if len(posts) != 3 {
+		t.Fatalf("want 3 posts, got %d", len(posts))
+	}
+	if posts[0].ID != "p1" || posts[0].Title != "First" || posts[0].Content != "body-1" {
+		t.Fatalf("post[0] bad: %+v", posts[0])
+	}
+	// URL is always blank — models.Post doesn't expose it.
+	if posts[0].URL != "" {
+		t.Fatalf("post[0] URL should be blank, got %q", posts[0].URL)
+	}
+	if posts[0].PublishedAt == nil || posts[0].PublishedAt.IsZero() {
+		t.Fatalf("post[0] PublishedAt should be parsed: %+v", posts[0].PublishedAt)
+	}
+	// post[1] has no published_at; must come back as nil.
+	if posts[1].PublishedAt != nil {
+		t.Fatalf("post[1] PublishedAt should be nil, got %v", *posts[1].PublishedAt)
+	}
+	// post[2] has an unparseable published_at; toModel leaves the
+	// zero-value, which the adapter must drop (nil).
+	if posts[2].PublishedAt != nil {
+		t.Fatalf("post[2] PublishedAt should be nil after parse-fail, got %v", *posts[2].PublishedAt)
+	}
+}
+
+// TestPatreonCampaignAdapter_ListCampaignPosts_UpstreamError exercises
+// the error-propagation path of the adapter: a 500 from the server must
+// surface as a non-nil error.
+func TestPatreonCampaignAdapter_ListCampaignPosts_UpstreamError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	c := patreon.NewClient(patreon.NewOAuth2Manager("id", "sec", "tok", "ref"), "cid")
+	c.SetBaseURL(srv.URL)
+	c.SetMaxRetries(1)
+
+	a := &patreonCampaignAdapter{client: c, logger: discardProcessLogger()}
+	_, err := a.ListCampaignPosts(context.Background(), "cid")
+	if err == nil {
+		t.Fatal("expected error from 500 upstream")
+	}
+}
+
+// TestContentArticleAdapter_NilGenerator exercises the defensive nil-guard.
+func TestContentArticleAdapter_NilGenerator(t *testing.T) {
+	a := &contentArticleAdapter{gen: nil}
+	_, _, err := a.Generate(context.Background(), &models.Repository{Name: "r"})
+	if err == nil {
+		t.Fatal("want error when gen is nil")
+	}
+}
+
+// adapterStubLLM is a minimal LLMProvider for wiring a real
+// content.Generator in adapter tests.
+type adapterStubLLM struct {
+	body string
+	err  error
+}
+
+func (s *adapterStubLLM) GenerateContent(_ context.Context, _ models.Prompt, _ models.GenerationOptions) (models.Content, error) {
+	if s.err != nil {
+		return models.Content{}, s.err
+	}
+	return models.Content{
+		Title:        "Stub Title",
+		Body:         s.body,
+		QualityScore: 0.9,
+		ModelUsed:    "stub",
+		TokenCount:   42,
+	}, nil
+}
+
+func (s *adapterStubLLM) GetAvailableModels(_ context.Context) ([]models.ModelInfo, error) {
+	return nil, nil
+}
+func (s *adapterStubLLM) GetModelQualityScore(_ context.Context, _ string) (float64, error) {
+	return 0.9, nil
+}
+func (s *adapterStubLLM) GetTokenUsage(_ context.Context) (models.UsageStats, error) {
+	return models.UsageStats{}, nil
+}
+
+// TestContentArticleAdapter_Generate_Success exercises the happy path
+// where the contentArticleAdapter wraps a real content.Generator with a
+// stub LLM provider. Asserts the title/body come back from the
+// generator.
+func TestContentArticleAdapter_Generate_Success(t *testing.T) {
+	llm := &adapterStubLLM{body: "generated body"}
+	budget := content.NewTokenBudget(100000)
+	gate := content.NewQualityGate(0.5)
+	gen := content.NewGenerator(llm, budget, gate, nil, nil, nil)
+
+	a := &contentArticleAdapter{gen: gen}
+	title, body, err := a.Generate(context.Background(), &models.Repository{
+		ID: "r1", Name: "repo1", Owner: "o",
+	})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if title != "Stub Title" {
+		t.Fatalf("title: %q", title)
+	}
+	if body != "generated body" {
+		t.Fatalf("body: %q", body)
+	}
+}
+
+// TestContentArticleAdapter_Generate_Error exercises the LLM-error
+// propagation path: when the underlying LLM fails, the content.Generator
+// wraps the error and the adapter surfaces it without populating title
+// or body.
+func TestContentArticleAdapter_Generate_Error(t *testing.T) {
+	wantErr := errors.New("llm-down")
+	llm := &adapterStubLLM{err: wantErr}
+	budget := content.NewTokenBudget(100000)
+	gate := content.NewQualityGate(0.5)
+	gen := content.NewGenerator(llm, budget, gate, nil, nil, nil)
+
+	a := &contentArticleAdapter{gen: gen}
+	_, _, err := a.Generate(context.Background(), &models.Repository{
+		ID: "r1", Name: "repo1", Owner: "o",
+	})
+	if err == nil {
+		t.Fatal("expected error when LLM fails")
+	}
+}
+
+// TestContentArticleAdapter_NilRepo exercises the defensive nil-guard on
+// the repo parameter. content.Generator would panic on a nil repo, so
+// the adapter guards against it.
+func TestContentArticleAdapter_NilRepo(t *testing.T) {
+	a := &contentArticleAdapter{gen: nil}
+	_, _, err := a.Generate(context.Background(), nil)
+	if err == nil {
+		t.Fatal("want error on nil repo")
+	}
+}
+
+// TestBuildProcessDeps_WiredOrchestratorScanner verifies that the
+// Scanner closure returned by buildProcessDeps delegates to the
+// supplied orchestrator's ScanOnly method.
+func TestBuildProcessDeps_WiredOrchestratorScanner(t *testing.T) {
+	cfg := baseProcessCfg()
+	var called bool
+	var gotOpts syncsvc.SyncOptions
+	want := errors.New("scan-boom")
+	mo := &mockOrchestrator{
+		scanFunc: func(ctx context.Context, opts syncsvc.SyncOptions) ([]models.Repository, error) {
+			called = true
+			gotOpts = opts
+			return nil, want
+		},
+	}
+	opts := syncsvc.SyncOptions{DryRun: true, Filter: syncsvc.SyncFilter{Org: "orgA"}}
+	deps := buildProcessDeps(cfg, nil, discardProcessLogger(), processDepsInputs{
+		Orchestrator: mo,
+		SyncOpts:     opts,
+	})
+	if deps.Scanner == nil {
+		t.Fatal("Scanner nil")
+	}
+	err := deps.Scanner(context.Background())
+	if !errors.Is(err, want) {
+		t.Fatalf("want wrapped scan-boom, got %v", err)
+	}
+	if !called {
+		t.Fatal("orchestrator.ScanOnly should have been called")
+	}
+	if !gotOpts.DryRun || gotOpts.Filter.Org != "orgA" {
+		t.Fatalf("opts not threaded through: %+v", gotOpts)
+	}
+}
+
+// TestBuildProcessDeps_WiredPatreonClient verifies that, when a real
+// *patreon.Client is supplied, the returned PatreonClient adapter
+// delegates to it. We point the client at an httptest server so there
+// is no network I/O.
+func TestBuildProcessDeps_WiredPatreonClient(t *testing.T) {
+	srv := newFakePatreonCampaignServer(t)
+	defer srv.Close()
+
+	c := patreon.NewClient(patreon.NewOAuth2Manager("id", "sec", "tok", "ref"), "cid")
+	c.SetBaseURL(srv.URL)
+	c.SetMaxRetries(1)
+
+	cfg := baseProcessCfg()
+	deps := buildProcessDeps(cfg, nil, discardProcessLogger(), processDepsInputs{
+		PatreonClient: c,
+	})
+	posts, err := deps.PatreonClient.ListCampaignPosts(context.Background(), "cid")
+	if err != nil {
+		t.Fatalf("ListCampaignPosts: %v", err)
+	}
+	if len(posts) != 3 {
+		t.Fatalf("want 3 posts, got %d", len(posts))
+	}
+}
+
+// TestBuildProcessDeps_WiredContentGenerator verifies the "real
+// content.Generator supplied" branch of buildProcessDeps wires a
+// contentArticleAdapter (not the stub). We drive it through a real
+// Generator fed by a stub LLM so the end-to-end adapter path is
+// exercised.
+func TestBuildProcessDeps_WiredContentGenerator(t *testing.T) {
+	llm := &adapterStubLLM{body: "wired body"}
+	budget := content.NewTokenBudget(100000)
+	gate := content.NewQualityGate(0.5)
+	gen := content.NewGenerator(llm, budget, gate, nil, nil, nil)
+
+	cfg := baseProcessCfg()
+	deps := buildProcessDeps(cfg, nil, discardProcessLogger(), processDepsInputs{
+		Generator: gen,
+	})
+	title, body, err := deps.Generator.Generate(context.Background(), &models.Repository{
+		ID: "r", Name: "n", Owner: "o",
+	})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if title != "Stub Title" || body != "wired body" {
+		t.Fatalf("unexpected title/body: %q / %q", title, body)
 	}
 }
