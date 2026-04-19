@@ -29,6 +29,16 @@ import (
 // rolled-back "down" rows — means the migrator has run at least once
 // and we trust its bookkeeping.
 func bootstrapSchemaMigrations(ctx context.Context, db *sql.DB, dialect Dialect, m *Migrator) error {
+	// The pre-refactor hardcoded Migrate() created schema_migrations
+	// with only (version, applied_at); the Migrator expects
+	// (version, applied_at, checksum, direction). If we see the old
+	// shape, drop and recreate — the subsequent seeding loop will
+	// repopulate from the discovered migration files, and the old
+	// rows held no information we care about (they were keyed by a
+	// version space that never matched our NNNN scheme).
+	if err := upgradeSchemaMigrationsTable(ctx, db, dialect); err != nil {
+		return fmt.Errorf("bootstrap: upgrade schema_migrations: %w", err)
+	}
 	if err := m.EnsureTable(ctx); err != nil {
 		return fmt.Errorf("bootstrap: ensure schema_migrations: %w", err)
 	}
@@ -68,6 +78,62 @@ func bootstrapSchemaMigrations(ctx context.Context, db *sql.DB, dialect Dialect,
 		}
 	}
 	return nil
+}
+
+// upgradeSchemaMigrationsTable detects and migrates the pre-refactor
+// shape of schema_migrations — which only had (version, applied_at) —
+// to the current shape expected by the Migrator. Does nothing if the
+// table is absent or already has the required columns. If the table
+// exists but is missing the "checksum" column we drop it; all rows on
+// such tables were written by the old hardcoded Migrate() with version
+// keys like "001" that don't match the new NNNN scheme anyway, so the
+// data loss is intentional and the subsequent seeding-from-files step
+// rebuilds the bookkeeping from scratch.
+func upgradeSchemaMigrationsTable(ctx context.Context, db *sql.DB, dialect Dialect) error {
+	has, err := schemaMigrationsHasChecksum(ctx, db, dialect)
+	if err != nil {
+		return err
+	}
+	if has {
+		return nil // Already current shape or table doesn't exist.
+	}
+	_, err = db.ExecContext(ctx, `DROP TABLE schema_migrations`)
+	return err
+}
+
+// schemaMigrationsHasChecksum returns true when the schema_migrations
+// table either doesn't exist or exists with the "checksum" column
+// present. A false return signals the old two-column shape that needs
+// upgrading.
+func schemaMigrationsHasChecksum(ctx context.Context, db *sql.DB, dialect Dialect) (bool, error) {
+	var q string
+	switch dialect {
+	case DialectPostgres:
+		q = `SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = CURRENT_SCHEMA() AND table_name = 'schema_migrations' AND column_name = 'checksum'`
+	default:
+		q = `SELECT COUNT(*) FROM pragma_table_info('schema_migrations') WHERE name = 'checksum'`
+	}
+	// First, check whether schema_migrations exists at all. If not,
+	// treat as "up to date" — EnsureTable will create the right shape.
+	var tableCount int
+	var existsQuery string
+	switch dialect {
+	case DialectPostgres:
+		existsQuery = `SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = CURRENT_SCHEMA() AND table_name = 'schema_migrations'`
+	default:
+		existsQuery = `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_migrations'`
+	}
+	if err := db.QueryRowContext(ctx, existsQuery).Scan(&tableCount); err != nil {
+		return false, err
+	}
+	if tableCount == 0 {
+		return true, nil
+	}
+	var col int
+	if err := db.QueryRowContext(ctx, q).Scan(&col); err != nil {
+		return false, err
+	}
+	return col > 0, nil
 }
 
 // repositoriesTableExists returns true when the `repositories` table is

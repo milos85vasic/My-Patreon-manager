@@ -35,25 +35,22 @@ func TestPostgresDB2_Migrate_Success(t *testing.T) {
 	ctx := context.Background()
 
 	// After the migration-system refactor, Migrate() is a thin wrapper
-	// around bootstrapSchemaMigrations + Migrator.MigrateUp. Against a
-	// fresh database (empty schema_migrations, no repositories table),
-	// it issues:
-	//
-	//   1x Exec CREATE schema_migrations    (bootstrap EnsureTable)
-	//   1x Query COUNT schema_migrations    (bootstrap row count)
-	//   1x Query information_schema         (bootstrap repo probe)
-	//   1x Exec CREATE schema_migrations    (MigrateUp EnsureTable, idempotent)
-	//   1x Query SELECT ... schema_migrations (MigrateUp applied())
-	//   For each of 7 discovered migrations: Exec apply + Exec DELETE + Exec INSERT.
-	//
-	// We match loosely — expectation order is off and the regex for each
-	// expectation is deliberately broad — because the exact wording of
-	// each .postgres.up.sql file is not what this test is verifying.
+	// around bootstrapSchemaMigrations + Migrator.MigrateUp. The
+	// bootstrap does a legacy-shape probe first (schema_migrations
+	// table existence + checksum column). On a fresh database all three
+	// scenario-1 queries return "not found", EnsureTable creates the
+	// table, COUNT returns 0, the repositories-probe returns 0, and
+	// MigrateUp then applies every .postgres.up.sql file. We match
+	// loosely because the exact wording of each file is not the focus.
 	mock.MatchExpectationsInOrder(false)
 
+	// schemaMigrationsHasChecksum -> existence probe returns "no".
+	mock.ExpectQuery(`information_schema\.tables.*schema_migrations`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM schema_migrations`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
-	mock.ExpectQuery(`information_schema\.tables`).
+	// repositoriesTableExists probe returns "no rows" (not found).
+	mock.ExpectQuery(`information_schema\.tables.*repositories`).
 		WillReturnError(sql.ErrNoRows)
 	mock.ExpectQuery(`SELECT version, applied_at, checksum, direction FROM schema_migrations`).
 		WillReturnRows(sqlmock.NewRows([]string{"version", "applied_at", "checksum", "direction"}))

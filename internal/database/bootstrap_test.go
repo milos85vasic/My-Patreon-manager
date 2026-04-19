@@ -226,6 +226,150 @@ func TestBootstrap_ChecksumFailure(t *testing.T) {
 	}
 }
 
+// TestBootstrap_UpgradesLegacySchemaMigrations exercises the path where
+// an existing schema_migrations table has only the old (version,
+// applied_at) shape — exactly what the pre-refactor hardcoded Migrate()
+// produced in production. The bootstrap should drop it, recreate it
+// with the new columns, and then seed from discovered files.
+func TestBootstrap_UpgradesLegacySchemaMigrations(t *testing.T) {
+	db := newMemSQLite(t)
+	ctx := context.Background()
+	// Simulate a pre-refactor production DB: repositories table plus
+	// the old schema_migrations layout with a stale row.
+	if _, err := db.DB().ExecContext(ctx,
+		`CREATE TABLE repositories (id TEXT PRIMARY KEY)`); err != nil {
+		t.Fatalf("seed repositories: %v", err)
+	}
+	if _, err := db.DB().ExecContext(ctx,
+		`CREATE TABLE schema_migrations (version TEXT PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP)`); err != nil {
+		t.Fatalf("seed old schema_migrations: %v", err)
+	}
+	if _, err := db.DB().ExecContext(ctx,
+		`INSERT INTO schema_migrations (version) VALUES ('001')`); err != nil {
+		t.Fatalf("seed old row: %v", err)
+	}
+	fsys := migratorFS(map[string]string{
+		"0001_x.sqlite.up.sql":   "CREATE TABLE x (id INTEGER);",
+		"0001_x.sqlite.down.sql": "DROP TABLE x;",
+	})
+	mg := NewMigrator(db.DB(), DialectSQLite, fsys, "migrations")
+	if err := bootstrapSchemaMigrations(ctx, db.DB(), DialectSQLite, mg); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	// Old "001" row should be gone; new version "0001" should be seeded.
+	var newVerCount, oldVerCount int
+	if err := db.DB().QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM schema_migrations WHERE version='0001'`).Scan(&newVerCount); err != nil {
+		t.Fatalf("count new: %v", err)
+	}
+	if err := db.DB().QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM schema_migrations WHERE version='001'`).Scan(&oldVerCount); err != nil {
+		t.Fatalf("count old: %v", err)
+	}
+	if newVerCount != 1 {
+		t.Fatalf("want 1 seeded 0001 row, got %d", newVerCount)
+	}
+	if oldVerCount != 0 {
+		t.Fatalf("old '001' row should have been dropped, got %d", oldVerCount)
+	}
+	// New columns present.
+	var present int
+	if err := db.DB().QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM pragma_table_info('schema_migrations') WHERE name = 'checksum'`).Scan(&present); err != nil {
+		t.Fatalf("pragma: %v", err)
+	}
+	if present != 1 {
+		t.Fatalf("checksum column missing after upgrade")
+	}
+}
+
+// TestBootstrap_UpgradeExistsQueryFailure drives the "table exists" probe
+// error branch of schemaMigrationsHasChecksum via sqlmock.
+func TestBootstrap_UpgradeExistsQueryFailure(t *testing.T) {
+	mdb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer mdb.Close()
+	mock.ExpectQuery(`sqlite_master`).WillReturnError(fmt.Errorf("probe-boom"))
+	mg := NewMigrator(mdb, DialectSQLite, migratorFS(nil), "migrations")
+	err = bootstrapSchemaMigrations(context.Background(), mdb, DialectSQLite, mg)
+	if err == nil {
+		t.Fatal("want upgrade-probe error")
+	}
+}
+
+// TestBootstrap_UpgradeColumnQueryFailure drives the "column exists"
+// probe error branch — table exists but pragma_table_info query fails.
+func TestBootstrap_UpgradeColumnQueryFailure(t *testing.T) {
+	mdb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer mdb.Close()
+	mock.ExpectQuery(`sqlite_master`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery(`pragma_table_info`).WillReturnError(fmt.Errorf("col-boom"))
+	mg := NewMigrator(mdb, DialectSQLite, migratorFS(nil), "migrations")
+	err = bootstrapSchemaMigrations(context.Background(), mdb, DialectSQLite, mg)
+	if err == nil {
+		t.Fatal("want column-probe error")
+	}
+}
+
+// TestBootstrap_UpgradeDropFailure drives the DROP TABLE error branch.
+func TestBootstrap_UpgradeDropFailure(t *testing.T) {
+	mdb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer mdb.Close()
+	mock.ExpectQuery(`sqlite_master`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery(`pragma_table_info`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectExec(`DROP TABLE schema_migrations`).
+		WillReturnError(fmt.Errorf("drop-boom"))
+	mg := NewMigrator(mdb, DialectSQLite, migratorFS(nil), "migrations")
+	err = bootstrapSchemaMigrations(context.Background(), mdb, DialectSQLite, mg)
+	if err == nil {
+		t.Fatal("want drop error")
+	}
+}
+
+// TestBootstrap_UpgradeNoopOnCurrentTable confirms that an existing
+// schema_migrations with the right columns is left untouched.
+func TestBootstrap_UpgradeNoopOnCurrentTable(t *testing.T) {
+	db := newMemSQLite(t)
+	ctx := context.Background()
+	// Build a current-shape schema_migrations manually + mark one row.
+	mg0 := NewMigrator(db.DB(), DialectSQLite, migratorFS(nil), "migrations")
+	if err := mg0.EnsureTable(ctx); err != nil {
+		t.Fatalf("ensure: %v", err)
+	}
+	if _, err := db.DB().ExecContext(ctx,
+		`INSERT INTO schema_migrations (version, applied_at, checksum, direction) VALUES ('0001', CURRENT_TIMESTAMP, 'a', 'up')`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	fsys := migratorFS(map[string]string{
+		"0001_x.sqlite.up.sql":   "SELECT 1;",
+		"0001_x.sqlite.down.sql": "SELECT 1;",
+	})
+	mg := NewMigrator(db.DB(), DialectSQLite, fsys, "migrations")
+	if err := bootstrapSchemaMigrations(ctx, db.DB(), DialectSQLite, mg); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	// Still exactly one row, still with our hand-picked checksum.
+	var sum string
+	if err := db.DB().QueryRowContext(ctx,
+		`SELECT checksum FROM schema_migrations WHERE version='0001'`).Scan(&sum); err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if sum != "a" {
+		t.Fatalf("upgrade should have been a no-op, checksum changed to %q", sum)
+	}
+}
+
 // TestBootstrap_RecordFailure drives the recordMigration error branch
 // via sqlmock: EnsureTable succeeds, COUNT returns 0, repositories probe
 // returns a row, Discover (via the embedded FS on disk) returns the real
