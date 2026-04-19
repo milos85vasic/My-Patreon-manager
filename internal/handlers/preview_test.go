@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -32,6 +34,14 @@ func setupPreviewHandler(t *testing.T) (*gin.Engine, *database.SQLiteDB, *config
 	cfg := &config.Config{AdminKey: "test-admin-key"}
 	h := handlers.NewPreviewHandler(db, cfg)
 	r := gin.New()
+	// Load the preview HTML templates so Index/RepoHistory can render.
+	// Tests run from the package directory, so templates/preview/* is a
+	// valid relative path.
+	if tmpl, err := template.ParseGlob("templates/preview/*"); err == nil {
+		r.SetHTMLTemplate(tmpl)
+	}
+	r.GET("/preview", h.Index)
+	r.GET("/preview/repo/:repo_id", h.RepoHistory)
 	r.POST("/preview/revision/:id/approve", h.ApproveRevision)
 	r.POST("/preview/revision/:id/reject", h.RejectRevision)
 	r.POST("/preview/revision/:id/edit", h.EditRevision)
@@ -1105,6 +1115,342 @@ func TestPreview_Edit_MaxVersionErr_500(t *testing.T) {
 		strings.NewReader(`{"title":"t","body":"b","author":"a"}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Admin-Key", "test-admin-key")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("want 500, got %d body: %s", w.Code, w.Body.String())
+	}
+}
+
+// ---- Task 26: dashboard (Index) -----------------------------------------
+
+// TestPreview_Index_EmptyDB_RendersEmptyTable confirms the handler renders
+// a 200 with the dashboard page even when no repositories exist. The empty-
+// state branch still emits the base HTML shell; we only assert the response
+// is 200 and non-empty, since the empty-state copy lives in the template.
+func TestPreview_Index_EmptyDB_RendersEmptyTable(t *testing.T) {
+	r, _, _ := setupPreviewHandler(t)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/preview", nil)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: %d body: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "Repositories") {
+		t.Fatalf("expected Repositories header in rendered HTML: %s", w.Body.String())
+	}
+}
+
+// TestPreview_Index_ShowsRowPerRepo confirms that seeded repos appear as
+// rows on the dashboard. Links target /preview/repo/<id> (not
+// /preview/<id>) because the handler registers RepoHistory under the
+// /preview/repo prefix to avoid colliding with the existing article/edit
+// dynamic routes.
+func TestPreview_Index_ShowsRowPerRepo(t *testing.T) {
+	r, db, _ := setupPreviewHandler(t)
+	_, err := db.DB().ExecContext(context.Background(),
+		`INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES ('rA','github','acme','project-a','u','h')`)
+	if err != nil {
+		t.Fatalf("seed rA: %v", err)
+	}
+	_, err = db.DB().ExecContext(context.Background(),
+		`INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES ('rB','gitlab','beta','project-b','u','h')`)
+	if err != nil {
+		t.Fatalf("seed rB: %v", err)
+	}
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/preview", nil)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: %d body: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "acme/project-a") {
+		t.Fatalf("missing rA: %s", body)
+	}
+	if !strings.Contains(body, "beta/project-b") {
+		t.Fatalf("missing rB: %s", body)
+	}
+	if !strings.Contains(body, `href="/preview/repo/rA"`) {
+		t.Fatalf("expected repo link for rA, got: %s", body)
+	}
+}
+
+// TestPreview_Index_CountsPendingReviewAndApproved seeds three revisions
+// (2 pending_review, 1 approved) and asserts the rendered row shows the
+// expected per-status counts.
+func TestPreview_Index_CountsPendingReviewAndApproved(t *testing.T) {
+	r, db, _ := setupPreviewHandler(t)
+	if _, err := db.DB().ExecContext(context.Background(),
+		`INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES ('r','github','o','n','u','h')`); err != nil {
+		t.Fatalf("seed repo: %v", err)
+	}
+	for i, status := range []string{"pending_review", "pending_review", "approved"} {
+		if err := db.ContentRevisions().Create(context.Background(), &models.ContentRevision{
+			ID: fmt.Sprintf("c%d", i), RepositoryID: "r", Version: i + 1,
+			Source: "generated", Status: status,
+			Title: "t", Body: "b", Fingerprint: fmt.Sprintf("fp%d", i),
+			Author: "system", CreatedAt: time.Now().UTC(),
+		}); err != nil {
+			t.Fatalf("seed revision %d: %v", i, err)
+		}
+	}
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/preview", nil)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: %d", w.Code)
+	}
+	body := w.Body.String()
+	// Pending count cell renders as ">2<" in a <td class="count">2</td>;
+	// match the count markers to avoid coincidental matches elsewhere.
+	if !strings.Contains(body, `class="count">2<`) {
+		t.Fatalf("expected pending count 2 in row: %s", body)
+	}
+	if !strings.Contains(body, `class="count">1<`) {
+		t.Fatalf("expected approved count 1 in row: %s", body)
+	}
+}
+
+// TestPreview_Index_DriftMarked confirms that a repo in
+// patreon_drift_detected state is visually distinguished via the `drift`
+// CSS class on the state cell.
+func TestPreview_Index_DriftMarked(t *testing.T) {
+	r, db, _ := setupPreviewHandler(t)
+	if _, err := db.DB().ExecContext(context.Background(),
+		`INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES ('rdrift','github','o','n','u','h')`); err != nil {
+		t.Fatalf("seed repo: %v", err)
+	}
+	if err := db.Repositories().SetProcessState(context.Background(), "rdrift", "patreon_drift_detected"); err != nil {
+		t.Fatalf("set state: %v", err)
+	}
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/preview", nil)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: %d body: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "patreon_drift_detected") {
+		t.Fatalf("drift state missing from output: %s", body)
+	}
+	if !strings.Contains(body, `class="drift"`) {
+		t.Fatalf("drift CSS class missing: %s", body)
+	}
+}
+
+// TestPreview_Index_RevisionPointersReflectedInRow seeds a repo with both
+// current_revision_id and published_revision_id set, then asserts the
+// handler's dashboard row exercise their unwrap branches. We verify the
+// rendered page is a 200 with the repo name present — the pointer
+// assignment paths in the handler are the code under test; direct DB
+// assertions are in the database package.
+func TestPreview_Index_RevisionPointersReflectedInRow(t *testing.T) {
+	r, db, _ := setupPreviewHandler(t)
+	ctx := context.Background()
+	if _, err := db.DB().ExecContext(ctx,
+		`INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES ('rptr','github','o','n','u','h')`); err != nil {
+		t.Fatalf("seed repo: %v", err)
+	}
+	// SetRevisionPointers requires the referenced revisions to exist, but
+	// the schema does not enforce FK on these pointers, so raw UPDATE works
+	// to set both without a preceding Create. Use the store method for
+	// realism instead.
+	if err := db.ContentRevisions().Create(ctx, &models.ContentRevision{
+		ID: "curX", RepositoryID: "rptr", Version: 1,
+		Source: "generated", Status: models.RevisionStatusApproved,
+		Title: "t", Body: "b", Fingerprint: "fp",
+		Author: "system", CreatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("seed rev: %v", err)
+	}
+	if err := db.Repositories().SetRevisionPointers(ctx, "rptr", "curX", "curX"); err != nil {
+		t.Fatalf("set pointers: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/preview", nil)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: %d body: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "o/n") {
+		t.Fatalf("expected repo name in body: %s", w.Body.String())
+	}
+}
+
+// listForQueueErrRepoStore wraps RepositoryStore so ListForProcessQueue
+// always errors; used to exercise the 500 branch on Index.
+type listForQueueErrRepoStore struct {
+	database.RepositoryStore
+}
+
+func (s *listForQueueErrRepoStore) ListForProcessQueue(ctx context.Context) ([]*models.Repository, error) {
+	return nil, errors.New("list for queue boom")
+}
+
+type listForQueueErrDB struct {
+	database.Database
+	inner database.RepositoryStore
+}
+
+func (d *listForQueueErrDB) Repositories() database.RepositoryStore {
+	return &listForQueueErrRepoStore{RepositoryStore: d.inner}
+}
+
+// TestPreview_Index_ListRepoErr_500 exercises the 500 branch when the
+// underlying ListForProcessQueue call fails.
+func TestPreview_Index_ListRepoErr_500(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	real := testhelpers.OpenMigratedSQLite(t)
+	wrappedDB := &listForQueueErrDB{Database: real, inner: real.Repositories()}
+	cfg := &config.Config{AdminKey: "test-admin-key"}
+	h := handlers.NewPreviewHandler(wrappedDB, cfg)
+	r := gin.New()
+	if tmpl, err := template.ParseGlob("templates/preview/*"); err == nil {
+		r.SetHTMLTemplate(tmpl)
+	}
+	r.GET("/preview", h.Index)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/preview", nil)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("want 500, got %d body: %s", w.Code, w.Body.String())
+	}
+}
+
+// ---- Task 27: per-repo revision history (RepoHistory) -------------------
+
+// TestPreview_RepoHistory_ShowsRevisionsInDescendingVersion verifies the
+// timeline renders revisions in version DESC order — i.e. v3 appears in
+// the HTML before v2 before v1.
+func TestPreview_RepoHistory_ShowsRevisionsInDescendingVersion(t *testing.T) {
+	r, db, _ := setupPreviewHandler(t)
+	if _, err := db.DB().ExecContext(context.Background(),
+		`INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES ('r','github','acme','demo','u','h')`); err != nil {
+		t.Fatalf("seed repo: %v", err)
+	}
+	for i := 1; i <= 3; i++ {
+		if err := db.ContentRevisions().Create(context.Background(), &models.ContentRevision{
+			ID: fmt.Sprintf("v%d", i), RepositoryID: "r", Version: i,
+			Source: "generated", Status: "approved",
+			Title: fmt.Sprintf("title %d", i), Body: "b", Fingerprint: fmt.Sprintf("fp%d", i),
+			Author: "system", CreatedAt: time.Now().UTC(),
+		}); err != nil {
+			t.Fatalf("seed v%d: %v", i, err)
+		}
+	}
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/preview/repo/r", nil)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: %d body: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	i3 := strings.Index(body, "title 3")
+	i2 := strings.Index(body, "title 2")
+	i1 := strings.Index(body, "title 1")
+	if i3 < 0 || i2 < 0 || i1 < 0 {
+		t.Fatalf("missing titles: %s", body)
+	}
+	if !(i3 < i2 && i2 < i1) {
+		t.Fatalf("wrong order: i3=%d i2=%d i1=%d", i3, i2, i1)
+	}
+}
+
+// TestPreview_RepoHistory_NotFound confirms that a :repo_id which does not
+// exist results in a bare 404.
+func TestPreview_RepoHistory_NotFound(t *testing.T) {
+	r, _, _ := setupPreviewHandler(t)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/preview/repo/nope", nil)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("want 404, got %d", w.Code)
+	}
+}
+
+// TestPreview_RepoHistory_StatusBadges asserts every status value in the
+// revision status graph makes it into the rendered HTML so operators can
+// visually distinguish them in the timeline.
+func TestPreview_RepoHistory_StatusBadges(t *testing.T) {
+	r, db, _ := setupPreviewHandler(t)
+	if _, err := db.DB().ExecContext(context.Background(),
+		`INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES ('r','github','o','n','u','h')`); err != nil {
+		t.Fatalf("seed repo: %v", err)
+	}
+	for i, s := range []string{"pending_review", "approved", "rejected", "superseded"} {
+		if err := db.ContentRevisions().Create(context.Background(), &models.ContentRevision{
+			ID: fmt.Sprintf("v%d", i+1), RepositoryID: "r", Version: i + 1,
+			Source: "generated", Status: s,
+			Title: "t", Body: "b", Fingerprint: fmt.Sprintf("fp%d", i),
+			Author: "system", CreatedAt: time.Now().UTC(),
+		}); err != nil {
+			t.Fatalf("seed v%d: %v", i+1, err)
+		}
+	}
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/preview/repo/r", nil)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: %d body: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	for _, s := range []string{"pending_review", "approved", "rejected", "superseded"} {
+		if !strings.Contains(body, s) {
+			t.Fatalf("status %q missing: %s", s, body)
+		}
+	}
+}
+
+// TestPreview_RepoHistory_GetByIDErr_500 forces the Repositories().GetByID
+// call to fail by closing the DB. Exercises the 500 branch that returns
+// the rendered error.html template.
+func TestPreview_RepoHistory_GetByIDErr_500(t *testing.T) {
+	r, db, _ := setupPreviewHandler(t)
+	if err := db.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/preview/repo/r", nil)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("want 500, got %d body: %s", w.Code, w.Body.String())
+	}
+}
+
+// repoHistoryListAllErrDB fakes ContentRevisions().ListAll() to always
+// fail, while Repositories().GetByID() continues to succeed — exercises
+// the second 500 branch of RepoHistory (after the repo is loaded).
+type repoHistoryListAllErrDB struct {
+	database.Database
+	inner database.ContentRevisionStore
+}
+
+func (d *repoHistoryListAllErrDB) ContentRevisions() database.ContentRevisionStore {
+	return &listAllErrStore{ContentRevisionStore: d.inner}
+}
+
+// TestPreview_RepoHistory_ListAllErr_500 exercises the 500 branch when
+// ContentRevisions().ListAll fails after the repo lookup succeeds.
+func TestPreview_RepoHistory_ListAllErr_500(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	real := testhelpers.OpenMigratedSQLite(t)
+	if _, err := real.DB().ExecContext(context.Background(),
+		`INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES ('r','github','o','n','u','h')`); err != nil {
+		t.Fatalf("seed repo: %v", err)
+	}
+	wrappedDB := &repoHistoryListAllErrDB{Database: real, inner: real.ContentRevisions()}
+	cfg := &config.Config{AdminKey: "test-admin-key"}
+	h := handlers.NewPreviewHandler(wrappedDB, cfg)
+	r := gin.New()
+	if tmpl, err := template.ParseGlob("templates/preview/*"); err == nil {
+		r.SetHTMLTemplate(tmpl)
+	}
+	r.GET("/preview/repo/:repo_id", h.RepoHistory)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/preview/repo/r", nil)
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("want 500, got %d body: %s", w.Code, w.Body.String())

@@ -22,37 +22,110 @@ func NewPreviewHandler(db database.Database, cfg *config.Config) *PreviewHandler
 	return &PreviewHandler{db: db, config: cfg}
 }
 
+// repoDashboardRow is the per-row data shape rendered on the preview
+// dashboard (GET /preview). It captures just the handful of fields the
+// operator needs to triage a repo: current process_state, counts of
+// revisions pending review and approved (i.e. awaiting publish), and the
+// two revision pointer IDs. HasDrift is a convenience flag derived from
+// ProcessState so the template doesn't need to string-compare.
+type repoDashboardRow struct {
+	ID                  string
+	Name                string
+	Service             string
+	ProcessState        string
+	PendingReviewCount  int
+	ApprovedCount       int
+	HasDrift            bool
+	CurrentRevisionID   string
+	PublishedRevisionID string
+}
+
+// Index renders the repository dashboard at GET /preview. Rows are
+// surfaced in fair-queue order (least-recently-processed first) via
+// RepositoryStore.ListForProcessQueue, which matches the order the
+// process command would pick them. For each repo we aggregate:
+//
+//   - PendingReviewCount: revisions awaiting operator approval
+//   - ApprovedCount:      revisions approved and awaiting publish
+//   - HasDrift:           repo is in patreon_drift_detected state
+//
+// A template is required (see cmd/server/main.go's ParseGlob) — if the
+// template registry is empty, Gin will abort the response with 500,
+// which is acceptable in tests that don't register templates.
 func (h *PreviewHandler) Index(c *gin.Context) {
 	ctx := c.Request.Context()
-
-	var articles []ArticleView
-	repos, err := h.db.Repositories().List(ctx, database.RepositoryFilter{})
+	repos, err := h.db.Repositories().ListForProcessQueue(ctx)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
-			"Error": "Failed to load articles",
+			"Error": "Failed to load repos",
 		})
 		return
 	}
-
-	store := h.db.GeneratedContents()
-	for _, repo := range repos {
-		gc, err := store.GetLatestByRepo(ctx, repo.ID)
-		if err != nil || gc == nil {
-			continue
+	rows := make([]repoDashboardRow, 0, len(repos))
+	for _, r := range repos {
+		pending, _ := h.db.ContentRevisions().ListByRepoStatus(ctx, r.ID, models.RevisionStatusPendingReview)
+		approved, _ := h.db.ContentRevisions().ListByRepoStatus(ctx, r.ID, models.RevisionStatusApproved)
+		row := repoDashboardRow{
+			ID:                 r.ID,
+			Name:               r.Owner + "/" + r.Name,
+			Service:            r.Service,
+			ProcessState:       r.ProcessState,
+			PendingReviewCount: len(pending),
+			ApprovedCount:      len(approved),
+			HasDrift:           r.ProcessState == "patreon_drift_detected",
 		}
-		articles = append(articles, ArticleView{
-			ID:           gc.ID,
-			Title:        gc.Title,
-			Status:       gc.Status,
-			QualityScore: gc.QualityScore,
-			CreatedAt:    gc.CreatedAt.Format("Jan 2, 2006"),
-		})
+		if r.CurrentRevisionID != nil {
+			row.CurrentRevisionID = *r.CurrentRevisionID
+		}
+		if r.PublishedRevisionID != nil {
+			row.PublishedRevisionID = *r.PublishedRevisionID
+		}
+		rows = append(rows, row)
 	}
+	c.HTML(http.StatusOK, "preview_index.html", gin.H{"Repos": rows})
+}
 
-	c.HTML(http.StatusOK, "preview_index.html", gin.H{
-		"Articles": articles,
+// RepoHistory renders the per-repo revision timeline at
+// GET /preview/repo/:repo_id. Revisions are loaded via
+// ContentRevisionStore.ListAll which returns rows in version DESC order
+// — the newest entry appears at the top of the template. A nil repo
+// (unknown :repo_id) yields a bare 404; store errors surface as 500 via
+// the error.html template.
+//
+// Registered at /preview/repo/:repo_id (not /preview/:repo_id) to avoid
+// a Gin routing collision with the existing /preview/article/:id and
+// /preview/edit/:id routes: Gin rejects ambiguous dynamic prefixes at
+// registration time.
+func (h *PreviewHandler) RepoHistory(c *gin.Context) {
+	ctx := c.Request.Context()
+	repoID := c.Param("repo_id")
+	repo, err := h.db.Repositories().GetByID(ctx, repoID)
+	if err != nil {
+		c.HTML(http.StatusInternalServerError, "error.html", gin.H{"Error": err.Error()})
+		return
+	}
+	if repo == nil {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	revs, err := h.db.ContentRevisions().ListAll(ctx, repoID)
+	if err != nil {
+		c.HTML(http.StatusInternalServerError, "error.html", gin.H{"Error": err.Error()})
+		return
+	}
+	c.HTML(http.StatusOK, "preview_repo.html", gin.H{
+		"Repo":      repo,
+		"Revisions": revs,
 	})
 }
+
+// ViewArticle and EditArticle below are legacy handlers that operate on
+// the generated_contents table. They remain registered so existing
+// deep links keep working during the process-command rollout, but will
+// retire in Task 33 once the dashboard + per-repo history replaces the
+// "article" surface entirely. New preview UI work should target the
+// content_revisions-backed handlers (Index, RepoHistory, ApproveRevision,
+// etc.) instead.
 
 func (h *PreviewHandler) ViewArticle(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -169,6 +242,7 @@ func (h *PreviewHandler) RegisterRoutes(r *gin.Engine) {
 	preview := r.Group("/preview")
 	{
 		preview.GET("", h.Index)
+		preview.GET("/repo/:repo_id", h.RepoHistory)
 		preview.GET("/article/:id", h.ViewArticle)
 		preview.GET("/edit/:id", h.EditArticle)
 		preview.POST("/edit/:id", h.EditArticle)

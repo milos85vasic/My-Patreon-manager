@@ -1,10 +1,10 @@
-{{define "preview_index.html"}}
+{{define "preview_repo.html"}}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Repositories | Patreon Manager</title>
+    <title>{{with .Repo}}{{.Owner}}/{{.Name}} | {{end}}Patreon Manager</title>
     <style>
         :root {
             --bg: #0f1117;
@@ -27,7 +27,7 @@
             color: var(--text);
             line-height: 1.6;
         }
-        .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+        .container { max-width: 960px; margin: 0 auto; padding: 0 24px; }
         header {
             background: var(--surface);
             border-bottom: 1px solid var(--border);
@@ -49,32 +49,33 @@
             margin-left: 20px;
         }
         nav a:hover { color: var(--text); }
-        table {
-            width: 100%;
-            border-collapse: collapse;
+        .back { color: var(--text-muted); text-decoration: none; font-size: 14px; }
+        .back:hover { color: var(--text); }
+        .timeline {
+            list-style: none;
+            padding: 0;
+            margin-top: 24px;
+            position: relative;
+        }
+        .rev {
             background: var(--surface);
             border: 1px solid var(--border);
+            border-left: 4px solid var(--text-muted);
             border-radius: var(--radius);
-            overflow: hidden;
+            padding: 16px 20px;
+            margin: 12px 0;
         }
-        th, td {
-            padding: 12px 16px;
-            text-align: left;
-            border-bottom: 1px solid var(--border);
-            font-size: 14px;
+        .rev.approved       { border-left-color: var(--success); }
+        .rev.pending_review { border-left-color: var(--warning); }
+        .rev.rejected       { border-left-color: var(--danger); }
+        .rev.superseded     { border-left-color: var(--text-muted); opacity: 0.65; }
+        .rev .top {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
         }
-        tr:last-child td { border-bottom: none; }
-        th {
-            background: var(--surface-hover);
-            color: var(--text-muted);
-            font-weight: 600;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-        td a { color: var(--text); text-decoration: none; font-weight: 500; }
-        td a:hover { color: var(--accent); }
-        .count { text-align: right; font-variant-numeric: tabular-nums; }
+        .rev strong { font-size: 15px; }
         .badge {
             display: inline-block;
             padding: 2px 10px;
@@ -84,17 +85,25 @@
             background: rgba(139,143,163,0.15);
             color: var(--text-muted);
         }
-        .drift {
-            color: var(--danger);
-            font-weight: 600;
+        .rev .title {
+            font-style: italic;
+            color: var(--text);
+            margin-top: 4px;
         }
-        .drift .badge {
-            background: rgba(231,76,60,0.15);
-            color: var(--danger);
+        .rev .meta {
+            color: var(--text-muted);
+            font-size: 13px;
+            margin-top: 6px;
         }
+        .rev .actions {
+            margin-top: 8px;
+            font-size: 13px;
+        }
+        .rev .actions a { color: var(--accent); text-decoration: none; }
+        .rev .actions a:hover { text-decoration: underline; }
         .empty {
             text-align: center;
-            padding: 64px 0;
+            padding: 48px 0;
             color: var(--text-muted);
         }
         footer {
@@ -118,34 +127,35 @@
         </div>
     </header>
     <main class="container">
-        <h2 style="margin-bottom:24px;font-size:22px;">Repositories</h2>
-        {{if .Repos}}
-        <table>
-            <thead>
-                <tr>
-                    <th>Repo</th>
-                    <th>Service</th>
-                    <th>State</th>
-                    <th class="count">Pending review</th>
-                    <th class="count">Approved</th>
-                </tr>
-            </thead>
-            <tbody>
-                {{- range .Repos }}
-                <tr>
-                    <td><a href="/preview/repo/{{ .ID }}">{{ .Name }}</a></td>
-                    <td>{{ .Service }}</td>
-                    <td class="{{ if .HasDrift }}drift{{ end }}"><span class="badge">{{ .ProcessState }}</span></td>
-                    <td class="count">{{ .PendingReviewCount }}</td>
-                    <td class="count">{{ .ApprovedCount }}</td>
-                </tr>
-                {{- end }}
-            </tbody>
-        </table>
+        <p><a href="/preview" class="back">&larr; All repositories</a></p>
+        {{with .Repo}}
+        <h2 style="font-size:22px;margin-top:8px;">{{.Owner}}/{{.Name}}</h2>
+        <p style="color:var(--text-muted);font-size:14px;margin-top:4px;">
+            Service: {{.Service}} &middot; State: <strong>{{.ProcessState}}</strong>
+        </p>
+        {{end}}
+        {{if .Revisions}}
+        <ul class="timeline">
+            {{- range .Revisions }}
+            <li class="rev {{ .Status }}">
+                <div class="top">
+                    <strong>v{{ .Version }}</strong>
+                    <span class="badge">{{ .Source }}</span>
+                    <span class="badge">{{ .Status }}</span>
+                </div>
+                {{ if .Title }}<div class="title">{{ .Title }}</div>{{ end }}
+                <div class="meta">{{ .Author }} &middot; {{ .CreatedAt.Format "2006-01-02 15:04" }}</div>
+                {{ if eq .Status "pending_review" }}
+                <div class="actions">
+                    <a href="/preview/revision/{{ .ID }}">View</a>
+                </div>
+                {{ end }}
+            </li>
+            {{- end }}
+        </ul>
         {{else}}
         <div class="empty">
-            <p style="font-size:16px;margin-bottom:8px;">No repositories yet</p>
-            <p style="font-size:14px;">Run <code style="background:var(--surface);padding:2px 6px;border-radius:4px;">patreon-manager sync</code> to scan your repos.</p>
+            <p>No revisions for this repository yet.</p>
         </div>
         {{end}}
     </main>
