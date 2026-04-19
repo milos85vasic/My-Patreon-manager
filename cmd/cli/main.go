@@ -82,6 +82,7 @@ func main() {
 		fmt.Println("  scan      — discover repositories only; no LLM calls, no Patreon publish")
 		fmt.Println("  generate  — run content pipeline, persist GeneratedContent; no Patreon publish")
 		fmt.Println("  publish   — publish existing generated content to Patreon with tier gating")
+		fmt.Println("  migrate   — apply pending SQL migrations or print status")
 		fmt.Println("  validate  — validate configuration and environment")
 		fmt.Println("  verify    — test LLMsVerifier connection, list and score all available models")
 		osExit(1)
@@ -235,6 +236,11 @@ func main() {
 		runPublish(ctx, db, patreonClient, logger)
 	case "verify":
 		runVerify(ctx, cfg, promMetrics, logger)
+	case "migrate":
+		if err := runMigrate(ctx, db, args[1:], migrateOutWriter); err != nil {
+			logger.Error("migrate failed", slog.String("error", err.Error()))
+			osExit(1)
+		}
 	default:
 		fmt.Printf("Unknown command: %s\n", args[0])
 		osExit(1)

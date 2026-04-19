@@ -17,7 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Go 1.26.1 application that scans Git repositories across GitHub, GitLab, GitFlic, and GitVerse, generates content via an LLM pipeline with quality gates, and publishes tier-gated posts to Patreon. Module: `github.com/milos85vasic/My-Patreon-Manager`. HTTP framework: Gin.
 
 Two entrypoints:
-- `cmd/cli` (`patreon-manager`) — primary interface; top-level subcommand is `process` (scan → generate → illustrate → land drafts as `pending_review` revisions → prune). Low-level helpers: `scan`, `generate`, `validate`, `publish`, `verify`. `sync` is a **deprecated alias** for `process` — it prints a warning to stderr and falls through to the same pipeline. Supports `--dry-run`, `--schedule` (cron), `--org`, `--repo`, `--pattern`, `--json`, `--log-level`.
+- `cmd/cli` (`patreon-manager`) — primary interface; top-level subcommand is `process` (scan → generate → illustrate → land drafts as `pending_review` revisions → prune). Low-level helpers: `scan`, `generate`, `validate`, `publish`, `verify`, `migrate` (`up`, `status`). `sync` is a **deprecated alias** for `process` — it prints a warning to stderr and falls through to the same pipeline. Supports `--dry-run`, `--schedule` (cron), `--org`, `--repo`, `--pattern`, `--json`, `--log-level`.
 - `cmd/server` — Gin HTTP server on `:8080` exposing health, metrics (Prometheus), webhook handlers, and the preview UI (`/preview`, `/preview/repo/:repo_id`, `/preview/revision/:id/{approve,reject,edit}`, `/preview/:repo_id/resolve-drift`) for reviewing `pending_review` drafts.
 
 ## Common Commands
@@ -27,6 +27,8 @@ go build ./...                                  # build all packages
 go run ./cmd/cli process --dry-run              # dry-run the pipeline (sync is a deprecated alias)
 go run ./cmd/cli process                        # full pipeline: scan, generate, illustrate, land drafts
 go run ./cmd/cli publish                        # publish approved revisions to Patreon
+go run ./cmd/cli migrate up                     # apply pending SQL migrations
+go run ./cmd/cli migrate status                 # list applied/pending migrations
 go run ./cmd/cli validate                       # validate config/env
 go run ./cmd/server                             # run HTTP server + preview UI
 go test ./internal/... ./cmd/... ./tests/...    # run full test suite

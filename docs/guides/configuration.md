@@ -502,6 +502,17 @@ Maintain separate `.env` files for different environments (e.g., `.env.productio
 patreon-manager sync --config .env.production
 ```
 
+## Database Migrations
+
+Schema changes are versioned SQL files under `internal/database/migrations/` and applied automatically on every startup. To manage them directly:
+
+```sh
+go run ./cmd/cli migrate up       # apply every pending migration
+go run ./cmd/cli migrate status   # list applied + pending migrations with checksums
+```
+
+Down migrations are deliberately not exposed via the CLI in this release; they are destructive and require an operator runbook. Edit a `.sql` file after it has been applied and the next `migrate up` will fail with a checksum mismatch — add a new migration instead.
+
 ## Overriding via Command Line
 
 Most configuration can be overridden by command-line flags. For example, `--log-level debug` overrides `LOG_LEVEL`, and `--org my-org` overrides the provider org list for a single run. See the CLI reference for the complete flag list.
