@@ -93,19 +93,48 @@ func (m *Migrator) EnsureTable(ctx context.Context) error {
 // Each entry includes version + name parsed from the filename pattern
 // NNNN_name.up.sql. Missing .down.sql files are tolerated at discovery
 // time; MigrateDownTo surfaces the absence at rollback time.
+//
+// Dialect-suffixed filenames are recognized as well:
+//   - NNNN_name.<dialect>.up.sql — applied only when the migrator's
+//     Dialect field matches <dialect>.
+//   - NNNN_name.up.sql — fallback; used for any dialect if no
+//     dialect-specific file exists for that version.
+//
+// Files that carry a different dialect suffix than the migrator's
+// configured dialect are ignored. When both a dialect-specific file
+// and a fallback exist for the same version+direction, the
+// dialect-specific file wins.
 func (m *Migrator) Discover() ([]MigrationFile, error) {
 	entries, err := fs.ReadDir(m.fsys, m.dir)
 	if err != nil {
 		return nil, fmt.Errorf("read migrations dir: %w", err)
 	}
-	byVersion := map[string]*MigrationFile{}
+	// parsed holds every viable candidate we have found, keyed by
+	// version+direction. We keep both a fallback and a dialect-specific
+	// candidate side-by-side until the post-processing step decides
+	// which wins.
+	type candidate struct {
+		path      string
+		name      string
+		direction string
+		// isDialect is true when the candidate came from a dialect-suffixed
+		// filename that matches m.dialect; false when it came from a plain
+		// fallback.
+		isDialect bool
+	}
+	// Each key is "version:direction"; value lists candidates (at most
+	// two per key in practice: one fallback, one dialect-specific).
+	byKey := map[string][]candidate{}
+	versions := map[string]string{} // version -> name
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".sql") {
 			continue
 		}
 		name := e.Name()
-		// NNNN_name.up.sql or NNNN_name.down.sql
-		if len(name) < 10 {
+		// NNNN_name.[<dialect>.]<direction>.sql — minimum length is
+		// for something like "0001_x.up.sql" = 13 chars. Anything
+		// shorter can't parse.
+		if len(name) < 13 {
 			continue
 		}
 		version := name[:4]
@@ -122,22 +151,66 @@ func (m *Migrator) Discover() ([]MigrationFile, error) {
 		default:
 			continue
 		}
-		// rest is now "NNNN_name"
+		// rest is now "NNNN_name" or "NNNN_name.<dialect>".
+		isDialect := false
+		if dot := strings.LastIndex(rest, "."); dot > 0 {
+			suffix := rest[dot+1:]
+			switch Dialect(suffix) {
+			case DialectSQLite, DialectPostgres:
+				// A recognized dialect suffix.
+				if Dialect(suffix) != m.dialect {
+					// Belongs to another dialect — skip entirely.
+					continue
+				}
+				isDialect = true
+				rest = rest[:dot]
+			default:
+				// Not a known dialect; treat as part of the logical name.
+			}
+		}
 		parts := strings.SplitN(rest, "_", 2)
 		if len(parts) != 2 || parts[0] != version {
 			continue
 		}
-		mig, ok := byVersion[version]
-		if !ok {
-			mig = &MigrationFile{Version: version, Name: parts[1]}
-			byVersion[version] = mig
-		}
 		path := filepath.Join(m.dir, name)
-		if direction == "up" {
-			mig.UpPath = path
-		} else {
-			mig.DownPath = path
+		key := version + ":" + direction
+		byKey[key] = append(byKey[key], candidate{
+			path:      path,
+			name:      parts[1],
+			direction: direction,
+			isDialect: isDialect,
+		})
+		versions[version] = parts[1]
+	}
+	// Assemble MigrationFile per version. For each (version, direction)
+	// pair, dialect-specific candidates beat fallback candidates.
+	byVersion := map[string]*MigrationFile{}
+	chooseWinner := func(cands []candidate) candidate {
+		// Prefer dialect-specific.
+		for _, c := range cands {
+			if c.isDialect {
+				return c
+			}
 		}
+		return cands[0]
+	}
+	for version, name := range versions {
+		mf := &MigrationFile{Version: version, Name: name}
+		if ups := byKey[version+":up"]; len(ups) > 0 {
+			w := chooseWinner(ups)
+			mf.UpPath = w.path
+			mf.Name = w.name
+		}
+		if downs := byKey[version+":down"]; len(downs) > 0 {
+			w := chooseWinner(downs)
+			mf.DownPath = w.path
+			if mf.UpPath == "" {
+				// No up file seen — inherit the logical name from the
+				// down candidate so it isn't empty.
+				mf.Name = w.name
+			}
+		}
+		byVersion[version] = mf
 	}
 	out := make([]MigrationFile, 0, len(byVersion))
 	for _, mf := range byVersion {

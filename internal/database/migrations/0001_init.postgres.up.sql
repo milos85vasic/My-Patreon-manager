@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS generated_contents (
     token_count INTEGER DEFAULT 0,
     generation_attempts INTEGER DEFAULT 1,
     passed_quality_gate BOOLEAN DEFAULT FALSE,
+    status TEXT DEFAULT 'draft',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

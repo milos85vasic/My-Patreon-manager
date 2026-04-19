@@ -5,15 +5,39 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/milos85vasic/My-Patreon-Manager/internal/testhelpers"
+	"github.com/milos85vasic/My-Patreon-Manager/internal/database"
 )
+
+// openSQLiteUpTo opens an in-memory SQLite database and applies every
+// migration whose version is <= upTo. Returns the database so the test
+// can seed state that the remaining migrations will observe. Closing is
+// handled by t.Cleanup.
+//
+// The backfill tests below run migrations up to 0005 (the schema is in
+// place but 0006 hasn't fired yet), seed legacy rows, and then call
+// Migrate() so the 0006 backfill observes those rows. This matches the
+// behavior of a real production upgrade crossing the 0006 boundary.
+func openSQLiteUpTo(t *testing.T, upTo string) *database.SQLiteDB {
+	t.Helper()
+	ctx := context.Background()
+	db := database.NewSQLiteDB(":memory:")
+	if err := db.Connect(ctx, ""); err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	m := db.NewMigrator()
+	if err := m.MigrateUpTo(ctx, upTo); err != nil {
+		t.Fatalf("MigrateUpTo %s: %v", upTo, err)
+	}
+	return db
+}
 
 // TestBackfill_CopiesGeneratedContentToRevisions seeds a legacy
 // generated_contents row + a sync_states row with a patreon_post_id, then
-// re-runs Migrate() and asserts a matching content_revisions row plus the
-// repositories pointers.
+// runs Migrate() so the 0006 backfill picks up the legacy row and asserts
+// a matching content_revisions row plus the repositories pointers.
 func TestBackfill_CopiesGeneratedContentToRevisions(t *testing.T) {
-	db := testhelpers.OpenMigratedSQLite(t)
+	db := openSQLiteUpTo(t, "0005")
 	ctx := context.Background()
 
 	// Seed a repo, a legacy generated_contents row, and a sync_states row.
@@ -36,8 +60,8 @@ func TestBackfill_CopiesGeneratedContentToRevisions(t *testing.T) {
 		t.Fatalf("seed ss: %v", err)
 	}
 
-	// Re-run Migrate(). The backfill statements are idempotent; this simulates
-	// a subsequent app startup that should pick up the seeded legacy row.
+	// Run Migrate(). The 0006 backfill hasn't applied yet; now it will,
+	// and it should pick up the seeded legacy row.
 	if err := db.Migrate(ctx); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
@@ -80,7 +104,7 @@ func TestBackfill_CopiesGeneratedContentToRevisions(t *testing.T) {
 // TestBackfill_Idempotent asserts running Migrate twice does not duplicate
 // content_revisions rows and does not clobber pre-existing revision pointers.
 func TestBackfill_Idempotent(t *testing.T) {
-	db := testhelpers.OpenMigratedSQLite(t)
+	db := openSQLiteUpTo(t, "0005")
 	ctx := context.Background()
 
 	_, _ = db.DB().ExecContext(ctx,
@@ -107,7 +131,7 @@ func TestBackfill_Idempotent(t *testing.T) {
 // TestBackfill_NoLegacyRows_NoOp confirms the backfill touches nothing when
 // there are no legacy generated_contents rows.
 func TestBackfill_NoLegacyRows_NoOp(t *testing.T) {
-	db := testhelpers.OpenMigratedSQLite(t)
+	db := openSQLiteUpTo(t, "0005")
 	ctx := context.Background()
 
 	if err := db.Migrate(ctx); err != nil {
@@ -123,7 +147,7 @@ func TestBackfill_NoLegacyRows_NoOp(t *testing.T) {
 // TestBackfill_LegacyWithoutPatreonPost sets current_revision_id but NOT
 // published_revision_id when sync_states has no patreon_post_id.
 func TestBackfill_LegacyWithoutPatreonPost(t *testing.T) {
-	db := testhelpers.OpenMigratedSQLite(t)
+	db := openSQLiteUpTo(t, "0005")
 	ctx := context.Background()
 
 	_, _ = db.DB().ExecContext(ctx,

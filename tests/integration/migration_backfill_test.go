@@ -5,21 +5,32 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/milos85vasic/My-Patreon-Manager/internal/testhelpers"
+	"github.com/milos85vasic/My-Patreon-Manager/internal/database"
 )
 
 // TestMigrationBackfill_FullChain seeds the legacy generated_contents +
-// sync_states tables, runs the full Migrate() pipeline (which includes
-// the backfill statements), and asserts every legacy row has a
-// corresponding content_revisions row with correct pointers.
+// sync_states tables against a schema that has advanced up to 0005
+// (i.e. the backfill 0006 has not yet fired), then runs the full
+// Migrate() pipeline and asserts every legacy row has a corresponding
+// content_revisions row with correct pointers.
 //
-// The test opens a fully-migrated SQLite, then INSERTs legacy rows and
-// re-runs Migrate. That second Migrate is a no-op for schema creation
-// (IF NOT EXISTS) but runs the backfill INSERT OR IGNORE + pointer
-// UPDATEs against the newly seeded legacy data.
+// Before the migration-system refactor, this test relied on the old
+// idempotent re-run-Migrate-every-startup behavior. The versioned
+// migrator applies each file exactly once, so tests that want to
+// observe the backfill against their own seed data must place the
+// seed before the 0006 migration runs. We do that by halting at 0005,
+// seeding, then calling Migrate() to finish the chain.
 func TestMigrationBackfill_FullChain(t *testing.T) {
-	db := testhelpers.OpenMigratedSQLite(t)
 	ctx := context.Background()
+	db := database.NewSQLiteDB(":memory:")
+	if err := db.Connect(ctx, ""); err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	mg := db.NewMigrator()
+	if err := mg.MigrateUpTo(ctx, "0005"); err != nil {
+		t.Fatalf("MigrateUpTo 0005: %v", err)
+	}
 
 	// Seed three repositories. Repo with patreon_post_id, repo without, and a bare repo.
 	for _, r := range []struct{ id, commit string }{
@@ -55,7 +66,8 @@ func TestMigrationBackfill_FullChain(t *testing.T) {
 		t.Fatalf("seed sync_states: %v", err)
 	}
 
-	// Re-run Migrate so the backfill statements run against the seeded data.
+	// Run the remaining migrations (0006 backfill + 0007) so the
+	// backfill observes the seeded data above.
 	if err := db.Migrate(ctx); err != nil {
 		t.Fatalf("migrate (backfill): %v", err)
 	}

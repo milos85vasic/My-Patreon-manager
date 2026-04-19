@@ -34,11 +34,32 @@ func TestPostgresDB2_Migrate_Success(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	// Expect all DDL/DML queries the Migrate loop executes.
-	// The Migrate method executes 28 queries (13 CREATE TABLE, 12 CREATE INDEX,
-	// plus 3 backfill statements: 1 INSERT + 2 UPDATE from migration 0006).
-	// We'll expect Exec for each query; the empty regex matches any statement.
-	for i := 0; i < 28; i++ {
+	// After the migration-system refactor, Migrate() is a thin wrapper
+	// around bootstrapSchemaMigrations + Migrator.MigrateUp. Against a
+	// fresh database (empty schema_migrations, no repositories table),
+	// it issues:
+	//
+	//   1x Exec CREATE schema_migrations    (bootstrap EnsureTable)
+	//   1x Query COUNT schema_migrations    (bootstrap row count)
+	//   1x Query information_schema         (bootstrap repo probe)
+	//   1x Exec CREATE schema_migrations    (MigrateUp EnsureTable, idempotent)
+	//   1x Query SELECT ... schema_migrations (MigrateUp applied())
+	//   For each of 7 discovered migrations: Exec apply + Exec DELETE + Exec INSERT.
+	//
+	// We match loosely — expectation order is off and the regex for each
+	// expectation is deliberately broad — because the exact wording of
+	// each .postgres.up.sql file is not what this test is verifying.
+	mock.MatchExpectationsInOrder(false)
+
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM schema_migrations`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery(`information_schema\.tables`).
+		WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(`SELECT version, applied_at, checksum, direction FROM schema_migrations`).
+		WillReturnRows(sqlmock.NewRows([]string{"version", "applied_at", "checksum", "direction"}))
+
+	// 2 EnsureTable execs + 7 migration-body execs + 7 DELETE + 7 INSERT = 23 Execs.
+	for i := 0; i < 23; i++ {
 		mock.ExpectExec("").WillReturnResult(sqlmock.NewResult(0, 0))
 	}
 

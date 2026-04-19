@@ -127,6 +127,115 @@ func TestMigrator_Discover_SortsAndPairs(t *testing.T) {
 	}
 }
 
+// TestMigrator_Discover_DialectSpecificWins confirms that when both a
+// dialect-specific file and a dialect-agnostic fallback exist for the
+// same (version, direction), the dialect-specific file is chosen.
+func TestMigrator_Discover_DialectSpecificWins(t *testing.T) {
+	db := newMemSQLite(t)
+	fsys := migratorFS(map[string]string{
+		"0001_init.up.sql":          "fallback",
+		"0001_init.sqlite.up.sql":   "sqlite",
+		"0001_init.postgres.up.sql": "postgres",
+		"0001_init.down.sql":        "fallback-down",
+		"0001_init.sqlite.down.sql": "sqlite-down",
+	})
+	mg := NewMigrator(db.DB(), DialectSQLite, fsys, "migrations")
+	files, err := mg.Discover()
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("want 1 file, got %d (%+v)", len(files), files)
+	}
+	if !strings.HasSuffix(files[0].UpPath, "0001_init.sqlite.up.sql") {
+		t.Fatalf("sqlite dialect should win for up, got %s", files[0].UpPath)
+	}
+	if !strings.HasSuffix(files[0].DownPath, "0001_init.sqlite.down.sql") {
+		t.Fatalf("sqlite dialect should win for down, got %s", files[0].DownPath)
+	}
+}
+
+// TestMigrator_Discover_FallbackWhenNoDialectFile confirms that a plain
+// NNNN_name.up.sql is picked up when no dialect-suffixed variant exists.
+func TestMigrator_Discover_FallbackWhenNoDialectFile(t *testing.T) {
+	db := newMemSQLite(t)
+	fsys := migratorFS(map[string]string{
+		"0001_init.up.sql":   "fallback",
+		"0001_init.down.sql": "fallback-down",
+	})
+	mg := NewMigrator(db.DB(), DialectSQLite, fsys, "migrations")
+	files, err := mg.Discover()
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("want 1 file, got %d", len(files))
+	}
+	if !strings.HasSuffix(files[0].UpPath, "0001_init.up.sql") {
+		t.Fatalf("fallback should be used, got %s", files[0].UpPath)
+	}
+	if !strings.HasSuffix(files[0].DownPath, "0001_init.down.sql") {
+		t.Fatalf("fallback down should be used, got %s", files[0].DownPath)
+	}
+}
+
+// TestMigrator_Discover_IgnoresMismatchedDialect confirms that a
+// dialect-suffixed file for a different dialect is treated as absent.
+// A SQLite migrator seeing a *.postgres.up.sql should not apply it;
+// and if there is no fallback, the version slot is empty.
+func TestMigrator_Discover_IgnoresMismatchedDialect(t *testing.T) {
+	db := newMemSQLite(t)
+	fsys := migratorFS(map[string]string{
+		"0001_init.postgres.up.sql":   "postgres-only",
+		"0001_init.postgres.down.sql": "postgres-only-down",
+	})
+	mg := NewMigrator(db.DB(), DialectSQLite, fsys, "migrations")
+	files, err := mg.Discover()
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if len(files) != 0 {
+		t.Fatalf("want 0 files for SQLite, got %d (%+v)", len(files), files)
+	}
+	mg2 := NewMigrator(db.DB(), DialectPostgres, fsys, "migrations")
+	files2, err := mg2.Discover()
+	if err != nil {
+		t.Fatalf("Discover postgres: %v", err)
+	}
+	if len(files2) != 1 {
+		t.Fatalf("postgres migrator should see its dialect file, got %d", len(files2))
+	}
+}
+
+// TestMigrator_Discover_MixedDialectAcrossVersions confirms the
+// per-(version,direction) decision is independent: version 0001 can
+// use a dialect file while 0002 uses the fallback.
+func TestMigrator_Discover_MixedDialectAcrossVersions(t *testing.T) {
+	db := newMemSQLite(t)
+	fsys := migratorFS(map[string]string{
+		"0001_a.sqlite.up.sql": "sqlite-up",
+		"0001_a.down.sql":      "fallback-down",
+		"0002_b.up.sql":        "fallback-up",
+	})
+	mg := NewMigrator(db.DB(), DialectSQLite, fsys, "migrations")
+	files, err := mg.Discover()
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if len(files) != 2 {
+		t.Fatalf("want 2 files, got %d (%+v)", len(files), files)
+	}
+	if !strings.HasSuffix(files[0].UpPath, "0001_a.sqlite.up.sql") {
+		t.Fatalf("0001 up wrong: %s", files[0].UpPath)
+	}
+	if !strings.HasSuffix(files[0].DownPath, "0001_a.down.sql") {
+		t.Fatalf("0001 down wrong: %s", files[0].DownPath)
+	}
+	if !strings.HasSuffix(files[1].UpPath, "0002_b.up.sql") {
+		t.Fatalf("0002 up wrong: %s", files[1].UpPath)
+	}
+}
+
 // TestMigrator_Discover_VersionMismatch covers the branch where the
 // part before "_" doesn't equal the four-char version prefix.
 func TestMigrator_Discover_VersionMismatch(t *testing.T) {
