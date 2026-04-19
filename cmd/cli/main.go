@@ -80,7 +80,8 @@ func main() {
 	if len(args) == 0 {
 		fmt.Println("Usage: patreon-manager <command> [options]")
 		fmt.Println("Commands:")
-		fmt.Println("  sync      — discover repos, generate content, publish to Patreon (all-in-one)")
+		fmt.Println("  process   — single-runner: import, scan, generate, queue drafts (replaces sync)")
+		fmt.Println("  sync      — DEPRECATED alias of process; use 'process' instead")
 		fmt.Println("  scan      — discover repositories only; no LLM calls, no Patreon publish")
 		fmt.Println("  generate  — run content pipeline, persist GeneratedContent; no Patreon publish")
 		fmt.Println("  publish   — publish existing generated content to Patreon with tier gating")
@@ -197,7 +198,16 @@ func main() {
 	}
 
 	switch args[0] {
+	case "process":
+		if err := runProcess(ctx, cfg, db, buildProcessDeps(cfg, db, logger)); err != nil {
+			logger.Error("process failed", slog.String("error", err.Error()))
+			osExit(1)
+		}
 	case "sync":
+		// The legacy `sync` command is being retired in favor of `process`.
+		// Route it through runProcess so behavior converges; Task 21 will
+		// refine the deprecation message and eventually remove the alias.
+		fmt.Fprintln(os.Stderr, "warning: 'sync' is deprecated; use 'process' instead")
 		if schedule != "" {
 			runScheduledFunc(ctx, orchestrator, syncOpts, schedule, logger)
 		} else {
