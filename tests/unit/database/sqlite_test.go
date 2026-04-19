@@ -236,6 +236,11 @@ func TestPostStore(t *testing.T) {
 
 	r := &models.Repository{ID: "r1", Service: "github", Owner: "o", Name: "n", URL: "u", HTTPSURL: "h"}
 	require.NoError(t, db.Repositories().Create(ctx, r))
+	// Seed the campaign referenced by the post so the FK holds now that
+	// SQLite's foreign_keys pragma is on.
+	_, err := db.DB().ExecContext(ctx,
+		`INSERT INTO campaigns (id, name) VALUES ('camp1', 'camp1')`)
+	require.NoError(t, err)
 
 	store := db.Posts()
 

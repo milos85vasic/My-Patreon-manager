@@ -28,6 +28,7 @@ func (db *SQLiteDB) Connect(ctx context.Context, dsn string) error {
 	if dsn != "" {
 		db.dsn = dsn
 	}
+	db.dsn = ensureSQLiteForeignKeys(db.dsn)
 	var err error
 	db.db, err = sql.Open(db.driver, db.dsn)
 	if err != nil {
@@ -38,6 +39,31 @@ func (db *SQLiteDB) Connect(ctx context.Context, dsn string) error {
 	}
 	db.db.SetMaxOpenConns(1)
 	return nil
+}
+
+// ensureSQLiteForeignKeys appends _foreign_keys=on to the DSN query
+// string so the mattn/go-sqlite3 driver runs "PRAGMA foreign_keys=ON"
+// on every new connection. The pragma is off by default in SQLite,
+// which silently demotes every ON DELETE CASCADE in the schema to a
+// no-op — a bug we refuse to ship. If the DSN already pins the pragma
+// (on or off) we leave it alone so callers who really want it off in a
+// specialized test can still do so. An empty DSN is passed through
+// unchanged so the subsequent sql.Open surfaces the real "missing DSN"
+// error instead of opening a database literally named "?_foreign_keys=on"
+// in the current working directory.
+func ensureSQLiteForeignKeys(dsn string) string {
+	if dsn == "" {
+		return dsn
+	}
+	// Detect existing pragma setting regardless of separator.
+	if strings.Contains(dsn, "_foreign_keys=") || strings.Contains(dsn, "_fk=") {
+		return dsn
+	}
+	sep := "?"
+	if strings.Contains(dsn, "?") {
+		sep = "&"
+	}
+	return dsn + sep + "_foreign_keys=on"
 }
 
 func (db *SQLiteDB) Close() error {
@@ -319,6 +345,14 @@ func (db *SQLiteDB) RunMigrations(ctx context.Context, migrationsFS embed.FS, di
 
 func (db *SQLiteDB) BeginTx(ctx context.Context) (*sql.Tx, error) {
 	return db.db.BeginTx(ctx, nil)
+}
+
+// NewMigrator returns a versioned migration runner that reads the
+// embedded .sql files and records applied versions in the
+// schema_migrations table. The existing hardcoded (*SQLiteDB).Migrate
+// path remains authoritative until Phase M2 swaps it over.
+func (db *SQLiteDB) NewMigrator() *Migrator {
+	return NewMigrator(db.db, DialectSQLite, embeddedMigrations, "migrations")
 }
 
 // Dialect reports the SQL dialect identifier for this driver. Callers

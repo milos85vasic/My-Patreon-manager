@@ -22,6 +22,33 @@ func setupSQLite(t *testing.T) *SQLiteDB {
 	return db
 }
 
+// seedTestRepo inserts a minimal repositories row so FK-bearing child
+// tables (sync_states, mirror_maps, generated_contents, posts,
+// audit_entries, ...) can reference it. Safe to re-run for the same id;
+// the INSERT uses OR IGNORE. Needed now that PRAGMA foreign_keys is ON
+// by default on SQLite — before the pragma fix these tests inserted
+// orphan child rows and the FK was silently skipped.
+func seedTestRepo(t *testing.T, db *SQLiteDB, id string) {
+	t.Helper()
+	_, err := db.DB().ExecContext(context.Background(),
+		`INSERT OR IGNORE INTO repositories (id, service, owner, name, url, https_url)
+         VALUES (?, 'github', 'o', ?, 'u', 'h')`, id, id)
+	if err != nil {
+		t.Fatalf("seed repo %s: %v", id, err)
+	}
+}
+
+// seedTestCampaign inserts a minimal campaigns row so the FK-bearing
+// posts and tiers tables can reference it.
+func seedTestCampaign(t *testing.T, db *SQLiteDB, id string) {
+	t.Helper()
+	_, err := db.DB().ExecContext(context.Background(),
+		`INSERT OR IGNORE INTO campaigns (id, name) VALUES (?, ?)`, id, id)
+	if err != nil {
+		t.Fatalf("seed campaign %s: %v", id, err)
+	}
+}
+
 func TestSQLiteRepositoryStore_CRUD(t *testing.T) {
 	db := setupSQLite(t)
 	ctx := context.Background()
@@ -144,6 +171,7 @@ func TestSQLiteRepositoryStore_CRUD(t *testing.T) {
 func TestSQLiteSyncStateStore_CRUD(t *testing.T) {
 	db := setupSQLite(t)
 	ctx := context.Background()
+	seedTestRepo(t, db, "r1")
 	store := db.SyncStates()
 
 	state := &models.SyncState{
@@ -214,6 +242,8 @@ func TestSQLiteSyncStateStore_CRUD(t *testing.T) {
 func TestSQLiteMirrorMapStore_CRUD(t *testing.T) {
 	db := setupSQLite(t)
 	ctx := context.Background()
+	seedTestRepo(t, db, "r1")
+	seedTestRepo(t, db, "r2")
 	store := db.MirrorMaps()
 
 	m := &models.MirrorMap{
@@ -272,6 +302,7 @@ func TestSQLiteMirrorMapStore_CRUD(t *testing.T) {
 func TestSQLiteGeneratedContentStore_CRUD(t *testing.T) {
 	db := setupSQLite(t)
 	ctx := context.Background()
+	seedTestRepo(t, db, "r1")
 	store := db.GeneratedContents()
 
 	c := &models.GeneratedContent{
@@ -386,6 +417,8 @@ func TestSQLiteContentTemplateStore_CRUD(t *testing.T) {
 func TestSQLitePostStore_CRUD(t *testing.T) {
 	db := setupSQLite(t)
 	ctx := context.Background()
+	seedTestRepo(t, db, "r1")
+	seedTestCampaign(t, db, "c1")
 	store := db.Posts()
 
 	post := &models.Post{
@@ -462,6 +495,7 @@ func TestSQLitePostStore_CRUD(t *testing.T) {
 func TestSQLiteAuditEntryStore_CRUD(t *testing.T) {
 	db := setupSQLite(t)
 	ctx := context.Background()
+	seedTestRepo(t, db, "r1")
 	store := db.AuditEntries()
 
 	entry := &models.AuditEntry{
@@ -687,5 +721,93 @@ func TestRepositoryStore_ListForProcessQueue_FairOrder(t *testing.T) {
 	}
 	if list[0].ID != "rB" || list[1].ID != "rC" || list[2].ID != "rA" {
 		t.Fatalf("bad order: %s, %s, %s", list[0].ID, list[1].ID, list[2].ID)
+	}
+}
+
+// TestSQLite_ForeignKeysPragma_Cascades confirms that deleting a parent
+// repositories row actually removes its children (sync_states,
+// mirror_maps, generated_contents, audit_entries, content_revisions).
+// Before the Connect() pragma fix the CASCADE was silently ignored:
+// SQLite honors REFERENCES ... ON DELETE CASCADE only when PRAGMA
+// foreign_keys = ON is set on the connection, and the default is OFF.
+// This test guards against anyone removing _foreign_keys=on from the
+// DSN.
+func TestSQLite_ForeignKeysPragma_Cascades(t *testing.T) {
+	db := setupSQLite(t)
+	ctx := context.Background()
+
+	// Verify the pragma reports 1 (on) for the active connection. If this
+	// drifts we want a clear failure before the cascade assertion.
+	var pragma int
+	if err := db.DB().QueryRowContext(ctx, `PRAGMA foreign_keys`).Scan(&pragma); err != nil {
+		t.Fatalf("pragma query: %v", err)
+	}
+	if pragma != 1 {
+		t.Fatalf("foreign_keys pragma should be 1 (on), got %d", pragma)
+	}
+
+	// Seed parent + children referencing it via FK.
+	seedTestRepo(t, db, "parent-repo")
+	_, err := db.DB().ExecContext(ctx,
+		`INSERT INTO sync_states (id, repository_id, status) VALUES ('s-1', 'parent-repo', 'pending')`)
+	if err != nil {
+		t.Fatalf("insert sync_state: %v", err)
+	}
+	_, err = db.DB().ExecContext(ctx,
+		`INSERT INTO content_revisions (id, repository_id, version, source, status, title, body, fingerprint, author)
+         VALUES ('rev-1', 'parent-repo', 1, 'generated', 'pending_review', 't', 'b', 'fp', 'system')`)
+	if err != nil {
+		t.Fatalf("insert content_revision: %v", err)
+	}
+	_, err = db.DB().ExecContext(ctx,
+		`INSERT INTO mirror_maps (id, mirror_group_id, repository_id, detection_method) VALUES ('mm-1', 'g-1', 'parent-repo', 'exact')`)
+	if err != nil {
+		t.Fatalf("insert mirror_map: %v", err)
+	}
+
+	// Delete the parent and verify children vanished.
+	if _, err := db.DB().ExecContext(ctx,
+		`DELETE FROM repositories WHERE id = 'parent-repo'`); err != nil {
+		t.Fatalf("delete parent: %v", err)
+	}
+
+	for table, pred := range map[string]string{
+		"sync_states":       "repository_id = 'parent-repo'",
+		"content_revisions": "repository_id = 'parent-repo'",
+		"mirror_maps":       "repository_id = 'parent-repo'",
+	} {
+		var n int
+		if err := db.DB().QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM `+table+` WHERE `+pred).Scan(&n); err != nil {
+			t.Fatalf("count %s: %v", table, err)
+		}
+		if n != 0 {
+			t.Fatalf("cascade delete failed: %s still has %d rows", table, n)
+		}
+	}
+}
+
+// TestEnsureSQLiteForeignKeys verifies the DSN-mangling helper so the
+// pragma fix is covered even without a full connect flow.
+func TestEnsureSQLiteForeignKeys(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{":memory:", ":memory:?_foreign_keys=on"},
+		{"file:test.db", "file:test.db?_foreign_keys=on"},
+		{"file:test.db?cache=shared", "file:test.db?cache=shared&_foreign_keys=on"},
+		{"file:test.db?_foreign_keys=off", "file:test.db?_foreign_keys=off"},
+		{"file:test.db?_fk=1", "file:test.db?_fk=1"},
+		// Empty DSN must pass through untouched — otherwise we'd create
+		// a bogus "?_foreign_keys=on" file in the CWD when Connect() is
+		// given an unset DSN.
+		{"", ""},
+	}
+	for _, tc := range cases {
+		got := ensureSQLiteForeignKeys(tc.in)
+		if got != tc.want {
+			t.Errorf("ensureSQLiteForeignKeys(%q) = %q, want %q", tc.in, got, tc.want)
+		}
 	}
 }

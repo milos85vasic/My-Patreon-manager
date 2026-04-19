@@ -69,6 +69,19 @@ func setupDB(t *testing.T) *database.SQLiteDB {
 	require.NoError(t, db.Connect(context.Background(), ""))
 	require.NoError(t, db.Migrate(context.Background()))
 	t.Cleanup(func() { db.Close() })
+
+	// Pre-seed the repository rows referenced by tests in this package.
+	// Previously the PRAGMA foreign_keys pragma was off, so child rows
+	// (generated_contents, sync_states, posts, audit_entries) could be
+	// inserted even though their parent repositories row didn't exist.
+	// That silently violated the schema. With the pragma now on, we seed
+	// explicitly.
+	for _, id := range []string{"repo-1", "r1", "repo-fallback", "repo-all-low", "repo-circuit"} {
+		_, err := db.DB().ExecContext(context.Background(),
+			`INSERT OR IGNORE INTO repositories (id, service, owner, name, url, https_url)
+             VALUES (?, 'github', 'o', ?, 'u', 'h')`, id, id)
+		require.NoError(t, err)
+	}
 	return db
 }
 

@@ -284,6 +284,14 @@ func (db *PostgresDB2) BeginTx(ctx context.Context) (*sql.Tx, error) {
 	return db.db.BeginTx(ctx, nil)
 }
 
+// NewMigrator returns a versioned migration runner that reads the
+// embedded .sql files and records applied versions in the
+// schema_migrations table. Dormant until Phase M2 wires it into the
+// startup path.
+func (db *PostgresDB2) NewMigrator() *Migrator {
+	return NewMigrator(db.db, DialectPostgres, embeddedMigrations, "migrations")
+}
+
 // Dialect reports the SQL dialect identifier for this driver. Callers
 // that need to build raw SQL outside the store layer use this to choose
 // between "?" and "$N" placeholders. See database.Database.Dialect.
