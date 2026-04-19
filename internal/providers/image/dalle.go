@@ -18,14 +18,21 @@ type DALLEProvider struct {
 	logger     *slog.Logger
 }
 
-func NewDALLEProvider(apiKey string, client *http.Client) *DALLEProvider {
+// NewDALLEProvider constructs a DALL-E provider. A non-empty baseURL
+// overrides the default OpenAI endpoint — useful for routing calls through
+// a proxy or regional mirror. An empty baseURL falls back to the public
+// OpenAI v1 API.
+func NewDALLEProvider(apiKey, baseURL string, client *http.Client) *DALLEProvider {
 	if client == nil {
 		client = http.DefaultClient
+	}
+	if baseURL == "" {
+		baseURL = "https://api.openai.com/v1"
 	}
 	return &DALLEProvider{
 		apiKey:     apiKey,
 		httpClient: client,
-		baseURL:    "https://api.openai.com/v1",
+		baseURL:    baseURL,
 		model:      "dall-e-3",
 		logger:     slog.Default(),
 	}

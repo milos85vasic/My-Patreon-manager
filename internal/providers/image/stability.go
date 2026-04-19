@@ -18,14 +18,21 @@ type StabilityProvider struct {
 	logger     *slog.Logger
 }
 
-func NewStabilityProvider(apiKey string, client *http.Client) *StabilityProvider {
+// NewStabilityProvider constructs a Stability AI provider. A non-empty
+// baseURL overrides the default Stability v2beta endpoint — useful for
+// routing calls through a proxy or regional mirror. An empty baseURL
+// falls back to the public Stability v2beta API.
+func NewStabilityProvider(apiKey, baseURL string, client *http.Client) *StabilityProvider {
 	if client == nil {
 		client = http.DefaultClient
+	}
+	if baseURL == "" {
+		baseURL = "https://api.stability.ai/v2beta"
 	}
 	return &StabilityProvider{
 		apiKey:     apiKey,
 		httpClient: client,
-		baseURL:    "https://api.stability.ai/v2beta",
+		baseURL:    baseURL,
 		engine:     "stable-diffusion-xl-1.0",
 		logger:     slog.Default(),
 	}

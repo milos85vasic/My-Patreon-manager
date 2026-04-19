@@ -137,9 +137,9 @@ Each provider is activated by providing the relevant API key(s). Providers with 
 | Variable | Required | Default | Description |
 |----------|:--------:|---------|-------------|
 | `OPENAI_API_KEY` | Conditional | *(empty)* | OpenAI API key used by the **DALL-E 3** provider. Required to enable `dalle`. |
-| `OPENAI_BASE_URL` | No | *reserved* | Reserved for a future override of the DALL-E API endpoint. **Not currently applied** -- the DALL-E provider hardcodes `https://api.openai.com/v1`. |
+| `OPENAI_BASE_URL` | No | `https://api.openai.com/v1` | Override for the DALL-E API endpoint. Useful for routing calls through a proxy or regional mirror. Leave empty to use the default. |
 | `STABILITY_AI_API_KEY` | Conditional | *(empty)* | Stability AI key for the **Stability** (SDXL) provider. Required to enable `stability`. |
-| `STABILITY_AI_BASE_URL` | No | *reserved* | Reserved for a future override of the Stability endpoint. **Not currently applied** -- the Stability provider hardcodes `https://api.stability.ai/v2beta`. |
+| `STABILITY_AI_BASE_URL` | No | `https://api.stability.ai/v2beta` | Override for the Stability API endpoint. Useful for routing calls through a proxy or regional mirror. Leave empty to use the default. |
 | `MIDJOURNEY_API_KEY` | Conditional | *(empty)* | Bearer token for a Midjourney-compatible proxy API. Required to enable `midjourney`. |
 | `MIDJOURNEY_ENDPOINT` | Conditional | *(empty)* | Base URL of the Midjourney proxy (no default). Required alongside `MIDJOURNEY_API_KEY`. |
 | `OPENAI_COMPAT_API_KEY` | Conditional | *(empty)* | API key for an OpenAI-compatible image endpoint (Venice, Together, etc.). Required to enable `openai_compat`. |
@@ -403,8 +403,8 @@ Set the keys for **one** of these four blocks. Articles still publish without il
 | — | `ILLUSTRATION_DEFAULT_SIZE` | ○ | `1792x1024` default |
 | — | `ILLUSTRATION_DEFAULT_QUALITY` | ○ | `hd` default |
 | — | `ILLUSTRATION_DIR` | ○ | `./data/illustrations` default |
-| — | `OPENAI_BASE_URL` | — *(reserved)* | Currently unused; the DALL-E provider hardcodes the base URL |
-| — | `STABILITY_AI_BASE_URL` | — *(reserved)* | Currently unused; the Stability provider hardcodes the base URL |
+| — | `OPENAI_BASE_URL` | ○ | Override for the DALL-E endpoint; defaults to `https://api.openai.com/v1` |
+| — | `STABILITY_AI_BASE_URL` | ○ | Override for the Stability endpoint; defaults to `https://api.stability.ai/v2beta` |
 
 Step-by-step signup flows with key-format notes, `curl` verification commands, and rate-limit / cost tables in [Obtaining Credentials § Image / Illustration Providers](obtaining-credentials.md#image--illustration-providers).
 

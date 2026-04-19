@@ -314,12 +314,12 @@ func buildImageProviders(cfg *config.Config, _ metrics.MetricsCollector, logger 
 	var providers []imgprov.ImageProvider
 
 	if cfg.OpenAIAPIKey != "" {
-		dalleProv := imgprov.NewDALLEProvider(cfg.OpenAIAPIKey, nil)
+		dalleProv := imgprov.NewDALLEProvider(cfg.OpenAIAPIKey, cfg.OpenAIBaseURL, nil)
 		dalleProv.SetLogger(logger)
 		providers = append(providers, dalleProv)
 	}
 	if cfg.StabilityAIAPIKey != "" {
-		stabilityProv := imgprov.NewStabilityProvider(cfg.StabilityAIAPIKey, nil)
+		stabilityProv := imgprov.NewStabilityProvider(cfg.StabilityAIAPIKey, cfg.StabilityAIBaseURL, nil)
 		stabilityProv.SetLogger(logger)
 		providers = append(providers, stabilityProv)
 	}

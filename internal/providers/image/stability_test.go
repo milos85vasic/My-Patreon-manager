@@ -12,15 +12,15 @@ import (
 )
 
 func TestStabilityProvider_ProviderName(t *testing.T) {
-	p := NewStabilityProvider("test-key", nil)
+	p := NewStabilityProvider("test-key", "", nil)
 	assert.Equal(t, "stability", p.ProviderName())
 }
 
 func TestStabilityProvider_IsAvailable(t *testing.T) {
-	p := NewStabilityProvider("test-key", nil)
+	p := NewStabilityProvider("test-key", "", nil)
 	assert.True(t, p.IsAvailable(context.Background()))
 
-	p2 := NewStabilityProvider("", nil)
+	p2 := NewStabilityProvider("", "", nil)
 	assert.False(t, p2.IsAvailable(context.Background()))
 }
 
@@ -38,8 +38,7 @@ func TestStabilityProvider_GenerateImage(t *testing.T) {
 	}))
 	defer server.Close()
 
-	p := NewStabilityProvider("test-key", server.Client())
-	p.baseURL = server.URL
+	p := NewStabilityProvider("test-key", server.URL, server.Client())
 
 	result, err := p.GenerateImage(context.Background(), ImageRequest{
 		Prompt: "a sunset over mountains",
@@ -61,8 +60,7 @@ func TestStabilityProvider_GenerateImage_Error(t *testing.T) {
 	}))
 	defer server.Close()
 
-	p := NewStabilityProvider("test-key", server.Client())
-	p.baseURL = server.URL
+	p := NewStabilityProvider("test-key", server.URL, server.Client())
 
 	result, err := p.GenerateImage(context.Background(), ImageRequest{
 		Prompt: "test",
@@ -72,9 +70,35 @@ func TestStabilityProvider_GenerateImage_Error(t *testing.T) {
 }
 
 func TestStabilityProvider_GenerateImage_NoAPIKey(t *testing.T) {
-	p := NewStabilityProvider("", nil)
+	p := NewStabilityProvider("", "", nil)
 	result, err := p.GenerateImage(context.Background(), ImageRequest{Prompt: "test"})
 	assert.Nil(t, result)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "API key not configured")
+}
+
+// TestStabilityProvider_CustomBaseURL confirms a custom base URL passed
+// to the constructor is honored for the request path.
+func TestStabilityProvider_CustomBaseURL(t *testing.T) {
+	var gotURL string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotURL = r.URL.Path
+		w.Header().Set("Content-Type", "image/png")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte{0x89})
+	}))
+	defer server.Close()
+
+	p := NewStabilityProvider("test-key", server.URL+"/v9", server.Client())
+	_, err := p.GenerateImage(context.Background(), ImageRequest{Prompt: "p"})
+	require.NoError(t, err)
+	assert.Equal(t, "/v9/stable-image/generate/sdxl", gotURL)
+	assert.Equal(t, server.URL+"/v9", p.baseURL)
+}
+
+// TestStabilityProvider_EmptyBaseURLFallsBack confirms the public
+// Stability endpoint default is applied when no base URL is supplied.
+func TestStabilityProvider_EmptyBaseURLFallsBack(t *testing.T) {
+	p := NewStabilityProvider("test-key", "", nil)
+	assert.Equal(t, "https://api.stability.ai/v2beta", p.baseURL)
 }

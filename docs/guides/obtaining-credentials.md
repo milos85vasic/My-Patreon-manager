@@ -385,8 +385,9 @@ Enables the `dalle` provider. DALL-E 3 produces the most polished "clean modern 
 
 ```env
 OPENAI_API_KEY=your_openai_api_key_here
-# OPENAI_BASE_URL is reserved; setting it has no effect today (the DALL-E
-# provider hardcodes https://api.openai.com/v1).
+# OPENAI_BASE_URL overrides the DALL-E endpoint (proxy/mirror routing).
+# Leave empty to use https://api.openai.com/v1.
+OPENAI_BASE_URL=
 ```
 
 #### Verify the key works
@@ -424,8 +425,9 @@ Enables the `stability` provider. Uses the **Stable Image SDXL** endpoint (`/v2b
 
 ```env
 STABILITY_AI_API_KEY=your_stability_ai_api_key_here
-# STABILITY_AI_BASE_URL is reserved; setting it has no effect today (the
-# Stability provider hardcodes https://api.stability.ai/v2beta).
+# STABILITY_AI_BASE_URL overrides the Stability endpoint (proxy/mirror routing).
+# Leave empty to use https://api.stability.ai/v2beta.
+STABILITY_AI_BASE_URL=
 ```
 
 #### Verify the key works
