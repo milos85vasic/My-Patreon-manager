@@ -35,6 +35,7 @@ func setupPreviewHandler(t *testing.T) (*gin.Engine, *database.SQLiteDB, *config
 	r.POST("/preview/revision/:id/approve", h.ApproveRevision)
 	r.POST("/preview/revision/:id/reject", h.RejectRevision)
 	r.POST("/preview/revision/:id/edit", h.EditRevision)
+	r.POST("/preview/:repo_id/resolve-drift", h.ResolveDrift)
 	return r, db, cfg
 }
 
@@ -509,6 +510,579 @@ type maxVersionErrDB struct {
 
 func (d *maxVersionErrDB) ContentRevisions() database.ContentRevisionStore {
 	return &maxVersionErrStore{ContentRevisionStore: d.inner}
+}
+
+// seedDriftScenario creates the canonical three-revision fixture used across
+// the ResolveDrift tests:
+//
+//   v1 (generated, approved)       — our older approved revision.
+//   v2 (generated, pending_review) — a draft that hasn't been approved yet.
+//   v3 (patreon_import, approved)  — the external Patreon edit that drift
+//                                    detection just materialized.
+//
+// The repository is forced into patreon_drift_detected so the handler's 409
+// gate passes. Tests that don't need the full fixture (e.g. 409, no-import
+// 400, 404) skip this helper and seed directly.
+func seedDriftScenario(t *testing.T, db *database.SQLiteDB) {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := db.DB().ExecContext(ctx,
+		`INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES ('rdrift','github','o','n','u','h')`); err != nil {
+		t.Fatalf("seed repo: %v", err)
+	}
+	if err := db.Repositories().SetProcessState(ctx, "rdrift", "patreon_drift_detected"); err != nil {
+		t.Fatalf("set process state: %v", err)
+	}
+	if err := db.ContentRevisions().Create(ctx, &models.ContentRevision{
+		ID: "v1", RepositoryID: "rdrift", Version: 1,
+		Source: "generated", Status: models.RevisionStatusApproved,
+		Title: "Old approved", Body: "old-body", Fingerprint: "fp-v1",
+		Author: "system", CreatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("seed v1: %v", err)
+	}
+	if err := db.ContentRevisions().Create(ctx, &models.ContentRevision{
+		ID: "v2", RepositoryID: "rdrift", Version: 2,
+		Source: "generated", Status: models.RevisionStatusPendingReview,
+		Title: "Pending", Body: "pending-body", Fingerprint: "fp-v2",
+		Author: "system", CreatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("seed v2: %v", err)
+	}
+	pp := "patreon-post-id"
+	if err := db.ContentRevisions().Create(ctx, &models.ContentRevision{
+		ID: "v3", RepositoryID: "rdrift", Version: 3,
+		Source: "patreon_import", Status: models.RevisionStatusApproved,
+		Title: "External edit", Body: "external-body", Fingerprint: "fp-v3",
+		PatreonPostID: &pp,
+		Author:        "system", CreatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("seed v3: %v", err)
+	}
+}
+
+// TestPreview_ResolveDrift_KeepOurs verifies the simple path: process_state
+// flips idle; every revision remains at its previous status; revision
+// pointers stay unchanged. Nothing else should move.
+func TestPreview_ResolveDrift_KeepOurs(t *testing.T) {
+	r, db, _ := setupPreviewHandler(t)
+	seedDriftScenario(t, db)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/preview/rdrift/resolve-drift",
+		strings.NewReader(`{"resolution":"keep_ours"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Key", "test-admin-key")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: %d body: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("json: %v", err)
+	}
+	if resp["resolution"] != "keep_ours" || resp["repo_id"] != "rdrift" {
+		t.Fatalf("resp: %+v", resp)
+	}
+
+	repo, _ := db.Repositories().GetByID(context.Background(), "rdrift")
+	if repo.ProcessState != "idle" {
+		t.Fatalf("process_state: %s want idle", repo.ProcessState)
+	}
+	// Pointers untouched (nil-or-whatever — we never set them in the fixture).
+	if repo.CurrentRevisionID != nil {
+		t.Fatalf("current_revision_id set by keep_ours: %v", repo.CurrentRevisionID)
+	}
+	if repo.PublishedRevisionID != nil {
+		t.Fatalf("published_revision_id set by keep_ours: %v", repo.PublishedRevisionID)
+	}
+	// Revision statuses untouched.
+	v1, _ := db.ContentRevisions().GetByID(context.Background(), "v1")
+	if v1.Status != models.RevisionStatusApproved {
+		t.Fatalf("v1 status: %s", v1.Status)
+	}
+	v2, _ := db.ContentRevisions().GetByID(context.Background(), "v2")
+	if v2.Status != models.RevisionStatusPendingReview {
+		t.Fatalf("v2 status: %s", v2.Status)
+	}
+	v3, _ := db.ContentRevisions().GetByID(context.Background(), "v3")
+	if v3.Status != models.RevisionStatusApproved {
+		t.Fatalf("v3 status: %s", v3.Status)
+	}
+}
+
+// TestPreview_ResolveDrift_KeepTheirs verifies the full keep_theirs path:
+// v1 (older approved) -> superseded; v2 (pending_review) -> rejected; v3
+// (patreon_import) stays approved and becomes both current_revision_id and
+// published_revision_id; process_state flips idle.
+func TestPreview_ResolveDrift_KeepTheirs(t *testing.T) {
+	r, db, _ := setupPreviewHandler(t)
+	seedDriftScenario(t, db)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/preview/rdrift/resolve-drift",
+		strings.NewReader(`{"resolution":"keep_theirs"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Key", "test-admin-key")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: %d body: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("json: %v", err)
+	}
+	if resp["resolution"] != "keep_theirs" || resp["repo_id"] != "rdrift" {
+		t.Fatalf("resp: %+v", resp)
+	}
+
+	repo, _ := db.Repositories().GetByID(context.Background(), "rdrift")
+	if repo.ProcessState != "idle" {
+		t.Fatalf("process_state: %s want idle", repo.ProcessState)
+	}
+	if repo.CurrentRevisionID == nil || *repo.CurrentRevisionID != "v3" {
+		t.Fatalf("current_revision_id: %v want v3", repo.CurrentRevisionID)
+	}
+	if repo.PublishedRevisionID == nil || *repo.PublishedRevisionID != "v3" {
+		t.Fatalf("published_revision_id: %v want v3", repo.PublishedRevisionID)
+	}
+
+	v1, _ := db.ContentRevisions().GetByID(context.Background(), "v1")
+	if v1.Status != models.RevisionStatusSuperseded {
+		t.Fatalf("v1 status: %s want superseded", v1.Status)
+	}
+	v2, _ := db.ContentRevisions().GetByID(context.Background(), "v2")
+	if v2.Status != models.RevisionStatusRejected {
+		t.Fatalf("v2 status: %s want rejected", v2.Status)
+	}
+	v3, _ := db.ContentRevisions().GetByID(context.Background(), "v3")
+	if v3.Status != models.RevisionStatusApproved {
+		t.Fatalf("v3 status: %s want approved", v3.Status)
+	}
+	// Body/title/fingerprint on every row must remain untouched — only
+	// status and pointers may move through this handler.
+	if v1.Body != "old-body" || v1.Title != "Old approved" || v1.Fingerprint != "fp-v1" {
+		t.Fatalf("v1 immutable fields mutated: %+v", v1)
+	}
+	if v3.Body != "external-body" || v3.Title != "External edit" || v3.Fingerprint != "fp-v3" {
+		t.Fatalf("v3 immutable fields mutated: %+v", v3)
+	}
+}
+
+// TestPreview_ResolveDrift_KeepTheirs_NoImport_BadRequest verifies the 400
+// branch when keep_theirs is requested on a drifted repo that somehow has
+// no patreon_import revision. This shouldn't happen in practice (drift
+// detection always creates one) but the handler must fail loudly rather
+// than silently set nil pointers.
+func TestPreview_ResolveDrift_KeepTheirs_NoImport_BadRequest(t *testing.T) {
+	r, db, _ := setupPreviewHandler(t)
+	ctx := context.Background()
+	if _, err := db.DB().ExecContext(ctx,
+		`INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES ('r','github','o','n','u','h')`); err != nil {
+		t.Fatalf("seed repo: %v", err)
+	}
+	if err := db.Repositories().SetProcessState(ctx, "r", "patreon_drift_detected"); err != nil {
+		t.Fatalf("set state: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/preview/r/resolve-drift",
+		strings.NewReader(`{"resolution":"keep_theirs"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Key", "test-admin-key")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("want 400, got %d body: %s", w.Code, w.Body.String())
+	}
+	// Repo must NOT have been flipped back to idle on the error path.
+	repo, _ := db.Repositories().GetByID(context.Background(), "r")
+	if repo.ProcessState != "patreon_drift_detected" {
+		t.Fatalf("process_state prematurely flipped: %s", repo.ProcessState)
+	}
+}
+
+// TestPreview_ResolveDrift_NotDrifted_Conflict covers the 409 gate: a repo
+// in a non-drift state (idle here, but any non-patreon_drift_detected
+// state should fail the same way) cannot be "resolved".
+func TestPreview_ResolveDrift_NotDrifted_Conflict(t *testing.T) {
+	r, db, _ := setupPreviewHandler(t)
+	if _, err := db.DB().ExecContext(context.Background(),
+		`INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES ('r','github','o','n','u','h')`); err != nil {
+		t.Fatalf("seed repo: %v", err)
+	}
+	// Default process_state is 'idle' per the migration.
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/preview/r/resolve-drift",
+		strings.NewReader(`{"resolution":"keep_ours"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Key", "test-admin-key")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("want 409, got %d body: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestPreview_ResolveDrift_InvalidResolution_BadRequest covers an unknown
+// resolution string, which must be rejected as a 400 before any store
+// access occurs.
+func TestPreview_ResolveDrift_InvalidResolution_BadRequest(t *testing.T) {
+	r, db, _ := setupPreviewHandler(t)
+	seedDriftScenario(t, db)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/preview/rdrift/resolve-drift",
+		strings.NewReader(`{"resolution":"pick_both"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Key", "test-admin-key")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("want 400, got %d", w.Code)
+	}
+	// Repo state untouched (no GetByID happens before this branch).
+	repo, _ := db.Repositories().GetByID(context.Background(), "rdrift")
+	if repo.ProcessState != "patreon_drift_detected" {
+		t.Fatalf("process_state mutated: %s", repo.ProcessState)
+	}
+}
+
+// TestPreview_ResolveDrift_MalformedJSON_BadRequest exercises the BindJSON
+// error branch.
+func TestPreview_ResolveDrift_MalformedJSON_BadRequest(t *testing.T) {
+	r, db, _ := setupPreviewHandler(t)
+	seedDriftScenario(t, db)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/preview/rdrift/resolve-drift",
+		strings.NewReader(`{not json`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Key", "test-admin-key")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("want 400, got %d", w.Code)
+	}
+}
+
+// TestPreview_ResolveDrift_NoAuth_Unauthorized asserts the handler fails
+// closed when X-Admin-Key is absent.
+func TestPreview_ResolveDrift_NoAuth_Unauthorized(t *testing.T) {
+	r, _, _ := setupPreviewHandler(t)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/preview/rdrift/resolve-drift",
+		strings.NewReader(`{"resolution":"keep_ours"}`))
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("want 401, got %d", w.Code)
+	}
+}
+
+// TestPreview_ResolveDrift_WrongKey_Unauthorized covers the header-present-
+// but-wrong case — same auth branch, different input shape.
+func TestPreview_ResolveDrift_WrongKey_Unauthorized(t *testing.T) {
+	r, _, _ := setupPreviewHandler(t)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/preview/rdrift/resolve-drift",
+		strings.NewReader(`{"resolution":"keep_ours"}`))
+	req.Header.Set("X-Admin-Key", "wrong")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("want 401, got %d", w.Code)
+	}
+}
+
+// TestPreview_ResolveDrift_NotFound covers the missing-repo branch.
+func TestPreview_ResolveDrift_NotFound(t *testing.T) {
+	r, _, _ := setupPreviewHandler(t)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/preview/missing/resolve-drift",
+		strings.NewReader(`{"resolution":"keep_ours"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Key", "test-admin-key")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("want 404, got %d", w.Code)
+	}
+}
+
+// TestPreview_ResolveDrift_GetByIDErr_500 forces the initial
+// Repositories().GetByID call to fail by closing the DB. Exercises the 500
+// branch after auth + JSON validation pass.
+func TestPreview_ResolveDrift_GetByIDErr_500(t *testing.T) {
+	r, db, _ := setupPreviewHandler(t)
+	if err := db.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/preview/rdrift/resolve-drift",
+		strings.NewReader(`{"resolution":"keep_ours"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Key", "test-admin-key")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("want 500, got %d body: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestPreview_ResolveDrift_KeepOurs_SetStateErr_500 exercises the
+// SetProcessState error branch on the keep_ours path by installing a
+// trigger that aborts UPDATEs on the repositories table.
+func TestPreview_ResolveDrift_KeepOurs_SetStateErr_500(t *testing.T) {
+	r, db, _ := setupPreviewHandler(t)
+	seedDriftScenario(t, db)
+	// The SELECT in GetByID must still succeed; only UPDATEs on
+	// repositories should fail, so the handler reaches SetProcessState
+	// and surfaces its error as 500.
+	if _, err := db.DB().ExecContext(context.Background(),
+		`CREATE TRIGGER block_repo_update_ko BEFORE UPDATE ON repositories BEGIN SELECT RAISE(ABORT, 'blocked'); END`); err != nil {
+		t.Fatalf("trigger: %v", err)
+	}
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/preview/rdrift/resolve-drift",
+		strings.NewReader(`{"resolution":"keep_ours"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Key", "test-admin-key")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("want 500, got %d body: %s", w.Code, w.Body.String())
+	}
+}
+
+// listAllErrStore wraps a real ContentRevisionStore but makes ListAll fail.
+// We need this to exercise the 500 branch for ListAll on the keep_theirs
+// path — GetByID on repositories must still succeed, so a trigger approach
+// against content_revisions won't work here (the SELECT in ListAll would
+// need to fail while other SELECTs on the same table pass — SQLite doesn't
+// offer that granularity).
+type listAllErrStore struct {
+	database.ContentRevisionStore
+}
+
+func (s *listAllErrStore) ListAll(ctx context.Context, repoID string) ([]*models.ContentRevision, error) {
+	return nil, errors.New("list all boom")
+}
+
+// listAllErrDB wraps Database so ContentRevisions() returns the error-
+// injecting store; everything else is delegated to the embedded Database.
+type listAllErrDB struct {
+	database.Database
+	inner database.ContentRevisionStore
+}
+
+func (d *listAllErrDB) ContentRevisions() database.ContentRevisionStore {
+	return &listAllErrStore{ContentRevisionStore: d.inner}
+}
+
+// TestPreview_ResolveDrift_KeepTheirs_ListAllErr_500 exercises the 500
+// branch when ContentRevisions().ListAll fails on the keep_theirs path.
+func TestPreview_ResolveDrift_KeepTheirs_ListAllErr_500(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	real := testhelpers.OpenMigratedSQLite(t)
+	if _, err := real.DB().ExecContext(context.Background(),
+		`INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES ('rdrift','github','o','n','u','h')`); err != nil {
+		t.Fatalf("seed repo: %v", err)
+	}
+	if err := real.Repositories().SetProcessState(context.Background(), "rdrift", "patreon_drift_detected"); err != nil {
+		t.Fatalf("set state: %v", err)
+	}
+	wrappedDB := &listAllErrDB{Database: real, inner: real.ContentRevisions()}
+	cfg := &config.Config{AdminKey: "test-admin-key"}
+	h := handlers.NewPreviewHandler(wrappedDB, cfg)
+	r := gin.New()
+	r.POST("/preview/:repo_id/resolve-drift", h.ResolveDrift)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/preview/rdrift/resolve-drift",
+		strings.NewReader(`{"resolution":"keep_theirs"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Key", "test-admin-key")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("want 500, got %d body: %s", w.Code, w.Body.String())
+	}
+}
+
+// supersedeErrStore fails UpdateStatus ONLY when the target is
+// "superseded". Rejection (pending_review -> rejected) still succeeds via
+// the embedded real store, so the handler's inner loop runs past the
+// pending_review entries and hits the supersede branch — which errors
+// and must surface as 500. This targets the approved-older-than-import
+// arm specifically.
+type supersedeErrStore struct {
+	database.ContentRevisionStore
+}
+
+func (s *supersedeErrStore) UpdateStatus(ctx context.Context, id, newStatus string) error {
+	if newStatus == models.RevisionStatusSuperseded {
+		return errors.New("supersede boom")
+	}
+	return s.ContentRevisionStore.UpdateStatus(ctx, id, newStatus)
+}
+
+type supersedeErrDB struct {
+	database.Database
+	inner database.ContentRevisionStore
+}
+
+func (d *supersedeErrDB) ContentRevisions() database.ContentRevisionStore {
+	return &supersedeErrStore{ContentRevisionStore: d.inner}
+}
+
+// TestPreview_ResolveDrift_KeepTheirs_SupersedeErr_500 exercises the 500
+// branch inside the supersede arm of the inner loop. ListAll returns rows
+// version-DESC, so the handler processes v3 (skipped — it's the import),
+// then v2 (pending_review -> rejected; succeeds), then v1 (older approved
+// -> superseded; errors here), and we assert the 500 response.
+func TestPreview_ResolveDrift_KeepTheirs_SupersedeErr_500(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	real := testhelpers.OpenMigratedSQLite(t)
+	seedDriftScenario(t, real)
+	wrappedDB := &supersedeErrDB{Database: real, inner: real.ContentRevisions()}
+	cfg := &config.Config{AdminKey: "test-admin-key"}
+	h := handlers.NewPreviewHandler(wrappedDB, cfg)
+	r := gin.New()
+	r.POST("/preview/:repo_id/resolve-drift", h.ResolveDrift)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/preview/rdrift/resolve-drift",
+		strings.NewReader(`{"resolution":"keep_theirs"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Key", "test-admin-key")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("want 500, got %d body: %s", w.Code, w.Body.String())
+	}
+}
+
+// rejectErrStore wraps a real ContentRevisionStore but makes UpdateStatus
+// fail ONLY for the "rejected" target. Supersede (approved -> superseded)
+// still succeeds, so the handler reaches the pending_review branch and
+// the rejection call errors there — exercising that specific 500 path.
+type rejectErrStore struct {
+	database.ContentRevisionStore
+}
+
+func (s *rejectErrStore) UpdateStatus(ctx context.Context, id, newStatus string) error {
+	if newStatus == models.RevisionStatusRejected {
+		return errors.New("reject boom")
+	}
+	return s.ContentRevisionStore.UpdateStatus(ctx, id, newStatus)
+}
+
+type rejectErrDB struct {
+	database.Database
+	inner database.ContentRevisionStore
+}
+
+func (d *rejectErrDB) ContentRevisions() database.ContentRevisionStore {
+	return &rejectErrStore{ContentRevisionStore: d.inner}
+}
+
+// TestPreview_ResolveDrift_KeepTheirs_RejectErr_500 exercises the 500
+// branch in the pending_review -> rejected arm of the loop.
+func TestPreview_ResolveDrift_KeepTheirs_RejectErr_500(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	real := testhelpers.OpenMigratedSQLite(t)
+	seedDriftScenario(t, real)
+	wrappedDB := &rejectErrDB{Database: real, inner: real.ContentRevisions()}
+	cfg := &config.Config{AdminKey: "test-admin-key"}
+	h := handlers.NewPreviewHandler(wrappedDB, cfg)
+	r := gin.New()
+	r.POST("/preview/:repo_id/resolve-drift", h.ResolveDrift)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/preview/rdrift/resolve-drift",
+		strings.NewReader(`{"resolution":"keep_theirs"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Key", "test-admin-key")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("want 500, got %d body: %s", w.Code, w.Body.String())
+	}
+}
+
+// setPointersErrRepoStore overrides only SetRevisionPointers to fail.
+type setPointersErrRepoStore struct {
+	database.RepositoryStore
+}
+
+func (s *setPointersErrRepoStore) SetRevisionPointers(ctx context.Context, repoID, currentID, publishedID string) error {
+	return errors.New("set pointers boom")
+}
+
+type setPointersErrDB struct {
+	database.Database
+	inner database.RepositoryStore
+}
+
+func (d *setPointersErrDB) Repositories() database.RepositoryStore {
+	return &setPointersErrRepoStore{RepositoryStore: d.inner}
+}
+
+// TestPreview_ResolveDrift_KeepTheirs_SetPointersErr_500 exercises the
+// 500 branch when SetRevisionPointers fails after the supersede/reject
+// loop completes. GetByID on the repository still must succeed (it goes
+// through the real store under the hood), so we wrap only the methods
+// that need to fail.
+func TestPreview_ResolveDrift_KeepTheirs_SetPointersErr_500(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	real := testhelpers.OpenMigratedSQLite(t)
+	seedDriftScenario(t, real)
+	wrappedDB := &setPointersErrDB{Database: real, inner: real.Repositories()}
+	cfg := &config.Config{AdminKey: "test-admin-key"}
+	h := handlers.NewPreviewHandler(wrappedDB, cfg)
+	r := gin.New()
+	r.POST("/preview/:repo_id/resolve-drift", h.ResolveDrift)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/preview/rdrift/resolve-drift",
+		strings.NewReader(`{"resolution":"keep_theirs"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Key", "test-admin-key")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("want 500, got %d body: %s", w.Code, w.Body.String())
+	}
+}
+
+// setStateErrRepoStore leaves SetRevisionPointers working but fails
+// SetProcessState — the final step of keep_theirs. Tests the last 500
+// branch.
+type setStateErrRepoStore struct {
+	database.RepositoryStore
+}
+
+func (s *setStateErrRepoStore) SetProcessState(ctx context.Context, repoID, state string) error {
+	return errors.New("set state boom")
+}
+
+type setStateErrDB struct {
+	database.Database
+	inner database.RepositoryStore
+}
+
+func (d *setStateErrDB) Repositories() database.RepositoryStore {
+	return &setStateErrRepoStore{RepositoryStore: d.inner}
+}
+
+// TestPreview_ResolveDrift_KeepTheirs_SetStateErr_500 exercises the very
+// last 500 branch of keep_theirs: SetProcessState fails after
+// SetRevisionPointers succeeded.
+func TestPreview_ResolveDrift_KeepTheirs_SetStateErr_500(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	real := testhelpers.OpenMigratedSQLite(t)
+	seedDriftScenario(t, real)
+	wrappedDB := &setStateErrDB{Database: real, inner: real.Repositories()}
+	cfg := &config.Config{AdminKey: "test-admin-key"}
+	h := handlers.NewPreviewHandler(wrappedDB, cfg)
+	r := gin.New()
+	r.POST("/preview/:repo_id/resolve-drift", h.ResolveDrift)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/preview/rdrift/resolve-drift",
+		strings.NewReader(`{"resolution":"keep_theirs"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Key", "test-admin-key")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("want 500, got %d body: %s", w.Code, w.Body.String())
+	}
 }
 
 // TestPreview_Edit_MaxVersionErr_500 exercises the 500 branch for the

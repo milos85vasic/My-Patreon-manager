@@ -176,6 +176,7 @@ func (h *PreviewHandler) RegisterRoutes(r *gin.Engine) {
 		preview.POST("/revision/:id/approve", h.ApproveRevision)
 		preview.POST("/revision/:id/reject", h.RejectRevision)
 		preview.POST("/revision/:id/edit", h.EditRevision)
+		preview.POST("/:repo_id/resolve-drift", h.ResolveDrift)
 	}
 }
 
@@ -304,6 +305,136 @@ func (h *PreviewHandler) transitionRevision(c *gin.Context, newStatus, responseS
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": responseStatus, "id": id})
+}
+
+// resolveDriftRequest is the JSON body for POST /preview/:repo_id/resolve-drift.
+// Resolution must be exactly "keep_ours" or "keep_theirs"; any other value is
+// rejected as a 400.
+type resolveDriftRequest struct {
+	Resolution string `json:"resolution"`
+}
+
+// ResolveDrift resolves a patreon_drift_detected state on a repository.
+//
+// Two resolutions are supported via the JSON body's "resolution" field:
+//
+//   - keep_ours:    operator re-publishes our last-approved revision,
+//                   overriding the external Patreon edit. The existing
+//                   patreon_import revision is kept in history as an audit
+//                   trail; no revision statuses change. Repo state flips
+//                   back to idle so the publisher can act again.
+//
+//   - keep_theirs:  operator accepts the external Patreon edit as canonical.
+//                   The most recent patreon_import revision (version DESC) is
+//                   promoted to current_revision_id AND published_revision_id.
+//                   Older approved generated revisions for this repo are
+//                   superseded (approved -> superseded is legal). Any
+//                   currently pending_review drafts are rejected
+//                   (pending_review -> rejected is legal). Repo state flips
+//                   back to idle.
+//
+// Returns:
+//   - 200 with {"resolution":<r>, "repo_id":<id>} on success,
+//   - 400 on malformed JSON, unknown resolution, or keep_theirs with no
+//         patreon_import revision on file,
+//   - 401 on missing or wrong X-Admin-Key,
+//   - 404 when :repo_id doesn't exist,
+//   - 409 when the repo isn't in patreon_drift_detected state (you cannot
+//         "resolve" a non-drifted repo),
+//   - 500 on any store error.
+func (h *PreviewHandler) ResolveDrift(c *gin.Context) {
+	if c.GetHeader("X-Admin-Key") != h.config.AdminKey {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	var req resolveDriftRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.AbortWithStatus(http.StatusBadRequest)
+		return
+	}
+	if req.Resolution != "keep_ours" && req.Resolution != "keep_theirs" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": `resolution must be "keep_ours" or "keep_theirs"`})
+		return
+	}
+
+	ctx := c.Request.Context()
+	repoID := c.Param("repo_id")
+
+	repo, err := h.db.Repositories().GetByID(ctx, repoID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if repo == nil {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	if repo.ProcessState != "patreon_drift_detected" {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":         "repo is not in patreon_drift_detected state",
+			"process_state": repo.ProcessState,
+		})
+		return
+	}
+
+	if req.Resolution == "keep_ours" {
+		if err := h.db.Repositories().SetProcessState(ctx, repoID, "idle"); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"resolution": "keep_ours", "repo_id": repoID})
+		return
+	}
+
+	// keep_theirs
+	all, err := h.db.ContentRevisions().ListAll(ctx, repoID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	var mostRecentImport *models.ContentRevision
+	for _, rv := range all { // ListAll returns version DESC.
+		if rv.Source == "patreon_import" {
+			mostRecentImport = rv
+			break
+		}
+	}
+	if mostRecentImport == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no patreon_import revision found for this repo; cannot keep_theirs"})
+		return
+	}
+
+	// Supersede older approved generated revisions; reject any pending_review
+	// drafts. Both are legal forward-only transitions per the status graph.
+	for _, rv := range all {
+		if rv.ID == mostRecentImport.ID {
+			continue
+		}
+		switch rv.Status {
+		case models.RevisionStatusApproved:
+			if rv.Version < mostRecentImport.Version {
+				if err := h.db.ContentRevisions().UpdateStatus(ctx, rv.ID, models.RevisionStatusSuperseded); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
+			}
+		case models.RevisionStatusPendingReview:
+			if err := h.db.ContentRevisions().UpdateStatus(ctx, rv.ID, models.RevisionStatusRejected); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+	}
+
+	if err := h.db.Repositories().SetRevisionPointers(ctx, repoID, mostRecentImport.ID, mostRecentImport.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.db.Repositories().SetProcessState(ctx, repoID, "idle"); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"resolution": "keep_theirs", "repo_id": repoID})
 }
 
 type ArticleView struct {
