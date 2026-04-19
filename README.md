@@ -57,6 +57,9 @@ Jump directly to the information you're looking for:
 - [OpenAPI spec](docs/api/openapi.yaml) · [CLI reference](docs/api/cli-reference.md)
 - [Main specification](docs/main_specification.md)
 
+**Project status and future work**
+- [**Known Issues, Unfinished Work & Future Enhancements**](docs/KNOWN-ISSUES.md) — the canonical "what's not done and why" document. Covers product non-goals (multi-tenancy, drift auto-merge, article scheduling, separate REVIEWER_KEY), infrastructure gaps (Postgres integration harness, coverage.sh measurement semantics, submodule mirrors), deferred enhancements (`models.Post.URL`, illustration cleanup on repo delete, preview UI SPA, webhook-driven sync, multi-node parallelism, migrate-down backups), documentation deferrals (video course scripts, legacy planning artifacts), and environmental caveats (Semgrep auth, COVERAGE_MIN default). Each entry has a workaround and a concrete path to resolution.
+
 Full documentation index with every file: [see "Documentation" section below](#documentation).
 
 ## Features
