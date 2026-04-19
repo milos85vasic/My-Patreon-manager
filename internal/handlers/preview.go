@@ -3,11 +3,14 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/config"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/database"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/models"
+	"github.com/milos85vasic/My-Patreon-Manager/internal/services/process"
 )
 
 type PreviewHandler struct {
@@ -172,7 +175,81 @@ func (h *PreviewHandler) RegisterRoutes(r *gin.Engine) {
 		preview.POST("/toggle/:id/:action", h.ToggleArticle)
 		preview.POST("/revision/:id/approve", h.ApproveRevision)
 		preview.POST("/revision/:id/reject", h.RejectRevision)
+		preview.POST("/revision/:id/edit", h.EditRevision)
 	}
+}
+
+// editRevisionRequest is the JSON body for POST /preview/revision/:id/edit.
+// All three fields are required — empty strings are rejected as 400.
+type editRevisionRequest struct {
+	Title  string `json:"title"`
+	Body   string `json:"body"`
+	Author string `json:"author"`
+}
+
+// EditRevision creates a NEW content_revisions row that supersedes the
+// target revision without mutating it. This is a load-bearing safety
+// invariant: Task 24 of the process-command plan requires that the
+// original revision's body/title/fingerprint remain literally unchanged
+// after an edit — the edit materializes as a fresh pending_review row
+// with edited_from_revision_id pointing back at the source.
+//
+// Returns:
+//   - 200 with {"id":<new-id>, "version":<new-version>} on success,
+//   - 400 on malformed JSON or any empty required field,
+//   - 401 when X-Admin-Key is missing or wrong,
+//   - 404 when :id does not exist,
+//   - 500 on any other store error.
+func (h *PreviewHandler) EditRevision(c *gin.Context) {
+	if c.GetHeader("X-Admin-Key") != h.config.AdminKey {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	var req editRevisionRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.AbortWithStatus(http.StatusBadRequest)
+		return
+	}
+	if req.Title == "" || req.Body == "" || req.Author == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "title, body, and author are required"})
+		return
+	}
+	ctx := c.Request.Context()
+	id := c.Param("id")
+	cur, err := h.db.ContentRevisions().GetByID(ctx, id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if cur == nil {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	maxV, err := h.db.ContentRevisions().MaxVersion(ctx, cur.RepositoryID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	newID := uuid.NewString()
+	editedFromID := cur.ID
+	next := &models.ContentRevision{
+		ID:                   newID,
+		RepositoryID:         cur.RepositoryID,
+		Version:              maxV + 1,
+		Source:               "manual_edit",
+		Status:               models.RevisionStatusPendingReview,
+		Title:                req.Title,
+		Body:                 req.Body,
+		Fingerprint:          process.Fingerprint(req.Body, ""),
+		EditedFromRevisionID: &editedFromID,
+		Author:               req.Author,
+		CreatedAt:            time.Now().UTC(),
+	}
+	if err := h.db.ContentRevisions().Create(ctx, next); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"id": newID, "version": next.Version})
 }
 
 // ApproveRevision transitions a ContentRevision from pending_review to
