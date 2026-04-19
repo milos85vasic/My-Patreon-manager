@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -205,9 +206,9 @@ func main() {
 		}
 	case "sync":
 		// The legacy `sync` command is being retired in favor of `process`.
-		// Route it through runProcess so behavior converges; Task 21 will
-		// refine the deprecation message and eventually remove the alias.
-		fmt.Fprintln(os.Stderr, "warning: 'sync' is deprecated; use 'process' instead")
+		// Route it through runProcess so behavior converges; the alias will
+		// eventually be removed.
+		printSyncDeprecation(os.Stderr)
 		if schedule != "" {
 			runScheduledFunc(ctx, orchestrator, syncOpts, schedule, logger)
 		} else {
@@ -313,6 +314,15 @@ func runScheduled(ctx context.Context, orch orchestrator, opts syncsvc.SyncOptio
 }
 
 var runScheduledFunc = runScheduled
+
+// printSyncDeprecation writes the refined deprecation warning for the
+// legacy `sync` command. Factored into a helper so tests can assert the
+// exact wording without spinning up the full CLI.
+func printSyncDeprecation(w io.Writer) {
+	fmt.Fprintln(w, "warning: 'sync' is deprecated and will be removed in a future release.")
+	fmt.Fprintln(w, "         Use 'patreon-manager process' instead. See:")
+	fmt.Fprintln(w, "         docs/superpowers/specs/2026-04-18-process-command-design.md")
+}
 
 func parseLogLevel(level string) slog.Level {
 	switch level {
