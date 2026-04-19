@@ -656,6 +656,8 @@ go run ./cmd/cli migrate down <NNNN> --force  # execute the rollback (destructiv
 
 `migrate down` rolls back every applied migration whose version is strictly greater than `<NNNN>` (4-digit zero-padded, e.g. `0003`), in descending order. Without `--force` the command only prints the plan (the list of versions it would roll back) and exits 0 — so you can review before pulling the trigger. **`--force` is required to actually execute; rollback is destructive.** Every rolled-back version must have a matching `.down.sql` file; otherwise the command aborts with `missing down migration`. Edit a `.sql` file after it has been applied and the next `migrate up` will fail with a checksum mismatch — add a new migration instead.
 
+Both the SQLite and PostgreSQL dialects ship with `.down.sql` files for every production migration (0001–0007), so `migrate down --force` works end-to-end on either driver. For SQLite, column-drop rollbacks (notably 0005) are implemented via the "create-copy-drop-rename" pattern because SQLite 3.34 and earlier cannot `DROP COLUMN` in place — expect a brief table rebuild, and take a backup before running `--force` on a production database.
+
 ## Merging History After a Repo Rename
 
 When a repository is renamed or moved between orgs, the next scan produces a fresh `repositories` row with an empty history. Re-parent every `content_revisions` row from the old ID onto the new one:

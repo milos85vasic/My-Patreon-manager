@@ -330,9 +330,9 @@ func TestMigrateDown_PlanWithoutForce(t *testing.T) {
 
 // TestMigrateDown_Force_ExecutesRollback asserts that with --force the
 // command actually rolls back migrations above the target version. Uses a
-// synthetic MapFS with complete up/down pairs so the rollback succeeds —
-// the real embedded migrations ship without .sqlite.down.sql files for the
-// SQLite dialect.
+// synthetic MapFS with trivial up/down pairs so the test is self-contained
+// and does not depend on the exact shape of the production migrations
+// (which are exercised separately by internal/database/sqlite_down_migrations_test.go).
 func TestMigrateDown_Force_ExecutesRollback(t *testing.T) {
 	ctx := context.Background()
 	fsys := buildMigratorFS(map[string]string{
