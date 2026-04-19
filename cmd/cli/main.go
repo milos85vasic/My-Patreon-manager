@@ -218,7 +218,7 @@ func main() {
 	case "generate":
 		runGenerate(ctx, orchestrator, syncOpts, logger)
 	case "publish":
-		runPublish(ctx, orchestrator, syncOpts, logger)
+		runPublish(ctx, db, patreonClient, logger)
 	case "verify":
 		runVerify(ctx, cfg, promMetrics, logger)
 	default:

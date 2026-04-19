@@ -520,6 +520,150 @@ func TestContentRevisions_ScanEmptyPublishedAt(t *testing.T) {
 	}
 }
 
+// TestContentRevisions_MarkPublished_HappyPath verifies MarkPublished
+// writes both markers and re-running with the same values leaves the row
+// unchanged (idempotent semantics).
+func TestContentRevisions_MarkPublished_HappyPath(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	seedRepo(t, db, "r1")
+	if err := db.ContentRevisions().Create(ctx, mkRev("a", "r1", 1, "approved")); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	stamp := time.Date(2026, 4, 18, 10, 0, 0, 0, time.UTC)
+	if err := db.ContentRevisions().MarkPublished(ctx, "a", "pp-42", stamp); err != nil {
+		t.Fatalf("mark: %v", err)
+	}
+	got, err := db.ContentRevisions().GetByID(ctx, "a")
+	if err != nil || got == nil {
+		t.Fatalf("get: err=%v got=%v", err, got)
+	}
+	if got.PatreonPostID == nil || *got.PatreonPostID != "pp-42" {
+		t.Fatalf("patreon_post_id: %+v", got.PatreonPostID)
+	}
+	if got.PublishedToPatreonAt == nil || !got.PublishedToPatreonAt.Equal(stamp) {
+		t.Fatalf("published_at: %+v want %v", got.PublishedToPatreonAt, stamp)
+	}
+	// Immutable columns must not have moved.
+	if got.Title != "T" || got.Body != "B" || got.Fingerprint != "fp-a" {
+		t.Fatalf("immutable columns drifted: %+v", got)
+	}
+
+	// Idempotent re-run: same values, no error, row unchanged.
+	if err := db.ContentRevisions().MarkPublished(ctx, "a", "pp-42", stamp); err != nil {
+		t.Fatalf("re-run: %v", err)
+	}
+	got2, _ := db.ContentRevisions().GetByID(ctx, "a")
+	if *got2.PatreonPostID != "pp-42" || !got2.PublishedToPatreonAt.Equal(stamp) {
+		t.Fatalf("idempotent re-run drifted: %+v", got2)
+	}
+}
+
+// TestContentRevisions_MarkPublished_DBError exercises the SQL-level
+// error path via a closed DB.
+func TestContentRevisions_MarkPublished_DBError(t *testing.T) {
+	db := openClosedSQLite(t)
+	err := db.ContentRevisions().MarkPublished(context.Background(), "a", "pp", time.Now().UTC())
+	if err == nil {
+		t.Fatal("want error on closed DB")
+	}
+}
+
+// TestContentRevisions_SupersedeOlderApproved_MultiRow seeds three
+// approved revisions and verifies that publishing v3 flips v1 and v2 to
+// superseded while leaving v3 untouched.
+func TestContentRevisions_SupersedeOlderApproved_MultiRow(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	seedRepo(t, db, "r1")
+	for i, id := range []string{"v1", "v2", "v3"} {
+		if err := db.ContentRevisions().Create(ctx, mkRev(id, "r1", i+1, "approved")); err != nil {
+			t.Fatalf("create %s: %v", id, err)
+		}
+	}
+	n, err := db.ContentRevisions().SupersedeOlderApproved(ctx, "r1", 3)
+	if err != nil {
+		t.Fatalf("supersede: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("want 2 rows updated, got %d", n)
+	}
+	v1, _ := db.ContentRevisions().GetByID(ctx, "v1")
+	v2, _ := db.ContentRevisions().GetByID(ctx, "v2")
+	v3, _ := db.ContentRevisions().GetByID(ctx, "v3")
+	if v1.Status != "superseded" || v2.Status != "superseded" {
+		t.Fatalf("older rows not superseded: v1=%s v2=%s", v1.Status, v2.Status)
+	}
+	if v3.Status != "approved" {
+		t.Fatalf("target row moved: v3=%s", v3.Status)
+	}
+}
+
+// TestContentRevisions_SupersedeOlderApproved_EmptyResult verifies the
+// zero-row case — no approved revisions older than the given version.
+func TestContentRevisions_SupersedeOlderApproved_EmptyResult(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	seedRepo(t, db, "r1")
+	// Only one row and it's the target itself — nothing older.
+	if err := db.ContentRevisions().Create(ctx, mkRev("only", "r1", 5, "approved")); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	n, err := db.ContentRevisions().SupersedeOlderApproved(ctx, "r1", 5)
+	if err != nil {
+		t.Fatalf("supersede: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("want 0, got %d", n)
+	}
+}
+
+// TestContentRevisions_SupersedeOlderApproved_OnlyApproved ensures the
+// update predicate really filters on status='approved'. A pending_review
+// or rejected row below the cutoff must stay put.
+func TestContentRevisions_SupersedeOlderApproved_OnlyApproved(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	seedRepo(t, db, "r1")
+	if err := db.ContentRevisions().Create(ctx, mkRev("p1", "r1", 1, "pending_review")); err != nil {
+		t.Fatalf("p1: %v", err)
+	}
+	if err := db.ContentRevisions().Create(ctx, mkRev("r2", "r1", 2, "rejected")); err != nil {
+		t.Fatalf("r2: %v", err)
+	}
+	if err := db.ContentRevisions().Create(ctx, mkRev("a3", "r1", 3, "approved")); err != nil {
+		t.Fatalf("a3: %v", err)
+	}
+	if err := db.ContentRevisions().Create(ctx, mkRev("a4", "r1", 4, "approved")); err != nil {
+		t.Fatalf("a4: %v", err)
+	}
+	n, err := db.ContentRevisions().SupersedeOlderApproved(ctx, "r1", 4)
+	if err != nil {
+		t.Fatalf("supersede: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("want 1 (only a3), got %d", n)
+	}
+	p1, _ := db.ContentRevisions().GetByID(ctx, "p1")
+	if p1.Status != "pending_review" {
+		t.Fatalf("p1 status changed: %s", p1.Status)
+	}
+	r2, _ := db.ContentRevisions().GetByID(ctx, "r2")
+	if r2.Status != "rejected" {
+		t.Fatalf("r2 status changed: %s", r2.Status)
+	}
+}
+
+// TestContentRevisions_SupersedeOlderApproved_DBError exercises the
+// SQL-level error path via a closed DB.
+func TestContentRevisions_SupersedeOlderApproved_DBError(t *testing.T) {
+	db := openClosedSQLite(t)
+	_, err := db.ContentRevisions().SupersedeOlderApproved(context.Background(), "r1", 1)
+	if err == nil {
+		t.Fatal("want error on closed DB")
+	}
+}
+
 // TestContentRevisions_CountAll covers the cross-repo count used by the
 // first-run importer. It should return 0 on an empty DB and reflect every
 // row regardless of status once revisions exist.

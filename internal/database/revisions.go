@@ -28,6 +28,19 @@ type ContentRevisionStore interface {
 	// every repository and status. Used by the first-run importer to
 	// decide whether the DB is already populated.
 	CountAll(ctx context.Context) (int, error)
+	// MarkPublished stamps patreon_post_id and published_to_patreon_at on
+	// a revision. It never touches body/title/fingerprint — those remain
+	// immutable. Idempotent: re-running with the same values is a no-op
+	// from the caller's perspective. The UPDATE is unconditional on id, so
+	// re-running with different values simply overwrites the markers.
+	MarkPublished(ctx context.Context, id, patreonPostID string, at time.Time) error
+	// SupersedeOlderApproved flips every 'approved' revision for the given
+	// repo whose version is strictly less than newerThan to 'superseded'.
+	// Returns the number of rows updated. Used by the publisher to retire
+	// older approved-but-not-yet-published revisions once a newer revision
+	// has gone live. It touches only the status column; body/title/
+	// fingerprint remain untouched.
+	SupersedeOlderApproved(ctx context.Context, repoID string, newerThan int) (int, error)
 }
 
 // ErrIllegalStatusTransition is returned by ContentRevisionStore.UpdateStatus
@@ -311,6 +324,30 @@ func (s *contentRevisionStore) CountAll(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	return n, nil
+}
+
+// MarkPublished sets the published markers on a revision without touching
+// the immutable body/title/fingerprint columns. The UPDATE targets the
+// row by primary key and is idempotent when called with the same values.
+func (s *contentRevisionStore) MarkPublished(ctx context.Context, id, patreonPostID string, at time.Time) error {
+	_, err := s.db.ExecContext(ctx,
+		s.rebind(`UPDATE content_revisions SET patreon_post_id = ?, published_to_patreon_at = ? WHERE id = ?`),
+		patreonPostID, formatTime(at), id)
+	return err
+}
+
+// SupersedeOlderApproved flips every approved revision for repoID whose
+// version < newerThan to 'superseded', returning the row count. Only the
+// status column is touched — body/title/fingerprint remain immutable.
+func (s *contentRevisionStore) SupersedeOlderApproved(ctx context.Context, repoID string, newerThan int) (int, error) {
+	res, err := s.db.ExecContext(ctx,
+		s.rebind(`UPDATE content_revisions SET status = 'superseded' WHERE repository_id = ? AND version < ? AND status = 'approved'`),
+		repoID, newerThan)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
 }
 
 // queryList runs a SELECT with a shared column list and scans rows.

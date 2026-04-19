@@ -20,6 +20,7 @@ import (
 	"github.com/milos85vasic/My-Patreon-Manager/internal/providers/patreon"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/services/audit"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/services/content"
+	"github.com/milos85vasic/My-Patreon-Manager/internal/services/process"
 	syncsvc "github.com/milos85vasic/My-Patreon-Manager/internal/services/sync"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
@@ -765,28 +766,21 @@ func TestMain_PublishCommand(t *testing.T) {
 	// reset prometheus registry to avoid duplicate metric registration
 	cleanup := withMockPrometheusRegistry(t)
 	defer cleanup()
-	// mock orchestrator to track calls
-	var orchestratorCalled bool
-	var orchestratorOpts syncsvc.SyncOptions
-	oldNewOrchestrator := newOrchestrator
-	defer func() { newOrchestrator = oldNewOrchestrator }()
-	newOrchestrator = func(db database.Database, providers []git.RepositoryProvider, patreonClient patreon.Provider, generator *content.Generator, m metrics.MetricsCollector, logger *slog.Logger, tierMapper *content.TierMapper) orchestrator {
-		return &mockOrchestrator{
-			publishFunc: func(ctx context.Context, opts syncsvc.SyncOptions) (*syncsvc.SyncResult, error) {
-				orchestratorCalled = true
-				orchestratorOpts = opts
-				return &syncsvc.SyncResult{Processed: 1, Failed: 0, Skipped: 0}, nil
-			},
-		}
+	// The publish subcommand no longer routes through the orchestrator;
+	// it constructs a process.Publisher via newPublisher. Swap the
+	// factory so the command's logic fires without hitting a real DB.
+	var publisherCalled bool
+	oldNewPublisher := newPublisher
+	defer func() { newPublisher = oldNewPublisher }()
+	newPublisher = func(db database.Database, client process.PatreonMutator) publisher {
+		return &fakePublisher{count: 1, onPublish: func() { publisherCalled = true }}
 	}
-	// No need to capture log output; the orchestrator call is sufficient.
 	exited, code := withMockExit(t, func() {
 		main()
 	})
 	assert.False(t, exited, "publish command should not exit with error")
 	assert.Equal(t, 0, code)
-	assert.True(t, orchestratorCalled, "orchestrator should have been called")
-	assert.False(t, orchestratorOpts.DryRun, "dry-run should default to false")
+	assert.True(t, publisherCalled, "publisher should have been called")
 }
 
 func TestBuildProviderOrgs_Empty(t *testing.T) {
