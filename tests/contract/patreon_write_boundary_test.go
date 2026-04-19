@@ -60,6 +60,13 @@ func TestPatreonWriteBoundary(t *testing.T) {
 
 		// Test fixtures
 		"tests/mocks/",
+
+		// E2E and chaos tests exercise the real publisher against a fake
+		// Patreon server via patreon.Client.CreatePost / UpdatePost. They
+		// are downstream consumers of the canonical publish path, not a
+		// parallel write route — the fake server is the test boundary.
+		"tests/e2e/",
+		"tests/chaos/",
 	}
 
 	for _, f := range strings.Split(strings.TrimSpace(string(out)), "\n") {
