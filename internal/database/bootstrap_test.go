@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
@@ -371,15 +372,20 @@ func TestBootstrap_UpgradeNoopOnCurrentTable(t *testing.T) {
 }
 
 // TestBootstrap_RecordFailure drives the recordMigration error branch
-// via sqlmock: EnsureTable succeeds, COUNT returns 0, repositories probe
-// returns a row, Discover (via the embedded FS on disk) returns the real
-// migration set, and then the DELETE inside recordMigration errors.
+// via sqlmock: upgrade path no-ops (schema_migrations already current),
+// EnsureTable succeeds, COUNT returns 0, repositories probe returns a
+// row, Discover returns one migration file, and the DELETE inside
+// recordMigration errors.
 func TestBootstrap_RecordFailure(t *testing.T) {
 	mdb, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("sqlmock: %v", err)
 	}
 	defer mdb.Close()
+	// Upgrade path: postgres existsQuery first — say table does not
+	// exist so we short-circuit the upgrade with no DROP.
+	mock.ExpectQuery(`information_schema\.tables`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 	mock.ExpectExec(`CREATE TABLE IF NOT EXISTS schema_migrations`).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM schema_migrations`).
@@ -401,3 +407,143 @@ func TestBootstrap_RecordFailure(t *testing.T) {
 		t.Fatal("want record error")
 	}
 }
+
+// TestBootstrap_EnsureTableFailureAfterUpgrade drives the EnsureTable
+// error wrap at line 42-44. Upgrade succeeds (table missing, no DROP),
+// then the CREATE fails.
+func TestBootstrap_EnsureTableFailureAfterUpgrade(t *testing.T) {
+	mdb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer mdb.Close()
+	// Upgrade path: table missing → no-op.
+	mock.ExpectQuery(`sqlite_master`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	// EnsureTable: CREATE fails.
+	mock.ExpectExec(`CREATE TABLE IF NOT EXISTS schema_migrations`).
+		WillReturnError(fmt.Errorf("create-boom"))
+	mg := NewMigrator(mdb, DialectSQLite, migratorFS(nil), "migrations")
+	err = bootstrapSchemaMigrations(context.Background(), mdb, DialectSQLite, mg)
+	if err == nil {
+		t.Fatal("want EnsureTable wrap error")
+	}
+	if got := err.Error(); !strings.Contains(got, "bootstrap: ensure schema_migrations") {
+		t.Fatalf("want EnsureTable wrap, got %q", got)
+	}
+}
+
+// TestBootstrap_CountFailureAfterUpgrade drives the COUNT(*) error wrap
+// at line 46-48. Upgrade succeeds, EnsureTable succeeds, COUNT fails.
+func TestBootstrap_CountFailureAfterUpgrade(t *testing.T) {
+	mdb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer mdb.Close()
+	mock.ExpectQuery(`sqlite_master`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectExec(`CREATE TABLE IF NOT EXISTS schema_migrations`).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM schema_migrations`).
+		WillReturnError(fmt.Errorf("count-boom"))
+	mg := NewMigrator(mdb, DialectSQLite, migratorFS(nil), "migrations")
+	err = bootstrapSchemaMigrations(context.Background(), mdb, DialectSQLite, mg)
+	if err == nil {
+		t.Fatal("want COUNT wrap error")
+	}
+	if got := err.Error(); !strings.Contains(got, "bootstrap: count schema_migrations") {
+		t.Fatalf("want count wrap, got %q", got)
+	}
+}
+
+// TestBootstrap_RepositoriesProbeWrapError drives the repositoriesTableExists
+// error wrap at line 54-56. Upgrade + EnsureTable + COUNT=0 succeed, then
+// the probe returns a non-sql.ErrNoRows error.
+func TestBootstrap_RepositoriesProbeWrapError(t *testing.T) {
+	mdb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer mdb.Close()
+	// Upgrade short-circuits: schema_migrations missing.
+	mock.ExpectQuery(`sqlite_master`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	// EnsureTable.
+	mock.ExpectExec(`CREATE TABLE IF NOT EXISTS schema_migrations`).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	// COUNT returns 0.
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM schema_migrations`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	// repositories probe: non-ErrNoRows error so the wrap fires.
+	mock.ExpectQuery(`sqlite_master`).
+		WillReturnError(fmt.Errorf("probe-boom"))
+	mg := NewMigrator(mdb, DialectSQLite, migratorFS(nil), "migrations")
+	err = bootstrapSchemaMigrations(context.Background(), mdb, DialectSQLite, mg)
+	if err == nil {
+		t.Fatal("want probe wrap error")
+	}
+	if got := err.Error(); !strings.Contains(got, "bootstrap: probe repositories") {
+		t.Fatalf("want probe wrap, got %q", got)
+	}
+}
+
+// TestBootstrap_SkipsDownOnlyMigration drives the `if f.UpPath == "" { continue }`
+// branch at lines 69-70. A discovered migration that has only a down file
+// must be skipped cleanly during pre-populated seeding.
+func TestBootstrap_SkipsDownOnlyMigration(t *testing.T) {
+	db := newMemSQLite(t)
+	ctx := context.Background()
+	if _, err := db.DB().ExecContext(ctx,
+		`CREATE TABLE repositories (id TEXT PRIMARY KEY)`); err != nil {
+		t.Fatalf("seed repositories: %v", err)
+	}
+	// One down-only file plus one normal up+down pair. The down-only
+	// version must hit the `continue` branch.
+	fsys := migratorFS(map[string]string{
+		"0001_down_only.sqlite.down.sql": "DROP TABLE orphan;",
+		"0002_normal.sqlite.up.sql":      "CREATE TABLE normal (id INTEGER);",
+		"0002_normal.sqlite.down.sql":    "DROP TABLE normal;",
+	})
+	mg := NewMigrator(db.DB(), DialectSQLite, fsys, "migrations")
+	if err := bootstrapSchemaMigrations(ctx, db.DB(), DialectSQLite, mg); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	// Only the "0002" row should have been recorded; "0001" has no up
+	// file and was skipped.
+	var count0001, count0002 int
+	if err := db.DB().QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM schema_migrations WHERE version='0001'`).Scan(&count0001); err != nil {
+		t.Fatalf("count 0001: %v", err)
+	}
+	if err := db.DB().QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM schema_migrations WHERE version='0002'`).Scan(&count0002); err != nil {
+		t.Fatalf("count 0002: %v", err)
+	}
+	if count0001 != 0 {
+		t.Fatalf("down-only migration should not be recorded, got %d rows for 0001", count0001)
+	}
+	if count0002 != 1 {
+		t.Fatalf("want 1 row for 0002, got %d", count0002)
+	}
+}
+
+// TestRepositoriesTableExists_NonErrNoRowsError drives the non-ErrNoRows
+// error branch at line 157 directly. A query error that isn't sql.ErrNoRows
+// must be returned as-is (not swallowed).
+func TestRepositoriesTableExists_NonErrNoRowsError(t *testing.T) {
+	mdb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer mdb.Close()
+	mock.ExpectQuery(`sqlite_master`).WillReturnError(fmt.Errorf("catalog-boom"))
+	found, err := repositoriesTableExists(context.Background(), mdb, DialectSQLite)
+	if err == nil {
+		t.Fatal("want non-ErrNoRows error")
+	}
+	if found {
+		t.Fatalf("want found=false on error, got true")
+	}
+}
+
