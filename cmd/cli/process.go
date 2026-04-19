@@ -220,27 +220,14 @@ func (a *contentArticleAdapter) Generate(ctx context.Context, repo *models.Repos
 	return generated.Title, generated.Body, nil
 }
 
-// stubArticleGenerator is a placeholder ArticleGenerator used by
-// buildProcessDeps when a real content generator is not available (e.g.
-// when the CLI is invoked without the full LLM wiring). It returns
-// (repo.Name, "", nil) so the `process` subcommand still compiles and
-// exercises the surrounding plumbing; tests override this with a
-// deterministic stub.
-type stubArticleGenerator struct{}
-
-func (stubArticleGenerator) Generate(_ context.Context, r *models.Repository) (string, string, error) {
-	title := "Untitled"
-	if r != nil && r.Name != "" {
-		title = r.Name
-	}
-	return title, "", nil
-}
-
 // processDepsInputs bundles the real collaborators that buildProcessDeps
 // needs to wire the `process` subcommand. Keeping them in a struct avoids
-// an explosive parameter list on buildProcessDeps and makes it easy to
-// pass zero-valued inputs in tests (buildProcessDeps tolerates nil
-// orchestrator / generator / patreonClient and falls back to stubs).
+// an explosive parameter list on buildProcessDeps. Fields left nil are
+// propagated through as nil — the caller is responsible for supplying the
+// dependencies the selected pipeline stages require. The Scanner path
+// special-cases nil Orchestrator because "no scan step configured" is a
+// valid operational mode; every other nil is a misconfiguration the
+// pipeline catches at use time.
 type processDepsInputs struct {
 	Orchestrator    orchestrator
 	Generator       *content.Generator
@@ -265,12 +252,23 @@ func (a *illustrationGenAdapter) Generate(ctx context.Context, repo *models.Repo
 	return a.inner.GenerateForRevision(ctx, repo, body)
 }
 
-// buildProcessDeps constructs a processDeps with the available real
-// integrations. Any collaborator left nil on the inputs struct is
-// replaced with a safe stub (documented on the stub type) so the
-// subcommand still runs end-to-end on partial configurations — useful for
-// dev environments where Patreon credentials or LLM wiring are not yet in
-// place.
+// buildProcessDeps constructs a processDeps from the supplied inputs.
+// Nil inputs are propagated through rather than masked behind stubs:
+//
+//   - nil Orchestrator → Scanner is left nil (runProcess skips the scan step)
+//   - nil Generator    → processDeps.Generator is nil; invoking the
+//     pipeline with no generator is a programmer error that surfaces on the
+//     first Generate call rather than being silently papered over with a
+//     dummy title/body
+//   - nil PatreonClient → adapter is still constructed so ListCampaignPosts
+//     returns (nil, nil) — this path is part of the first-run-importer
+//     contract, not a stub fallback
+//   - nil IllustrationGen → processDeps.IllustrationGen is nil; the pipeline
+//     documents this as "no illustration" and skips the step
+//
+// The removed stubArticleGenerator was only used when the CLI was wired
+// without an LLM; in practice every real invocation supplies a
+// *content.Generator, and the tests already exercise the real adapter.
 func buildProcessDeps(_ *config.Config, _ database.Database, logger *slog.Logger, in processDepsInputs) processDeps {
 	if logger == nil {
 		logger = slog.Default()
@@ -283,15 +281,11 @@ func buildProcessDeps(_ *config.Config, _ database.Database, logger *slog.Logger
 			_, err := in.Orchestrator.ScanOnly(ctx, opts)
 			return err
 		}
-	} else {
-		scanner = func(context.Context) error { return nil }
 	}
 
 	var articleGen process.ArticleGenerator
 	if in.Generator != nil {
 		articleGen = &contentArticleAdapter{gen: in.Generator}
-	} else {
-		articleGen = stubArticleGenerator{}
 	}
 
 	// If a real illustration.Generator is supplied, wrap it in the adapter

@@ -244,36 +244,27 @@ func TestRunProcess_ReclaimStaleError(t *testing.T) {
 	}
 }
 
-// TestBuildProcessDeps_ReturnsNonNil checks the constructor produces a
-// dependency set where every required field is non-nil when no real
-// collaborators are supplied. This exercises the safe-fallback path for
-// dev environments where Patreon/LLM wiring is not yet configured.
-func TestBuildProcessDeps_ReturnsNonNil(t *testing.T) {
+// TestBuildProcessDeps_NilInputsPropagate checks that buildProcessDeps
+// propagates nil inputs rather than masking them with stubs. The
+// PatreonClient adapter is still constructed because its nil-client
+// branch is part of the first-run-importer contract, not a stub fallback.
+func TestBuildProcessDeps_NilInputsPropagate(t *testing.T) {
 	cfg := baseProcessCfg()
 	deps := buildProcessDeps(cfg, nil, discardProcessLogger(), processDepsInputs{})
 	if deps.PatreonClient == nil {
-		t.Fatal("PatreonClient nil")
+		t.Fatal("PatreonClient adapter should be non-nil even with no inner client")
 	}
-	if deps.Scanner == nil {
-		t.Fatal("Scanner nil")
+	if deps.Scanner != nil {
+		t.Fatal("Scanner should be nil when no orchestrator is supplied")
 	}
-	if deps.Generator == nil {
-		t.Fatal("Generator nil")
+	if deps.Generator != nil {
+		t.Fatal("Generator should be nil when no content.Generator is supplied")
+	}
+	if deps.IllustrationGen != nil {
+		t.Fatal("IllustrationGen should be nil when none supplied")
 	}
 	if deps.Logger == nil {
 		t.Fatal("Logger nil")
-	}
-	// Scanner must be a no-op when no orchestrator is supplied.
-	if err := deps.Scanner(context.Background()); err != nil {
-		t.Fatalf("Scanner stub returned err: %v", err)
-	}
-	// Generator stub returns (Name, "", nil) even for nil repo when no
-	// real content.Generator is supplied.
-	if _, _, err := deps.Generator.Generate(context.Background(), nil); err != nil {
-		t.Fatalf("Generator stub returned err: %v", err)
-	}
-	if _, _, err := deps.Generator.Generate(context.Background(), &models.Repository{Name: "abc"}); err != nil {
-		t.Fatalf("Generator stub with repo returned err: %v", err)
 	}
 	// Adapter's ListCampaignPosts must return (nil, nil) when no
 	// patreon.Client is supplied — the nil-client branch.
