@@ -507,11 +507,13 @@ patreon-manager sync --config .env.production
 Schema changes are versioned SQL files under `internal/database/migrations/` and applied automatically on every startup. To manage them directly:
 
 ```sh
-go run ./cmd/cli migrate up       # apply every pending migration
-go run ./cmd/cli migrate status   # list applied + pending migrations with checksums
+go run ./cmd/cli migrate up                   # apply every pending migration
+go run ./cmd/cli migrate status               # list applied + pending migrations with checksums
+go run ./cmd/cli migrate down <NNNN>          # print the rollback plan for versions > <NNNN>
+go run ./cmd/cli migrate down <NNNN> --force  # execute the rollback (destructive)
 ```
 
-Down migrations are deliberately not exposed via the CLI in this release; they are destructive and require an operator runbook. Edit a `.sql` file after it has been applied and the next `migrate up` will fail with a checksum mismatch — add a new migration instead.
+`migrate down` rolls back every applied migration whose version is strictly greater than `<NNNN>` (4-digit zero-padded, e.g. `0003`), in descending order. Without `--force` the command only prints the plan (the list of versions it would roll back) and exits 0 — so you can review before pulling the trigger. **`--force` is required to actually execute; rollback is destructive.** Every rolled-back version must have a matching `.down.sql` file; otherwise the command aborts with `missing down migration`. Edit a `.sql` file after it has been applied and the next `migrate up` will fail with a checksum mismatch — add a new migration instead.
 
 ## Overriding via Command Line
 
