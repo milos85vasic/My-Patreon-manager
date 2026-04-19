@@ -15,6 +15,7 @@ import (
 	"github.com/milos85vasic/My-Patreon-Manager/internal/models"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/providers/patreon"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/services/content"
+	"github.com/milos85vasic/My-Patreon-Manager/internal/services/illustration"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/services/process"
 	syncsvc "github.com/milos85vasic/My-Patreon-Manager/internal/services/sync"
 	"github.com/robfig/cron/v3"
@@ -239,10 +240,27 @@ func (stubArticleGenerator) Generate(_ context.Context, r *models.Repository) (s
 // pass zero-valued inputs in tests (buildProcessDeps tolerates nil
 // orchestrator / generator / patreonClient and falls back to stubs).
 type processDepsInputs struct {
-	Orchestrator  orchestrator
-	Generator     *content.Generator
-	PatreonClient *patreon.Client
-	SyncOpts      syncsvc.SyncOptions
+	Orchestrator    orchestrator
+	Generator       *content.Generator
+	PatreonClient   *patreon.Client
+	SyncOpts        syncsvc.SyncOptions
+	IllustrationGen *illustration.Generator
+}
+
+// illustrationGenAdapter bridges the legacy *illustration.Generator onto the
+// process.IllustrationGenerator interface. The adapter's Generate method
+// forwards to the sibling GenerateForRevision method on the real generator,
+// returning (nil, nil) when no inner generator is supplied so the pipeline
+// treats the missing illustration as a no-op rather than an error.
+type illustrationGenAdapter struct {
+	inner *illustration.Generator
+}
+
+func (a *illustrationGenAdapter) Generate(ctx context.Context, repo *models.Repository, body string) (*models.Illustration, error) {
+	if a == nil || a.inner == nil {
+		return nil, nil
+	}
+	return a.inner.GenerateForRevision(ctx, repo, body)
 }
 
 // buildProcessDeps constructs a processDeps with the available real
@@ -274,25 +292,21 @@ func buildProcessDeps(_ *config.Config, _ database.Database, logger *slog.Logger
 		articleGen = stubArticleGenerator{}
 	}
 
-	// IllustrationGen remains nil for now. The existing
-	// internal/services/illustration.Generator.Generate signature
-	// (repoID, repoName, repoDesc, repoLang, repoTopics, contentID,
-	// title, body) is materially different from
-	// process.IllustrationGenerator.Generate(ctx, *models.Repository,
-	// body). A real wrapper would need to pull the contentID (which
-	// the pipeline does not currently expose) and re-derive the repo
-	// metadata. Keeping nil avoids a >20-line adapter; the Pipeline
-	// handles nil by skipping illustration generation, which matches
-	// the documented contract on IllustrationGenerator.
-	// TODO: wire illustration.Generator once the pipeline exposes the
-	// generated content ID (or the illustration generator grows an
-	// overload that can derive it from the repo + body alone).
+	// If a real illustration.Generator is supplied, wrap it in the adapter
+	// so the pipeline sees a process.IllustrationGenerator. When
+	// IllustrationGen is nil (dev environments without image providers)
+	// the pipeline handles that gracefully by skipping illustration
+	// generation, matching the documented contract on IllustrationGenerator.
+	var illustGen process.IllustrationGenerator
+	if in.IllustrationGen != nil {
+		illustGen = &illustrationGenAdapter{inner: in.IllustrationGen}
+	}
 
 	return processDeps{
 		PatreonClient:   &patreonCampaignAdapter{client: in.PatreonClient, logger: logger},
 		Scanner:         scanner,
 		Generator:       articleGen,
-		IllustrationGen: nil,
+		IllustrationGen: illustGen,
 		Logger:          logger,
 	}
 }

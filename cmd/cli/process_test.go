@@ -16,7 +16,9 @@ import (
 	"github.com/milos85vasic/My-Patreon-Manager/internal/database"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/models"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/providers/patreon"
+	imgprov "github.com/milos85vasic/My-Patreon-Manager/internal/providers/image"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/services/content"
+	"github.com/milos85vasic/My-Patreon-Manager/internal/services/illustration"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/services/process"
 	syncsvc "github.com/milos85vasic/My-Patreon-Manager/internal/services/sync"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/testhelpers"
@@ -757,6 +759,134 @@ func TestBuildProcessDeps_WiredPatreonClient(t *testing.T) {
 	}
 	if len(posts) != 3 {
 		t.Fatalf("want 3 posts, got %d", len(posts))
+	}
+}
+
+// --- illustration adapter tests --------------------------------------------
+
+// illTestStore is a minimal IllustrationStore used by illustration adapter
+// tests in this file. Only Create / GetByFingerprint are exercised.
+type illTestStore struct {
+	database.IllustrationStore
+	existing *models.Illustration
+	created  *models.Illustration
+}
+
+func (s *illTestStore) Create(_ context.Context, ill *models.Illustration) error {
+	s.created = ill
+	return nil
+}
+func (s *illTestStore) GetByFingerprint(_ context.Context, _ string) (*models.Illustration, error) {
+	return s.existing, nil
+}
+
+// illStubImgProvider is a tiny ImageProvider for adapter-level tests.
+type illStubImgProvider struct {
+	available bool
+	result    *imgprov.ImageResult
+	err       error
+}
+
+func (p *illStubImgProvider) ProviderName() string               { return "illstub" }
+func (p *illStubImgProvider) IsAvailable(_ context.Context) bool { return p.available }
+func (p *illStubImgProvider) GenerateImage(_ context.Context, _ imgprov.ImageRequest) (*imgprov.ImageResult, error) {
+	if p.err != nil {
+		return nil, p.err
+	}
+	return p.result, nil
+}
+
+// TestIllustrationGenAdapter_NilInner covers the defensive nil-guard: when
+// no inner generator is supplied the adapter returns (nil, nil) so the
+// pipeline treats it as "no illustration".
+func TestIllustrationGenAdapter_NilInner(t *testing.T) {
+	a := &illustrationGenAdapter{inner: nil}
+	ill, err := a.Generate(context.Background(), &models.Repository{ID: "r"}, "body")
+	if err != nil || ill != nil {
+		t.Fatalf("want (nil, nil); got (%v, %v)", ill, err)
+	}
+	// Also exercise nil-receiver.
+	var nilA *illustrationGenAdapter
+	ill, err = nilA.Generate(context.Background(), &models.Repository{ID: "r"}, "body")
+	if err != nil || ill != nil {
+		t.Fatalf("nil receiver want (nil, nil); got (%v, %v)", ill, err)
+	}
+}
+
+// TestIllustrationGenAdapter_DelegatesToInner wires a real illustration.Generator
+// and confirms the adapter forwards Generate through GenerateForRevision.
+func TestIllustrationGenAdapter_DelegatesToInner(t *testing.T) {
+	store := &illTestStore{}
+	prov := &illStubImgProvider{
+		available: true,
+		result: &imgprov.ImageResult{
+			Data:     []byte("bytes"),
+			Format:   "png",
+			Provider: "illstub",
+		},
+	}
+	fallback := imgprov.NewFallbackProvider(prov)
+	inner := illustration.NewGenerator(
+		fallback,
+		store,
+		illustration.NewStyleLoader("style"),
+		illustration.NewPromptBuilder("style"),
+		discardProcessLogger(),
+		t.TempDir(),
+	)
+	a := &illustrationGenAdapter{inner: inner}
+
+	ill, err := a.Generate(context.Background(), &models.Repository{ID: "r1", Name: "n"}, "body")
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if ill == nil {
+		t.Fatal("want illustration, got nil")
+	}
+	if ill.RepositoryID != "r1" {
+		t.Fatalf("RepositoryID mismatch: %q", ill.RepositoryID)
+	}
+	if store.created == nil || store.created.ID != ill.ID {
+		t.Fatalf("expected Create to be invoked with the illustration")
+	}
+}
+
+// TestBuildProcessDeps_WiredIllustrationGenerator confirms buildProcessDeps
+// threads a supplied *illustration.Generator through as an adapter and
+// that nil leaves IllustrationGen nil (pipeline skip path).
+func TestBuildProcessDeps_WiredIllustrationGenerator(t *testing.T) {
+	cfg := baseProcessCfg()
+	// nil input -> IllustrationGen stays nil.
+	deps := buildProcessDeps(cfg, nil, discardProcessLogger(), processDepsInputs{})
+	if deps.IllustrationGen != nil {
+		t.Fatalf("IllustrationGen should be nil when not supplied, got %T", deps.IllustrationGen)
+	}
+
+	// Real generator supplied -> IllustrationGen is a non-nil adapter.
+	store := &illTestStore{}
+	prov := &illStubImgProvider{available: true, result: &imgprov.ImageResult{
+		Data: []byte("x"), Format: "png", Provider: "illstub",
+	}}
+	inner := illustration.NewGenerator(
+		imgprov.NewFallbackProvider(prov),
+		store,
+		illustration.NewStyleLoader("style"),
+		illustration.NewPromptBuilder("style"),
+		discardProcessLogger(),
+		t.TempDir(),
+	)
+	deps2 := buildProcessDeps(cfg, nil, discardProcessLogger(), processDepsInputs{
+		IllustrationGen: inner,
+	})
+	if deps2.IllustrationGen == nil {
+		t.Fatal("IllustrationGen should be wired when inner supplied")
+	}
+	ill, err := deps2.IllustrationGen.Generate(context.Background(), &models.Repository{ID: "r"}, "body")
+	if err != nil {
+		t.Fatalf("Generate via adapter: %v", err)
+	}
+	if ill == nil {
+		t.Fatal("want illustration from adapter")
 	}
 }
 

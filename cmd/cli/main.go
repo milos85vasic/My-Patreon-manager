@@ -167,7 +167,10 @@ func main() {
 		}
 	}
 
-	// Wire illustration generator if enabled
+	// Wire illustration generator if enabled. The resulting *illustration.Generator
+	// is captured in imgGenerator so both the legacy sync orchestrator and the
+	// new process pipeline can share it.
+	var imgGenerator *illustration.Generator
 	if cfg.IllustrationEnabled {
 		imgProviders := buildImageProviders(cfg, promMetrics, logger)
 		if len(imgProviders) > 0 {
@@ -179,7 +182,7 @@ func main() {
 			if imgDir == "" {
 				imgDir = "./data/illustrations"
 			}
-			imgGenerator := illustration.NewGenerator(fallbackImgProv, imgStore, styleLoader, promptBuilder, logger, imgDir)
+			imgGenerator = illustration.NewGenerator(fallbackImgProv, imgStore, styleLoader, promptBuilder, logger, imgDir)
 			orchestrator.SetIllustrationGenerator(imgGenerator)
 		}
 	}
@@ -198,10 +201,11 @@ func main() {
 	switch args[0] {
 	case "process":
 		depsIn := processDepsInputs{
-			Orchestrator:  orchestrator,
-			Generator:     generator,
-			PatreonClient: patreonClient,
-			SyncOpts:      syncOpts,
+			Orchestrator:    orchestrator,
+			Generator:       generator,
+			PatreonClient:   patreonClient,
+			SyncOpts:        syncOpts,
+			IllustrationGen: imgGenerator,
 		}
 		deps := buildProcessDeps(cfg, db, logger, depsIn)
 		if schedule != "" {
@@ -216,10 +220,11 @@ func main() {
 		// eventually be removed.
 		printSyncDeprecation(os.Stderr)
 		depsIn := processDepsInputs{
-			Orchestrator:  orchestrator,
-			Generator:     generator,
-			PatreonClient: patreonClient,
-			SyncOpts:      syncOpts,
+			Orchestrator:    orchestrator,
+			Generator:       generator,
+			PatreonClient:   patreonClient,
+			SyncOpts:        syncOpts,
+			IllustrationGen: imgGenerator,
 		}
 		deps := buildProcessDeps(cfg, db, logger, depsIn)
 		if schedule != "" {

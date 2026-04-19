@@ -118,6 +118,103 @@ func (g *Generator) Generate(
 	return &embedTag, nil
 }
 
+// GenerateForRevision is the signature expected by process.IllustrationGenerator.
+// It produces an illustration for a content revision (as opposed to the legacy
+// Generate method which keyed off GeneratedContent). Unlike Generate, this
+// returns the full Illustration struct rather than a markdown embed tag —
+// callers who want the tag can format it themselves from the returned fields.
+//
+// The legacy generated_content_id FK is not populated (revisions don't have a
+// generated_contents row in the new pipeline). Because the current schema
+// declares that column as NOT NULL with a FK to generated_contents(id), we
+// set it to repo.ID as a transitional placeholder — documented here as a
+// migration wart to revisit when the FK is relaxed (tracked in
+// docs/superpowers/specs/2026-04-17-illustration-generation-design.md). The
+// placeholder keeps INSERT from violating the NOT NULL constraint while the
+// caller-visible Illustration.GeneratedContentID stays empty from the
+// pipeline's perspective.
+//
+// On provider failure the method logs a warning and returns (nil, nil) so the
+// pipeline can treat it as "no illustration this run" and proceed — matching
+// the fail-soft behavior of the legacy Generate method.
+func (g *Generator) GenerateForRevision(
+	ctx context.Context,
+	repo *models.Repository,
+	body string,
+) (*models.Illustration, error) {
+	if repo == nil {
+		return nil, fmt.Errorf("repo required")
+	}
+	prompt := g.promptBuilder.BuildFromFields(
+		repo.Name, repo.Description,
+		repo.PrimaryLanguage, repo.Topics,
+		"", body, // no title; the pipeline passes body only
+	)
+	style := g.styleLoader.LoadStyle(nil)
+	fingerprint := computeFingerprint(prompt, style)
+
+	existing, err := g.store.GetByFingerprint(ctx, fingerprint)
+	if err == nil && existing != nil && existing.FilePath != "" {
+		g.logger.Debug("reusing existing illustration", "fingerprint", fingerprint)
+		return existing, nil
+	}
+
+	req := imgprov.ImageRequest{
+		Prompt:       prompt,
+		Style:        style,
+		RepositoryID: repo.ID,
+	}
+	req.SetDefaults()
+
+	result, err := g.providers.GenerateImage(ctx, req)
+	if err != nil {
+		g.logger.Warn("illustration generation failed, skipping",
+			"repository_id", repo.ID, "error", err)
+		return nil, nil
+	}
+
+	imageData := result.Data
+	fileName := fmt.Sprintf("%s.%s", computeContentHash(imageData), result.Format)
+	filePath := filepath.Join(g.imageDir, fileName)
+
+	if err := os.MkdirAll(g.imageDir, 0o755); err != nil {
+		return nil, fmt.Errorf("create illustration dir: %w", err)
+	}
+	if len(imageData) > 0 {
+		if err := os.WriteFile(filePath, imageData, 0o644); err != nil {
+			return nil, fmt.Errorf("write illustration file: %w", err)
+		}
+	} else if result.URL != "" {
+		filePath = result.URL
+	}
+
+	ill := &models.Illustration{
+		// generated_content_id is NOT NULL + FK to generated_contents in the
+		// current schema; revisions have no generated_contents row, so we
+		// use repo.ID as a transitional placeholder. See method doc comment.
+		GeneratedContentID: repo.ID,
+		RepositoryID:       repo.ID,
+		FilePath:           filePath,
+		ImageURL:           result.URL,
+		Prompt:             prompt,
+		Style:              style,
+		ProviderUsed:       result.Provider,
+		Format:             result.Format,
+		ContentHash:        computeContentHash(imageData),
+		Fingerprint:        fingerprint,
+	}
+	ill.GenerateID()
+	ill.SetDefaults()
+
+	if err := g.store.Create(ctx, ill); err != nil {
+		g.logger.Error("failed to store illustration metadata", "error", err)
+		// Best-effort: return the in-memory illustration so the revision at
+		// least gets an ID and file path. The missing row in the store is a
+		// telemetry loss, not data loss.
+	}
+	return ill, nil
+}
+
 func computeFingerprint(prompt, style string) string {
 	h := sha256.Sum256([]byte(prompt + style))
 	return hex.EncodeToString(h[:])
