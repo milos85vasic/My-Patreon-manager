@@ -10,6 +10,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -1012,5 +1014,170 @@ func TestRunProcessScheduled_TickFiresAndSurvivesRunError(t *testing.T) {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("runProcessScheduled did not return after ctx cancel")
+	}
+}
+
+// TestNewIllustrationCleanupFn_DeletesInsidePrefix covers the happy path:
+// a file that sits inside the illustration directory is removed by the
+// returned closure.
+func TestNewIllustrationCleanupFn_DeletesInsidePrefix(t *testing.T) {
+	tmp := t.TempDir()
+	filePath := filepath.Join(tmp, "inside.png")
+	if err := os.WriteFile(filePath, []byte("bytes"), 0o644); err != nil {
+		t.Fatalf("seed file: %v", err)
+	}
+
+	fn := newIllustrationCleanupFn(tmp)
+	if err := fn(filePath); err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+	if _, err := os.Stat(filePath); !os.IsNotExist(err) {
+		t.Fatalf("file should be gone; stat err = %v", err)
+	}
+}
+
+// TestNewIllustrationCleanupFn_RefusesOutsidePrefix ensures the closure
+// silently no-ops on paths outside the allowed prefix; nothing is removed
+// from disk and no error is returned.
+func TestNewIllustrationCleanupFn_RefusesOutsidePrefix(t *testing.T) {
+	allowed := t.TempDir()
+	outside := t.TempDir()
+	filePath := filepath.Join(outside, "outside.png")
+	if err := os.WriteFile(filePath, []byte("bytes"), 0o644); err != nil {
+		t.Fatalf("seed file: %v", err)
+	}
+
+	fn := newIllustrationCleanupFn(allowed)
+	if err := fn(filePath); err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+	if _, err := os.Stat(filePath); err != nil {
+		t.Fatalf("file outside prefix must remain: %v", err)
+	}
+}
+
+// TestNewIllustrationCleanupFn_EmptyInputs covers the guards on empty
+// path and empty allowed-dir config. Both must be no-ops that do not
+// touch the filesystem.
+func TestNewIllustrationCleanupFn_EmptyInputs(t *testing.T) {
+	fn := newIllustrationCleanupFn("")
+	if err := fn("/anywhere"); err != nil {
+		t.Fatalf("empty dir must no-op: %v", err)
+	}
+	fn2 := newIllustrationCleanupFn("/tmp")
+	if err := fn2(""); err != nil {
+		t.Fatalf("empty path must no-op: %v", err)
+	}
+	// Also cover "." (treated as empty config).
+	fn3 := newIllustrationCleanupFn(".")
+	if err := fn3("/somewhere"); err != nil {
+		t.Fatalf(". dir must no-op: %v", err)
+	}
+}
+
+// TestNewIllustrationCleanupFn_PrefixCollisionGuard ensures a sibling
+// directory whose name starts with the allowed dir (e.g. foo/illus vs
+// foo/illus-evil) is not treated as inside the prefix.
+func TestNewIllustrationCleanupFn_PrefixCollisionGuard(t *testing.T) {
+	base := t.TempDir()
+	allowed := filepath.Join(base, "illus")
+	sibling := filepath.Join(base, "illus-evil")
+	if err := os.MkdirAll(sibling, 0o755); err != nil {
+		t.Fatalf("mkdir sibling: %v", err)
+	}
+	siblingFile := filepath.Join(sibling, "x.png")
+	if err := os.WriteFile(siblingFile, []byte("x"), 0o644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	fn := newIllustrationCleanupFn(allowed)
+	if err := fn(siblingFile); err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+	if _, err := os.Stat(siblingFile); err != nil {
+		t.Fatalf("sibling file must NOT be deleted: %v", err)
+	}
+}
+
+// TestRunProcess_CleansOrphanedIllustrationFile is an end-to-end guard:
+// seed a repo with an up-to-date revision plus a rejected older one that
+// has an illustration under ILLUSTRATION_DIR; runProcess's prune step
+// must delete both the row and the file.
+func TestRunProcess_CleansOrphanedIllustrationFile(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+
+	_, err := db.DB().ExecContext(ctx,
+		`INSERT INTO repositories (id, service, owner, name, url, https_url, last_commit_sha) VALUES (?,?,?,?,?,?,?)`,
+		"r", "github", "o", "n", "u", "h", "sha1")
+	if err != nil {
+		t.Fatalf("seed repo: %v", err)
+	}
+
+	illDir := t.TempDir()
+	filePath := filepath.Join(illDir, "orphan.png")
+	if err := os.WriteFile(filePath, []byte("img"), 0o644); err != nil {
+		t.Fatalf("seed file: %v", err)
+	}
+	ill := &models.Illustration{
+		RepositoryID: "r", FilePath: filePath,
+		Prompt: "p", Style: "s", ProviderUsed: "stub",
+		ContentHash: "hash", Fingerprint: "fp",
+		CreatedAt: time.Now().UTC(),
+	}
+	ill.GenerateID()
+	ill.SetDefaults()
+	if err := db.Illustrations().Create(ctx, ill); err != nil {
+		t.Fatalf("create illustration: %v", err)
+	}
+
+	// Two rejected revisions; v1 holds the illustration. keepTop=1 leaves v2
+	// and prunes v1.
+	illID := ill.ID
+	rev1 := &models.ContentRevision{
+		ID: "rv1", RepositoryID: "r", Version: 1, Source: "generated",
+		Status: models.RevisionStatusRejected, Title: "T", Body: "B",
+		Fingerprint: "f1", SourceCommitSHA: "sha1", Author: "system",
+		IllustrationID: &illID,
+		CreatedAt:      time.Now().UTC(),
+	}
+	rev2 := &models.ContentRevision{
+		ID: "rv2", RepositoryID: "r", Version: 2, Source: "generated",
+		Status: models.RevisionStatusRejected, Title: "T", Body: "B",
+		Fingerprint: "f2", SourceCommitSHA: "sha1", Author: "system",
+		CreatedAt:   time.Now().UTC(),
+	}
+	if err := db.ContentRevisions().Create(ctx, rev1); err != nil {
+		t.Fatalf("seed rev1: %v", err)
+	}
+	if err := db.ContentRevisions().Create(ctx, rev2); err != nil {
+		t.Fatalf("seed rev2: %v", err)
+	}
+	if err := db.Repositories().SetRevisionPointers(ctx, "r", "rv2", ""); err != nil {
+		t.Fatalf("set pointers: %v", err)
+	}
+
+	cfg := baseProcessCfg()
+	cfg.MaxRevisions = 1
+	cfg.IllustrationDir = illDir
+	deps := processDeps{
+		PatreonClient: procStubPatreonClient{},
+		Scanner:       func(context.Context) error { return nil },
+		Generator:     &procStubGenerator{title: "T", body: "B"},
+		Logger:        discardProcessLogger(),
+	}
+	if err := runProcess(ctx, cfg, db, deps); err != nil {
+		t.Fatalf("runProcess: %v", err)
+	}
+
+	if _, err := os.Stat(filePath); !os.IsNotExist(err) {
+		t.Fatalf("illustration file should be removed; stat err = %v", err)
+	}
+	got, err := db.Illustrations().GetByID(ctx, illID)
+	if err != nil {
+		t.Fatalf("GetByID: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("illustration row should be gone; got %+v", got)
 	}
 }

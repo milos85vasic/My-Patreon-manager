@@ -3,6 +3,9 @@ package process_test
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -77,7 +80,7 @@ func TestPruner_PinsPublishedAndInFlight(t *testing.T) {
 	}
 
 	// keepTop=2: nothing to delete. v4,v5 are inside top-2; v1-v3 are pinned.
-	n, err := process.Prune(ctx, db, 2)
+	n, err := process.Prune(ctx, db, 2, nil)
 	if err != nil {
 		t.Fatalf("Prune(2): %v", err)
 	}
@@ -86,7 +89,7 @@ func TestPruner_PinsPublishedAndInFlight(t *testing.T) {
 	}
 
 	// keepTop=1: only v5 is inside the window. v4 is outside AND unpinned -> delete.
-	n, err = process.Prune(ctx, db, 1)
+	n, err = process.Prune(ctx, db, 1, nil)
 	if err != nil {
 		t.Fatalf("Prune(1): %v", err)
 	}
@@ -135,7 +138,7 @@ func TestPruner_MultipleRepos(t *testing.T) {
 	mustCreate(mkPruneRev("r2a", "r2", 1, models.RevisionStatusRejected, false))
 	mustCreate(mkPruneRev("r2b", "r2", 2, models.RevisionStatusRejected, false))
 
-	n, err := process.Prune(ctx, db, 1)
+	n, err := process.Prune(ctx, db, 1, nil)
 	if err != nil {
 		t.Fatalf("Prune: %v", err)
 	}
@@ -156,7 +159,7 @@ func TestPruner_MultipleRepos(t *testing.T) {
 // TestPruner_EmptyDB returns (0, nil) with no repos.
 func TestPruner_EmptyDB(t *testing.T) {
 	db := testhelpers.OpenMigratedSQLite(t)
-	n, err := process.Prune(context.Background(), db, 10)
+	n, err := process.Prune(context.Background(), db, 10, nil)
 	if err != nil {
 		t.Fatalf("Prune: %v", err)
 	}
@@ -171,7 +174,7 @@ func TestPruner_EmptyDB(t *testing.T) {
 func TestPruner_ListForProcessQueueError(t *testing.T) {
 	db := testhelpers.OpenMigratedSQLite(t)
 	_ = db.Close()
-	n, err := process.Prune(context.Background(), db, 1)
+	n, err := process.Prune(context.Background(), db, 1, nil)
 	if err == nil {
 		t.Fatal("expected error from closed DB at ListForProcessQueue")
 	}
@@ -193,7 +196,7 @@ func TestPruner_ListForRetentionError(t *testing.T) {
 	if _, err := db.DB().ExecContext(ctx, `DROP TABLE content_revisions`); err != nil {
 		t.Fatalf("drop: %v", err)
 	}
-	n, err := process.Prune(ctx, db, 1)
+	n, err := process.Prune(ctx, db, 1, nil)
 	if err == nil {
 		t.Fatal("expected error from missing content_revisions at ListForRetention")
 	}
@@ -226,7 +229,7 @@ func TestPruner_DeleteError(t *testing.T) {
 			}
 		},
 	}
-	n, err := process.Prune(ctx, w, 1)
+	n, err := process.Prune(ctx, w, 1, nil)
 	if err != wantErr {
 		t.Fatalf("want %v, got %v", wantErr, err)
 	}
@@ -249,10 +252,12 @@ type deleteErrRevStore struct {
 func (d *deleteErrRevStore) Delete(_ context.Context, _ string) error { return d.err }
 
 // pruneWrapDB mirrors the wrapDB in pipeline_test.go but lets us swap the
-// ContentRevisions store specifically. Other methods delegate to inner.
+// ContentRevisions and Illustrations stores specifically. Other methods
+// delegate to inner.
 type pruneWrapDB struct {
 	inner database.Database
 	revs  func() database.ContentRevisionStore
+	ills  func() database.IllustrationStore
 }
 
 func (w *pruneWrapDB) Connect(ctx context.Context, dsn string) error { return w.inner.Connect(ctx, dsn) }
@@ -270,6 +275,9 @@ func (w *pruneWrapDB) ContentTemplates() database.ContentTemplateStore {
 func (w *pruneWrapDB) Posts() database.PostStore              { return w.inner.Posts() }
 func (w *pruneWrapDB) AuditEntries() database.AuditEntryStore { return w.inner.AuditEntries() }
 func (w *pruneWrapDB) Illustrations() database.IllustrationStore {
+	if w.ills != nil {
+		return w.ills()
+	}
 	return w.inner.Illustrations()
 }
 func (w *pruneWrapDB) ContentRevisions() database.ContentRevisionStore {
@@ -293,3 +301,244 @@ func (w *pruneWrapDB) IsLocked(ctx context.Context) (bool, *database.SyncLock, e
 }
 func (w *pruneWrapDB) BeginTx(ctx context.Context) (*sql.Tx, error) { return w.inner.BeginTx(ctx) }
 func (w *pruneWrapDB) Dialect() string                              { return w.inner.Dialect() }
+
+// seedIllustration inserts an illustration row and writes a real file at
+// filePath so the cleanup closure has something to remove. Returns the
+// illustration's generated ID.
+func seedIllustration(t *testing.T, db *database.SQLiteDB, repoID, filePath, fingerprint string) string {
+	t.Helper()
+	ctx := context.Background()
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+		t.Fatalf("mkdir illustration parent: %v", err)
+	}
+	if err := os.WriteFile(filePath, []byte("image-bytes"), 0o644); err != nil {
+		t.Fatalf("write illustration file: %v", err)
+	}
+	ill := &models.Illustration{
+		RepositoryID: repoID,
+		FilePath:     filePath,
+		Prompt:       "p",
+		Style:        "s",
+		ProviderUsed: "stub",
+		ContentHash:  "hash",
+		Fingerprint:  fingerprint,
+		CreatedAt:    time.Now().UTC(),
+	}
+	ill.GenerateID()
+	ill.SetDefaults()
+	if err := db.Illustrations().Create(ctx, ill); err != nil {
+		t.Fatalf("create illustration: %v", err)
+	}
+	return ill.ID
+}
+
+// TestPrune_DeletesOrphanedIllustration exercises the happy path of the
+// illustration-cleanup branch: a pruned revision with a non-nil
+// IllustrationID must (a) delete the illustration row and (b) call the
+// injected cleanup closure with the illustration's file path.
+func TestPrune_DeletesOrphanedIllustration(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	seedRepoForPrune(t, db, "r1")
+
+	tmp := t.TempDir()
+	filePath := filepath.Join(tmp, "orphan.png")
+	illID := seedIllustration(t, db, "r1", filePath, "fp-orphan")
+
+	// v1: rejected + has illustration -> prunable with keepTop=1.
+	rev := mkPruneRev("a", "r1", 1, models.RevisionStatusRejected, false)
+	rev.IllustrationID = &illID
+	if err := db.ContentRevisions().Create(ctx, rev); err != nil {
+		t.Fatalf("create rev: %v", err)
+	}
+	// v2: a rejected survivor so keepTop=1 leaves v2 in place and prunes v1.
+	rev2 := mkPruneRev("b", "r1", 2, models.RevisionStatusRejected, false)
+	if err := db.ContentRevisions().Create(ctx, rev2); err != nil {
+		t.Fatalf("create rev2: %v", err)
+	}
+
+	var cleanedPaths []string
+	cleanupFn := func(p string) error {
+		cleanedPaths = append(cleanedPaths, p)
+		return os.Remove(p)
+	}
+
+	n, err := process.Prune(ctx, db, 1, cleanupFn)
+	if err != nil {
+		t.Fatalf("Prune: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("want 1 delete, got %d", n)
+	}
+	if len(cleanedPaths) != 1 || cleanedPaths[0] != filePath {
+		t.Fatalf("cleanup not invoked correctly: %v", cleanedPaths)
+	}
+	if _, statErr := os.Stat(filePath); !os.IsNotExist(statErr) {
+		t.Fatalf("illustration file still exists on disk (stat err = %v)", statErr)
+	}
+	// Illustration row gone.
+	got, err := db.Illustrations().GetByID(ctx, illID)
+	if err != nil {
+		t.Fatalf("GetByID: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("illustration row should be gone; got %+v", got)
+	}
+}
+
+// TestPrune_CleanupFnRejectsPathOutsideIllustrationDir ensures that the
+// caller's safety check (wired via the cleanupFn closure) can refuse a
+// path outside the allowed prefix. The revision row is still deleted, and
+// the on-disk file is left untouched.
+func TestPrune_CleanupFnRejectsPathOutsideIllustrationDir(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	seedRepoForPrune(t, db, "r1")
+
+	tmp := t.TempDir()
+	outsidePath := filepath.Join(tmp, "outside.png")
+	if err := os.WriteFile(outsidePath, []byte("x"), 0o644); err != nil {
+		t.Fatalf("seed outside file: %v", err)
+	}
+	illID := seedIllustration(t, db, "r1", outsidePath, "fp-outside")
+
+	rev := mkPruneRev("a", "r1", 1, models.RevisionStatusRejected, false)
+	rev.IllustrationID = &illID
+	if err := db.ContentRevisions().Create(ctx, rev); err != nil {
+		t.Fatalf("create rev: %v", err)
+	}
+	rev2 := mkPruneRev("b", "r1", 2, models.RevisionStatusRejected, false)
+	if err := db.ContentRevisions().Create(ctx, rev2); err != nil {
+		t.Fatalf("create rev2: %v", err)
+	}
+
+	// Simulate the production closure that refuses paths outside its
+	// configured illustration dir. We allow only "/nonexistent", so the
+	// outside path is rejected.
+	var cleanupCalls int
+	cleanupFn := func(_ string) error {
+		cleanupCalls++
+		return nil // no-op: path refused by caller
+	}
+
+	n, err := process.Prune(ctx, db, 1, cleanupFn)
+	if err != nil {
+		t.Fatalf("Prune: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("want 1 revision deleted, got %d", n)
+	}
+	if cleanupCalls != 1 {
+		t.Fatalf("cleanupFn should be called exactly once, was %d", cleanupCalls)
+	}
+	if _, err := os.Stat(outsidePath); err != nil {
+		t.Fatalf("file outside prefix should NOT be removed: %v", err)
+	}
+	// Illustration row is still deleted by the pruner regardless of whether
+	// the file on disk was removable.
+	got, err := db.Illustrations().GetByID(ctx, illID)
+	if err != nil {
+		t.Fatalf("GetByID: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("illustration row should be gone; got %+v", got)
+	}
+}
+
+// TestPrune_NoIllustration covers the baseline: a revision without
+// IllustrationID is pruned cleanly and the cleanup closure is never called.
+func TestPrune_NoIllustration(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	seedRepoForPrune(t, db, "r1")
+
+	rev1 := mkPruneRev("a", "r1", 1, models.RevisionStatusRejected, false)
+	rev2 := mkPruneRev("b", "r1", 2, models.RevisionStatusRejected, false)
+	if err := db.ContentRevisions().Create(ctx, rev1); err != nil {
+		t.Fatalf("create rev1: %v", err)
+	}
+	if err := db.ContentRevisions().Create(ctx, rev2); err != nil {
+		t.Fatalf("create rev2: %v", err)
+	}
+
+	var called bool
+	cleanupFn := func(_ string) error {
+		called = true
+		return nil
+	}
+	n, err := process.Prune(ctx, db, 1, cleanupFn)
+	if err != nil {
+		t.Fatalf("Prune: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("want 1 delete, got %d", n)
+	}
+	if called {
+		t.Fatal("cleanupFn should not be called when revision has no illustration")
+	}
+}
+
+// TestPrune_IllustrationGetError_StillDeletesRevision exercises the branch
+// where fetching the illustration from the DB returns an error; the
+// revision deletion must still proceed so retention is not blocked.
+func TestPrune_IllustrationGetError_StillDeletesRevision(t *testing.T) {
+	inner := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	seedRepoForPrune(t, inner, "r1")
+
+	fakeID := "ill_fake"
+	rev1 := mkPruneRev("a", "r1", 1, models.RevisionStatusRejected, false)
+	rev1.IllustrationID = &fakeID
+	rev2 := mkPruneRev("b", "r1", 2, models.RevisionStatusRejected, false)
+	if err := inner.ContentRevisions().Create(ctx, rev1); err != nil {
+		t.Fatalf("seed rev1: %v", err)
+	}
+	if err := inner.ContentRevisions().Create(ctx, rev2); err != nil {
+		t.Fatalf("seed rev2: %v", err)
+	}
+
+	w := &pruneWrapDB{
+		inner: inner,
+		ills: func() database.IllustrationStore {
+			return &illGetErrStore{
+				IllustrationStore: inner.Illustrations(),
+				err:               errors.New("get-boom"),
+			}
+		},
+	}
+
+	var cleanupCalls int
+	n, err := process.Prune(ctx, w, 1, func(_ string) error {
+		cleanupCalls++
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Prune should not propagate illustration GetByID errors: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("want 1 revision deleted, got %d", n)
+	}
+	if cleanupCalls != 0 {
+		t.Fatalf("cleanupFn must not be called when GetByID fails; was %d", cleanupCalls)
+	}
+	// The pruned revision is gone.
+	survivors, err := inner.ContentRevisions().ListAll(ctx, "r1")
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(survivors) != 1 || survivors[0].ID != "b" {
+		t.Fatalf("unexpected survivors: %+v", survivors)
+	}
+}
+
+// illGetErrStore returns an error from GetByID; every other method
+// delegates to the embedded real store.
+type illGetErrStore struct {
+	database.IllustrationStore
+	err error
+}
+
+func (s *illGetErrStore) GetByID(_ context.Context, _ string) (*models.Illustration, error) {
+	return nil, s.err
+}
+

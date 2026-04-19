@@ -6,6 +6,15 @@ import (
 	"github.com/milos85vasic/My-Patreon-Manager/internal/database"
 )
 
+// IllustrationCleanupFn removes the on-disk illustration file at the given
+// absolute path if (and only if) it lies under the configured illustration
+// directory. Implementations MUST enforce the prefix check themselves — the
+// pruner passes whatever FilePath the illustration row holds and delegates
+// the sanity check to the closure. Returning a non-nil error is non-fatal:
+// the pruner logs nothing and simply continues; callers wire in logging at
+// the injection site if they care.
+type IllustrationCleanupFn func(filePath string) error
+
 // Prune removes content_revisions rows that are (a) below the top-keepTop
 // by version for their repo, (b) unpublished, and (c) neither approved
 // nor pending_review. Revisions that ever reached Patreon or that are in
@@ -16,7 +25,15 @@ import (
 // which applies every pin rule; the pruner simply deletes whatever the
 // store returns. This keeps the retention policy centralized in the store
 // and keeps the pruner thin enough to be obviously correct.
-func Prune(ctx context.Context, db database.Database, keepTop int) (int, error) {
+//
+// When a pruned revision has a non-nil IllustrationID, the pruner also
+// deletes the illustration row and, via the supplied cleanupFn, the
+// on-disk image file. A nil cleanupFn skips on-disk cleanup but still
+// removes the illustration DB row (tests rely on this). Errors fetching
+// or deleting the illustration are tolerated so they cannot block revision
+// deletion — an illustration left behind is a telemetry loss, not data
+// loss, whereas a revision left behind breaks the retention contract.
+func Prune(ctx context.Context, db database.Database, keepTop int, cleanupFn IllustrationCleanupFn) (int, error) {
 	repos, err := db.Repositories().ListForProcessQueue(ctx)
 	if err != nil {
 		return 0, err
@@ -28,6 +45,18 @@ func Prune(ctx context.Context, db database.Database, keepTop int) (int, error) 
 			return total, err
 		}
 		for _, c := range cands {
+			// Best-effort illustration cleanup before deleting the
+			// revision row. Any error here is swallowed so the revision
+			// delete can still proceed.
+			if c.IllustrationID != nil && *c.IllustrationID != "" {
+				ill, illErr := db.Illustrations().GetByID(ctx, *c.IllustrationID)
+				if illErr == nil && ill != nil {
+					_ = db.Illustrations().Delete(ctx, ill.ID)
+					if cleanupFn != nil && ill.FilePath != "" {
+						_ = cleanupFn(ill.FilePath)
+					}
+				}
+			}
 			if err := db.ContentRevisions().Delete(ctx, c.ID); err != nil {
 				return total, err
 			}

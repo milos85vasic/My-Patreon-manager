@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -143,7 +145,7 @@ func runProcess(ctx context.Context, cfg *config.Config, db database.Database, d
 		draftsCreated++
 	}
 
-	if _, err := process.Prune(ctx, db, cfg.MaxRevisions); err != nil {
+	if _, err := process.Prune(ctx, db, cfg.MaxRevisions, newIllustrationCleanupFn(cfg.IllustrationDir)); err != nil {
 		_ = releaseWith(err.Error())
 		return fmt.Errorf("prune: %w", err)
 	}
@@ -308,6 +310,37 @@ func buildProcessDeps(_ *config.Config, _ database.Database, logger *slog.Logger
 		Generator:       articleGen,
 		IllustrationGen: illustGen,
 		Logger:          logger,
+	}
+}
+
+// newIllustrationCleanupFn returns a process.IllustrationCleanupFn that
+// deletes `path` only when its cleaned form lies under `illustrationDir`.
+// The safety check guards against a mis-configured or adversarially-populated
+// illustrations row pointing the pruner at an arbitrary filesystem path.
+// Paths outside the allowed prefix are silently skipped (no error returned)
+// so the pruner continues to delete the DB row regardless.
+//
+// An empty illustrationDir returns a closure that refuses every path —
+// safer than implicitly allowing all paths when the config is incomplete.
+func newIllustrationCleanupFn(illustrationDir string) process.IllustrationCleanupFn {
+	allowed := filepath.Clean(illustrationDir)
+	return func(path string) error {
+		if path == "" || allowed == "" || allowed == "." {
+			return nil
+		}
+		cleaned := filepath.Clean(path)
+		// Only delete files that sit inside the configured directory. We
+		// compare against the cleaned allowed prefix with a trailing
+		// separator so a file named like the directory (e.g. "./data/illustrations"
+		// vs "./data/illustrations-evil/foo") does not accidentally match.
+		prefix := allowed
+		if !strings.HasSuffix(prefix, string(filepath.Separator)) {
+			prefix += string(filepath.Separator)
+		}
+		if cleaned != allowed && !strings.HasPrefix(cleaned, prefix) {
+			return nil
+		}
+		return os.Remove(cleaned)
 	}
 }
 
