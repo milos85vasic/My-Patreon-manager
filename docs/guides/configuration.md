@@ -178,6 +178,19 @@ Core design decisions enforced by this pipeline:
 - **Single-runner lock.** `PROCESS_LOCK_HEARTBEAT_SECONDS` drives the `process_runs` heartbeat. Stale rows (~10x heartbeat) are reclaimable as `crashed`, so operators don't have to intervene manually after an ungraceful exit.
 - **Drift detection.** Before republishing, `publish` verifies the live Patreon post matches the last known revision. `DRIFT_CHECK_SKIP_MINUTES` caches a recent successful check; any mismatch halts that repo until an operator resolves the drift via the preview UI.
 
+#### First-run Patreon-post matching
+
+The first-run importer needs to decide which existing Patreon posts belong to which local repos. It uses a four-layer cascade (strongest layer first, first match wins):
+
+1. **Explicit tag.** Post body contains a literal `repo:<id>` token where `<id>` equals a local repository ID (case-insensitive). This is the most reliable layer and the recommended one for new campaigns — adding `repo:<id>` to your Patreon post body guarantees a correct match regardless of title or wording.
+2. **Embedded repository URL.** Post body contains the repo's `URL` or `HTTPSURL`. Comparison is case-insensitive and trailing-slash-insensitive, so `https://github.com/you/project/` in your post body matches a stored `https://github.com/you/project` (and vice versa). Obviously-non-URL placeholders (`u`, `h`) are ignored.
+3. **Repo slug in post title.** The post title contains `owner/name` or `name` as a whole word — bounded by whitespace, punctuation, or the string edges. This catches titles like `"acme/widget v2.0"` or `"hello-world — release notes"` while avoiding mashed-together false positives.
+4. **Case-insensitive substring in title.** The original v1 heuristic, retained as a fuzzy fallback for legacy titles.
+
+Posts that miss all four layers land in `unmatched_patreon_posts` for operators to link manually via the preview UI.
+
+**Operator tip:** when importing an existing campaign, the cheapest way to get 100% match rate is to edit each Patreon post once and add `repo:<id>` anywhere in the body (it can live at the very bottom — the layer is a plain substring search, not a structured parse).
+
 #### Interaction with Other Commands
 
 | Command | Relationship |

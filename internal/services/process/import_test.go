@@ -167,7 +167,13 @@ func TestImporter_MatchedOverlaps_FirstRepoInSliceWins(t *testing.T) {
 	ctx := context.Background()
 	// Two repos whose names both appear in the post title. List() orders
 	// rows by insertion (no ORDER BY), so the importer should pick
-	// whichever comes first in repos.
+	// whichever comes first in repos when the strongest-matching layer
+	// returns multiple candidates.
+	//
+	// Under the layered matcher: "alphabet update" has "alphabet" as a
+	// whole word, which matches the r2 slug (stronger layer) before r1
+	// can win via substring. Precedence of layer > slice order is part
+	// of the design.
 	seedRepoUpsert(t, db, "r1", "alpha")
 	seedRepoUpsert(t, db, "r2", "alphabet")
 
@@ -182,11 +188,47 @@ func TestImporter_MatchedOverlaps_FirstRepoInSliceWins(t *testing.T) {
 	if n != 1 {
 		t.Fatalf("want 1 matched, got %d", n)
 	}
-	// "alpha" appears first in the repos slice and "alpha" IS a substring
-	// of "alphabet update" — so r1 wins.
+	// r2 wins because its name "alphabet" matches as a whole word
+	// (stronger slug layer), while "alpha" would only match via the
+	// substring fallback.
+	revs, _ := db.ContentRevisions().ListByRepoStatus(ctx, "r2", "approved")
+	if len(revs) != 1 {
+		t.Fatalf("r2 should have won via slug layer: %+v", revs)
+	}
+	r1revs, _ := db.ContentRevisions().ListByRepoStatus(ctx, "r1", "approved")
+	if len(r1revs) != 0 {
+		t.Fatalf("r1 must not match when r2 wins on a stronger layer: %+v", r1revs)
+	}
+}
+
+// TestImporter_MatchedOverlaps_SameLayer_FirstRepoWins keeps the
+// original "first repo in slice wins" guarantee for cases where two
+// repos both match on the same layer. We use the substring fallback
+// with "alpha" / "alphazz" against a title that doesn't form whole
+// words for either — both lose the slug layer and fall through to
+// substring, where slice order decides.
+func TestImporter_MatchedOverlaps_SameLayer_FirstRepoWins(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	seedRepoUpsert(t, db, "r1", "alpha")
+	seedRepoUpsert(t, db, "r2", "alphazz")
+
+	client := &fakePatreon{posts: []process.PatreonPost{
+		// "alphazzupdate" contains both "alpha" and "alphazz" as
+		// substrings, but neither is a whole word.
+		{ID: "p", Title: "alphazzupdate", Content: "body", URL: "u"},
+	}}
+	imp := process.NewImporter(db, client, "camp")
+	n, err := imp.ImportFirstRun(ctx)
+	if err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("want 1 matched, got %d", n)
+	}
 	revs, _ := db.ContentRevisions().ListByRepoStatus(ctx, "r1", "approved")
 	if len(revs) != 1 {
-		t.Fatalf("r1 should have won: %+v", revs)
+		t.Fatalf("r1 should have won on same-layer slice order: %+v", revs)
 	}
 }
 
@@ -367,6 +409,284 @@ func TestImporter_UnmatchedRecordError(t *testing.T) {
 	_, err := imp.ImportFirstRun(context.Background())
 	if err == nil {
 		t.Fatal("expected unmatched record error")
+	}
+}
+
+// ---------------------------------------------------------------------
+// Layered matching tests
+// ---------------------------------------------------------------------
+
+// TestImporter_MatchByTag verifies an explicit `repo:<id>` in post
+// content routes to that repo even when another repo's name appears
+// in the title.
+func TestImporter_MatchByTag(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	// r1 has id "r1" and an unrelated name so only the tag can pick it.
+	seedRepoUpsert(t, db, "r1", "some-other-name")
+	// r2's name appears in the post title but should lose to the tag.
+	seedRepoUpsert(t, db, "r2", "hello-world")
+
+	client := &fakePatreon{posts: []process.PatreonPost{{
+		ID:      "p1",
+		Title:   "hello-world release notes",
+		Content: "see also repo:r1 for details",
+		URL:     "u",
+	}}}
+	imp := process.NewImporter(db, client, "camp")
+	n, err := imp.ImportFirstRun(ctx)
+	if err != nil || n != 1 {
+		t.Fatalf("import: n=%d err=%v", n, err)
+	}
+	revs, _ := db.ContentRevisions().ListByRepoStatus(ctx, "r1", "approved")
+	if len(revs) != 1 {
+		t.Fatalf("tag should route to r1: %+v", revs)
+	}
+	r2revs, _ := db.ContentRevisions().ListByRepoStatus(ctx, "r2", "approved")
+	if len(r2revs) != 0 {
+		t.Fatalf("r2 must not match when tag is present: %+v", r2revs)
+	}
+}
+
+// TestImporter_MatchByURL_HTTPS verifies embedded HTTPS URLs route to
+// the repo whose HTTPSURL matches.
+func TestImporter_MatchByURL_HTTPS(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	// Use the raw SQL path so both url and https_url are set
+	// explicitly — seedRepoUpsert only sets placeholder values.
+	_, err := db.DB().ExecContext(ctx,
+		`INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES ('r1','github','foo','bar','git@github.com:foo/bar.git','https://github.com/foo/bar')`)
+	if err != nil {
+		t.Fatalf("seed r1: %v", err)
+	}
+	seedRepoUpsert(t, db, "r2", "unrelated")
+
+	client := &fakePatreon{posts: []process.PatreonPost{{
+		ID:      "p1",
+		Title:   "Fresh release",
+		Content: "Full details at https://github.com/foo/bar — enjoy!",
+		URL:     "u",
+	}}}
+	imp := process.NewImporter(db, client, "camp")
+	if _, err := imp.ImportFirstRun(ctx); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	revs, _ := db.ContentRevisions().ListByRepoStatus(ctx, "r1", "approved")
+	if len(revs) != 1 {
+		t.Fatalf("HTTPSURL match should route to r1: %+v", revs)
+	}
+}
+
+// TestImporter_MatchByURL_Normalization verifies the URL comparison is
+// insensitive to a trailing slash and host casing.
+func TestImporter_MatchByURL_Normalization(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	// Stored URL has no trailing slash; the post body has one.
+	_, err := db.DB().ExecContext(ctx,
+		`INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES ('r1','github','foo','bar','git@github.com:foo/bar.git','https://github.com/foo/bar')`)
+	if err != nil {
+		t.Fatalf("seed r1: %v", err)
+	}
+	// Stored URL has a trailing slash; the post body has none.
+	_, err = db.DB().ExecContext(ctx,
+		`INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES ('r2','github','acme','widget','git@github.com:acme/widget.git','https://github.com/acme/widget/')`)
+	if err != nil {
+		t.Fatalf("seed r2: %v", err)
+	}
+
+	client := &fakePatreon{posts: []process.PatreonPost{
+		{
+			ID:      "p1",
+			Title:   "release for r1",
+			Content: "Project home: HTTPS://GitHub.com/foo/bar/ (follow for updates)",
+			URL:     "u",
+		},
+		{
+			ID:      "p2",
+			Title:   "release for r2",
+			Content: "Source: https://github.com/acme/widget — star it!",
+			URL:     "u",
+		},
+	}}
+	imp := process.NewImporter(db, client, "camp")
+	if _, err := imp.ImportFirstRun(ctx); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	r1revs, _ := db.ContentRevisions().ListByRepoStatus(ctx, "r1", "approved")
+	if len(r1revs) != 1 {
+		t.Fatalf("trailing-slash-in-content should still match r1: %+v", r1revs)
+	}
+	r2revs, _ := db.ContentRevisions().ListByRepoStatus(ctx, "r2", "approved")
+	if len(r2revs) != 1 {
+		t.Fatalf("trailing-slash-in-stored-url should still match r2: %+v", r2revs)
+	}
+}
+
+// TestImporter_MatchBySlug_WholeWord verifies that slug matching
+// respects whole-word boundaries, and that titles without those
+// boundaries still fall through to the substring fallback.
+func TestImporter_MatchBySlug_WholeWord(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	// Hyphenated repo — the slug layer matches "hello-world" as a whole
+	// token (bounded by whitespace / punctuation).
+	seedRepoUpsert(t, db, "r-hyphen", "hello-world")
+	// Plain-alnum repo — both slug and substring work; used to show the
+	// substring fallback kicks in when slug boundaries don't line up.
+	seedRepoUpsert(t, db, "r-plain", "helloworld")
+
+	client := &fakePatreon{posts: []process.PatreonPost{
+		// Whole-word match: slug layer picks r-hyphen.
+		{ID: "p1", Title: "release hello-world v1", Content: "b", URL: "u"},
+		// No word boundaries around "helloworld"; slug misses but
+		// substring fallback still matches r-plain.
+		{ID: "p2", Title: "releasehelloworldv1", Content: "b", URL: "u"},
+	}}
+	imp := process.NewImporter(db, client, "camp")
+	n, err := imp.ImportFirstRun(ctx)
+	if err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("expected both posts to match (slug and substring), got %d", n)
+	}
+
+	hyphen, _ := db.ContentRevisions().ListByRepoStatus(ctx, "r-hyphen", "approved")
+	if len(hyphen) != 1 {
+		t.Fatalf("r-hyphen should match p1 via slug: %+v", hyphen)
+	}
+	plain, _ := db.ContentRevisions().ListByRepoStatus(ctx, "r-plain", "approved")
+	if len(plain) != 1 {
+		t.Fatalf("r-plain should match p2 via substring fallback: %+v", plain)
+	}
+}
+
+// TestImporter_MatchBySlug_OwnerName verifies owner/name pairs match
+// in post titles.
+func TestImporter_MatchBySlug_OwnerName(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	_, err := db.DB().ExecContext(ctx,
+		`INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES ('r1','github','acme','project','u','h')`)
+	if err != nil {
+		t.Fatalf("seed r1: %v", err)
+	}
+	// A second repo whose name is also "project" but under a different
+	// owner — the owner/name slug must pick the right one.
+	_, err = db.DB().ExecContext(ctx,
+		`INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES ('r2','github','otherorg','project','u','h')`)
+	if err != nil {
+		t.Fatalf("seed r2: %v", err)
+	}
+
+	client := &fakePatreon{posts: []process.PatreonPost{{
+		ID:      "p1",
+		Title:   "acme/project update",
+		Content: "b",
+		URL:     "u",
+	}}}
+	imp := process.NewImporter(db, client, "camp")
+	if _, err := imp.ImportFirstRun(ctx); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	revs, _ := db.ContentRevisions().ListByRepoStatus(ctx, "r1", "approved")
+	if len(revs) != 1 {
+		t.Fatalf("owner/name slug should route to r1: %+v", revs)
+	}
+}
+
+// TestImporter_MatchBySubstring_Fallback verifies a repo name with no
+// word boundaries in the title still matches via substring.
+func TestImporter_MatchBySubstring_Fallback(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	seedRepoUpsert(t, db, "r", "helloworld")
+
+	client := &fakePatreon{posts: []process.PatreonPost{{
+		ID:      "p1",
+		Title:   "supersizedhelloworldrelease",
+		Content: "b",
+		URL:     "u",
+	}}}
+	imp := process.NewImporter(db, client, "camp")
+	n, err := imp.ImportFirstRun(ctx)
+	if err != nil || n != 1 {
+		t.Fatalf("substring fallback failed: n=%d err=%v", n, err)
+	}
+}
+
+// TestImporter_MatchPrecedence constructs a post matchable by every
+// layer and confirms the tag layer wins.
+func TestImporter_MatchPrecedence(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	// winner: explicit tag routes to r-tag, even though none of its
+	// identifying fields appear in the content/title.
+	_, err := db.DB().ExecContext(ctx,
+		`INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES ('r-tag','github','tagowner','tagrepo','https://example.com/tag','https://example.com/tag')`)
+	if err != nil {
+		t.Fatalf("seed r-tag: %v", err)
+	}
+	// r-url would win via URL layer if the tag weren't present.
+	_, err = db.DB().ExecContext(ctx,
+		`INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES ('r-url','github','urlowner','urlrepo','https://github.com/urlowner/urlrepo','https://github.com/urlowner/urlrepo')`)
+	if err != nil {
+		t.Fatalf("seed r-url: %v", err)
+	}
+	// r-slug would win via slug layer.
+	_, err = db.DB().ExecContext(ctx,
+		`INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES ('r-slug','github','slugowner','slugrepo','u','h')`)
+	if err != nil {
+		t.Fatalf("seed r-slug: %v", err)
+	}
+	// r-sub would win via substring fallback.
+	seedRepoUpsert(t, db, "r-sub", "subrepo")
+
+	client := &fakePatreon{posts: []process.PatreonPost{{
+		ID:      "p1",
+		Title:   "slugowner/slugrepo subrepo mashed release",
+		Content: "repo:r-tag — see https://github.com/urlowner/urlrepo for details",
+		URL:     "u",
+	}}}
+	imp := process.NewImporter(db, client, "camp")
+	if _, err := imp.ImportFirstRun(ctx); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	revs, _ := db.ContentRevisions().ListByRepoStatus(ctx, "r-tag", "approved")
+	if len(revs) != 1 {
+		t.Fatalf("tag must win precedence: %+v", revs)
+	}
+	for _, other := range []string{"r-url", "r-slug", "r-sub"} {
+		lost, _ := db.ContentRevisions().ListByRepoStatus(ctx, other, "approved")
+		if len(lost) != 0 {
+			t.Fatalf("non-tag repo %q should not have matched: %+v", other, lost)
+		}
+	}
+}
+
+// TestImporter_NoMatch_GoesToUnmatched documents that unmatched posts
+// still land in unmatched_patreon_posts after the layered heuristic.
+func TestImporter_NoMatch_GoesToUnmatched(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	seedRepoUpsert(t, db, "r", "nevermatched")
+
+	client := &fakePatreon{posts: []process.PatreonPost{{
+		ID:      "p1",
+		Title:   "Completely unrelated announcement",
+		Content: "no tag, no url, no slug",
+		URL:     "https://patreon.com/posts/1",
+	}}}
+	imp := process.NewImporter(db, client, "camp")
+	n, err := imp.ImportFirstRun(ctx)
+	if err != nil || n != 0 {
+		t.Fatalf("want n=0 err=nil, got n=%d err=%v", n, err)
+	}
+	pending, _ := db.UnmatchedPatreonPosts().ListPending(ctx)
+	if len(pending) != 1 || pending[0].PatreonPostID != "p1" {
+		t.Fatalf("unmatched not recorded: %+v", pending)
 	}
 }
 

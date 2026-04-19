@@ -3,7 +3,6 @@ package process
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -48,10 +47,11 @@ func NewImporter(db database.Database, client PatreonCampaignClient, campaignID 
 
 // ImportFirstRun pulls every post from the configured Patreon campaign
 // and records each one as either a version-1 patreon_import revision
-// (when the post title matches a local repo by case-insensitive
-// substring) or an unmatched_patreon_posts row. Matching is
-// deterministic: the first repo whose Name appears in the post title
-// (case-insensitive substring) wins.
+// (when the post matches a local repo via the layered heuristic in
+// matchRepoLayered) or an unmatched_patreon_posts row. Matching is
+// deterministic: the layered matcher tries tag → URL → slug →
+// substring and the first layer to find a repo wins. Within a layer,
+// the first repo in slice order wins.
 //
 // The importer is a one-shot: if any content_revisions row already
 // exists in the DB (regardless of repo, source, or status), it returns
@@ -85,7 +85,7 @@ func (i *Importer) ImportFirstRun(ctx context.Context) (int, error) {
 
 	matched := 0
 	for _, post := range posts {
-		repo := matchRepo(repos, post.Title)
+		repo := matchRepo(repos, post)
 		if repo == nil {
 			if err := i.recordUnmatched(ctx, post); err != nil {
 				return matched, fmt.Errorf("record unmatched post %s: %w", post.ID, err)
@@ -100,22 +100,12 @@ func (i *Importer) ImportFirstRun(ctx context.Context) (int, error) {
 	return matched, nil
 }
 
-// matchRepo returns the first repo in repos whose Name is a
-// case-insensitive substring of the post title, or nil if none match.
-// The v1 heuristic is intentionally simple and deterministic: first
-// match in slice order wins. Operators can later resolve edge cases
-// via the unmatched_patreon_posts workflow.
-func matchRepo(repos []*models.Repository, title string) *models.Repository {
-	lowerTitle := strings.ToLower(title)
-	for _, r := range repos {
-		if r == nil || r.Name == "" {
-			continue
-		}
-		if strings.Contains(lowerTitle, strings.ToLower(r.Name)) {
-			return r
-		}
-	}
-	return nil
+// matchRepo routes a Patreon post to a local repo using the layered
+// heuristic implemented in matchRepoLayered (tag → URL → slug →
+// substring). Returns nil if no layer matches; the importer uses nil
+// to decide whether to record the post as unmatched.
+func matchRepo(repos []*models.Repository, post PatreonPost) *models.Repository {
+	return matchRepoLayered(post, repos)
 }
 
 // recordMatched inserts a version-1 patreon_import revision for the

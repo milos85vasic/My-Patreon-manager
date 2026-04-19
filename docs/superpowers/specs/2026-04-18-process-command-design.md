@@ -383,7 +383,13 @@ Ordered, all reversible:
 
 These are sub-choices that only become load-bearing during the plan. Implementation proposes an answer; user confirms before that step begins.
 
-1. **Repo ↔ Patreon-post matching heuristic** (first-run import). Options: exact title match, slug match, tag-based (`repo:<id>` tag on Patreon post), embedded-URL match in post body. Likely layered (tag → URL → title → slug), with a `threshold` below which the post goes to `unmatched_patreon_posts`.
+1. **Repo ↔ Patreon-post matching heuristic** (first-run import). **RESOLVED** — implemented as a four-layer cascade in `internal/services/process/import_match.go`. First match wins (strongest layer first):
+   1. **Explicit tag** — post body contains `repo:<id>` where `<id>` matches a local repo ID (case-insensitive).
+   2. **Embedded URL** — post body contains a repo's `URL` or `HTTPSURL`, compared case-insensitively and trailing-slash-insensitively. Placeholder / sub-URL-like values are filtered so they can't match arbitrary prose.
+   3. **Slug in title** — post title contains `owner/name` or `name` as a whole word (regex `\b` boundaries with metacharacters escaped).
+   4. **Case-insensitive substring** in title — the original v1 heuristic, kept as a fuzzy fallback.
+
+   No numeric threshold: layers are deterministic, and posts that still miss all four go to `unmatched_patreon_posts` for manual linking (unchanged). Operators who want reliable matching from day one can add a `repo:<id>` tag to Patreon post bodies before the first `process` run.
 2. **Preview UI authentication.** Does `ADMIN_KEY` gate Approve/Reject, or do we introduce a lower-privilege `REVIEWER_KEY`? Current `/admin/*` routes already require `ADMIN_KEY`; cheapest is reusing it.
 3. **Multi-tenancy.** The preview UI and `process_runs` assume one campaign per installation. Confirm single-tenant stays; multi-tenant is out of scope for v1 of this design.
 
