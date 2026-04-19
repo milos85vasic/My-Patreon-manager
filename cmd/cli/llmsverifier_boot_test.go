@@ -2,6 +2,8 @@ package main
 
 import (
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 
@@ -165,6 +167,55 @@ func TestGetEnvOrDefault_EnvEmpty(t *testing.T) {
 func TestGetEnvOrDefault_EnvUnset(t *testing.T) {
 	os.Unsetenv("TEST_BOOT_VAR_NONEXISTENT")
 	assert.Equal(t, "fallback", getEnvOrDefault("TEST_BOOT_VAR_NONEXISTENT", "fallback"))
+}
+
+// TestExecCommandImpl_Success runs a trivially-true command (/bin/true on
+// POSIX) to exercise the real execCommandImpl without any network or LLM
+// side-effects. The goal is solely to bump coverage on the wrapper.
+func TestExecCommandImpl_Success(t *testing.T) {
+	err := execCommandImpl("true")
+	if err != nil {
+		// Some minimal containers lack /bin/true; fall back to `sh -c :`.
+		if shErr := execCommandImpl("sh", "-c", ":"); shErr != nil {
+			t.Skipf("neither 'true' nor 'sh -c :' available: true=%v sh=%v", err, shErr)
+		}
+	}
+}
+
+// TestExecCommandImpl_Error asserts the wrapper surfaces exec errors.
+func TestExecCommandImpl_Error(t *testing.T) {
+	err := execCommandImpl("no-such-binary-that-definitely-does-not-exist-xyzzy")
+	if err == nil {
+		t.Fatal("expected error from non-existent command")
+	}
+}
+
+// TestVerifierReachableImpl_Success exercises the success branch — the
+// stub http server answers /api/health with 200, so the function must
+// return true.
+func TestVerifierReachableImpl_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/health" {
+			w.WriteHeader(404)
+			return
+		}
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+	if !verifierReachableImpl(srv.URL) {
+		t.Fatal("expected verifierReachableImpl to return true for healthy endpoint")
+	}
+}
+
+// TestVerifierReachableImpl_5xx: status >= 500 is treated as unreachable.
+func TestVerifierReachableImpl_5xx(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(503)
+	}))
+	defer srv.Close()
+	if verifierReachableImpl(srv.URL) {
+		t.Fatal("expected verifierReachableImpl to return false for 503")
+	}
 }
 
 func TestEnsureLLMsVerifier_EmptyEndpointTriggersBootstrap(t *testing.T) {

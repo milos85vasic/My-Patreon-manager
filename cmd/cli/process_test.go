@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/milos85vasic/My-Patreon-Manager/internal/config"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/database"
@@ -913,5 +914,103 @@ func TestBuildProcessDeps_WiredContentGenerator(t *testing.T) {
 	}
 	if title != "Stub Title" || body != "wired body" {
 		t.Fatalf("unexpected title/body: %q / %q", title, body)
+	}
+}
+
+// TestRunProcessScheduled_InvalidCron exercises the invalid-cron-schedule
+// branch. With an unparseable expression cron.AddFunc returns an error and
+// the function calls osExit(1) and returns without starting the scheduler.
+func TestRunProcessScheduled_InvalidCron(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	cfg := baseProcessCfg()
+	deps := processDeps{
+		PatreonClient: procStubPatreonClient{},
+		Scanner:       func(context.Context) error { return nil },
+		Generator:     &procStubGenerator{title: "T", body: "B"},
+		Logger:        discardProcessLogger(),
+	}
+
+	exited, code := withMockExit(t, func() {
+		runProcessScheduled(context.Background(), cfg, db, deps, "not-a-cron", discardProcessLogger())
+	})
+	if !exited {
+		t.Fatal("expected osExit on invalid cron")
+	}
+	if code != 1 {
+		t.Fatalf("want exit code 1, got %d", code)
+	}
+}
+
+// TestRunProcessScheduled_CancelStopsScheduler wires a valid cron expression
+// but cancels the parent context immediately so the scheduler exits cleanly
+// through the ctx.Done() branch. This exercises the Start/Stop lifecycle
+// without waiting for an actual tick.
+func TestRunProcessScheduled_CancelStopsScheduler(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	cfg := baseProcessCfg()
+	deps := processDeps{
+		PatreonClient: procStubPatreonClient{},
+		Scanner:       func(context.Context) error { return nil },
+		Generator:     &procStubGenerator{title: "T", body: "B"},
+		Logger:        discardProcessLogger(),
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	done := make(chan struct{})
+	go func() {
+		runProcessScheduled(ctx, cfg, db, deps, "@every 1h", discardProcessLogger())
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("runProcessScheduled did not return after ctx cancel")
+	}
+}
+
+// TestRunProcessScheduled_TickFiresAndSurvivesRunError wires an
+// `@every 1s` cron and lets at least one tick fire. The deps are
+// configured so runProcess returns an error (scanner fails), which
+// exercises the err-propagation path inside the cron callback but MUST
+// NOT stop the scheduler — the scheduler keeps running until ctx is
+// canceled.
+func TestRunProcessScheduled_TickFiresAndSurvivesRunError(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	cfg := baseProcessCfg()
+	tickCalled := make(chan struct{}, 4)
+	deps := processDeps{
+		PatreonClient: procStubPatreonClient{},
+		Scanner: func(context.Context) error {
+			select {
+			case tickCalled <- struct{}{}:
+			default:
+			}
+			return errors.New("scan-fail")
+		},
+		Generator: &procStubGenerator{title: "T", body: "B"},
+		Logger:    discardProcessLogger(),
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan struct{})
+	go func() {
+		runProcessScheduled(ctx, cfg, db, deps, "@every 1s", discardProcessLogger())
+		close(done)
+	}()
+
+	select {
+	case <-tickCalled:
+	case <-time.After(4 * time.Second):
+		cancel()
+		<-done
+		t.Fatal("scheduled tick never fired")
+	}
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("runProcessScheduled did not return after ctx cancel")
 	}
 }

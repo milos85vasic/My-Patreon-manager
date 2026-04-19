@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -660,3 +663,459 @@ func (t *trackingMockOrchestrator) SetProviderOrgs(orgs map[string][]string) {
 		t.setProviderOrgsFunc(orgs)
 	}
 }
+
+// setStdEnv clears the environment and sets a minimal, valid set of env
+// vars that allows main() to get past config.Validate() and DB connect.
+func setStdEnv(t *testing.T) {
+	t.Helper()
+	oldEnviron := os.Environ()
+	os.Clearenv()
+	t.Cleanup(func() {
+		for _, e := range oldEnviron {
+			parts := strings.SplitN(e, "=", 2)
+			if len(parts) == 2 {
+				os.Setenv(parts[0], parts[1])
+			}
+		}
+	})
+	os.Setenv("DB_DRIVER", "sqlite")
+	os.Setenv("DB_DSN", ":memory:")
+	os.Setenv("DB_PATH", ":memory:")
+	os.Setenv("PATREON_CLIENT_ID", "dummy")
+	os.Setenv("PATREON_CLIENT_SECRET", "dummy")
+	os.Setenv("PATREON_ACCESS_TOKEN", "dummy")
+	os.Setenv("PATREON_REFRESH_TOKEN", "dummy")
+	os.Setenv("PATREON_CAMPAIGN_ID", "dummy")
+	os.Setenv("HMAC_SECRET", "dummy")
+	os.Setenv("LLMSVERIFIER_ENDPOINT", "http://localhost:9099")
+}
+
+// setMainArgs resets os.Args and flag.CommandLine for the duration of t.
+func setMainArgs(t *testing.T, args ...string) {
+	t.Helper()
+	oldArgs := os.Args
+	oldFlag := flag.CommandLine
+	os.Args = append([]string{"patreon-manager"}, args...)
+	flag.CommandLine = flag.NewFlagSet("test", flag.ContinueOnError)
+	t.Cleanup(func() {
+		os.Args = oldArgs
+		flag.CommandLine = oldFlag
+	})
+}
+
+// noReconnectSQLite wraps a *database.SQLiteDB so Connect/Migrate are
+// no-ops after the initial setup. Required for main() tests: main always
+// calls db.Connect(ctx, dsn), which reopens SQLite and wipes our seed
+// data. Embedding the original keeps store methods working.
+type noReconnectSQLite struct {
+	*database.SQLiteDB
+}
+
+func (n *noReconnectSQLite) Connect(_ context.Context, _ string) error { return nil }
+func (n *noReconnectSQLite) Migrate(_ context.Context) error           { return nil }
+func (n *noReconnectSQLite) Close() error                              { return nil }
+
+// seedDBForProcess returns a migrated SQLite DB with a single
+// content_revisions row so runProcess's importer is a no-op (it
+// short-circuits when any revision already exists). This lets us
+// exercise the process dispatch in main() without wiring up a fake
+// Patreon server. The returned *noReconnectSQLite hides Connect/Migrate
+// from main() so our seed data survives.
+func seedDBForProcess(t *testing.T) *noReconnectSQLite {
+	t.Helper()
+	db := database.NewSQLiteDB(":memory:")
+	ctx := context.Background()
+	if err := db.Connect(ctx, ""); err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	if err := db.Migrate(ctx); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	// Seed a repo + a revision so the first-run importer short-circuits
+	// (CountAll > 0). We also wire current_revision_id so the SHA check
+	// in BuildQueue considers the repo up-to-date, resulting in an empty
+	// queue and a clean zero-work pipeline run.
+	if _, err := db.DB().ExecContext(ctx,
+		`INSERT INTO repositories (id, service, owner, name, url, https_url, last_commit_sha) VALUES (?,?,?,?,?,?,?)`,
+		"seed-r", "github", "o", "n", "u", "h", "sha1"); err != nil {
+		t.Fatalf("seed repo: %v", err)
+	}
+	if _, err := db.DB().ExecContext(ctx,
+		`INSERT INTO content_revisions (id, repository_id, version, source, status, title, body, fingerprint, source_commit_sha, author, created_at) VALUES (?,?,?,?,?,?,?,?,?,?, CURRENT_TIMESTAMP)`,
+		"seed-rev", "seed-r", 1, "generated", "approved", "t", "b", "fp", "sha1", "system"); err != nil {
+		t.Fatalf("seed revision: %v", err)
+	}
+	if _, err := db.DB().ExecContext(ctx,
+		`UPDATE repositories SET current_revision_id = ? WHERE id = ?`,
+		"seed-rev", "seed-r"); err != nil {
+		t.Fatalf("set pointer: %v", err)
+	}
+	return &noReconnectSQLite{SQLiteDB: db}
+}
+
+// TestMain_ProcessCommand exercises the "process" dispatch case through
+// main() without --schedule so the single-shot runProcess path fires.
+// We seed a content_revisions row so the importer no-ops, and the
+// orchestrator is stubbed to keep scans fast.
+func TestMain_ProcessCommand(t *testing.T) {
+	setMainArgs(t, "process")
+	setStdEnv(t)
+
+	seededDB := seedDBForProcess(t)
+	t.Cleanup(func() { _ = seededDB.Close() })
+
+	oldNewDatabase := newDatabase
+	defer func() { newDatabase = oldNewDatabase }()
+	newDatabase = func(driver, dsn string) database.Database { return seededDB }
+
+	oldNewOrchestrator := newOrchestrator
+	defer func() { newOrchestrator = oldNewOrchestrator }()
+	newOrchestrator = func(db database.Database, providers []git.RepositoryProvider, patreonClient patreon.Provider, generator *content.Generator, m metrics.MetricsCollector, logger *slog.Logger, tierMapper *content.TierMapper) orchestrator {
+		return &mockOrchestrator{}
+	}
+
+	cleanup := withMockPrometheusRegistry(t)
+	defer cleanup()
+
+	exited, code := withMockExit(t, func() {
+		main()
+	})
+	assert.False(t, exited, "process command should exit 0 on success")
+	assert.Equal(t, 0, code)
+}
+
+// TestMain_ProcessCommand_Scheduled covers the `--schedule` path of the
+// process dispatch case. runProcessScheduledFunc is replaced with a
+// counter so main() returns immediately without entering the real
+// cron loop.
+func TestMain_ProcessCommand_Scheduled(t *testing.T) {
+	setMainArgs(t, "--schedule", "@every 1h", "process")
+	setStdEnv(t)
+
+	oldNewDatabase := newDatabase
+	defer func() { newDatabase = oldNewDatabase }()
+	newDatabase = func(driver, dsn string) database.Database {
+		db := database.NewSQLiteDB(":memory:")
+		_ = db.Connect(context.Background(), "")
+		_ = db.Migrate(context.Background())
+		return db
+	}
+	oldNewOrchestrator := newOrchestrator
+	defer func() { newOrchestrator = oldNewOrchestrator }()
+	newOrchestrator = func(db database.Database, providers []git.RepositoryProvider, patreonClient patreon.Provider, generator *content.Generator, m metrics.MetricsCollector, logger *slog.Logger, tierMapper *content.TierMapper) orchestrator {
+		return &mockOrchestrator{}
+	}
+	cleanup := withMockPrometheusRegistry(t)
+	defer cleanup()
+
+	scheduledCalls := 0
+	oldSched := runProcessScheduledFunc
+	defer func() { runProcessScheduledFunc = oldSched }()
+	runProcessScheduledFunc = func(ctx context.Context, cfg *config.Config, db database.Database, deps processDeps, schedule string, logger *slog.Logger) {
+		scheduledCalls++
+	}
+
+	exited, _ := withMockExit(t, func() {
+		main()
+	})
+	assert.False(t, exited)
+	assert.Equal(t, 1, scheduledCalls, "scheduled func should have been called once")
+}
+
+// TestMain_SyncCommand_Deprecated covers the deprecated `sync` alias.
+// The deprecation warning is emitted and the flow proceeds through
+// runProcess — we verify we exit 0 and don't panic.
+func TestMain_SyncCommand_Deprecated(t *testing.T) {
+	setMainArgs(t, "sync")
+	setStdEnv(t)
+
+	// LLMsVerifier auto-start: stub so it returns nil (no real check).
+	oldEnsure := ensureLLMsVerifier
+	defer func() { ensureLLMsVerifier = oldEnsure }()
+	ensureLLMsVerifier = func(cfg *config.Config, logger *slog.Logger) error { return nil }
+
+	seededDB := seedDBForProcess(t)
+	t.Cleanup(func() { _ = seededDB.Close() })
+
+	oldNewDatabase := newDatabase
+	defer func() { newDatabase = oldNewDatabase }()
+	newDatabase = func(driver, dsn string) database.Database { return seededDB }
+
+	oldNewOrchestrator := newOrchestrator
+	defer func() { newOrchestrator = oldNewOrchestrator }()
+	newOrchestrator = func(db database.Database, providers []git.RepositoryProvider, patreonClient patreon.Provider, generator *content.Generator, m metrics.MetricsCollector, logger *slog.Logger, tierMapper *content.TierMapper) orchestrator {
+		return &mockOrchestrator{}
+	}
+	cleanup := withMockPrometheusRegistry(t)
+	defer cleanup()
+
+	exited, code := withMockExit(t, func() {
+		main()
+	})
+	assert.False(t, exited, "deprecated sync should still exit 0 when process succeeds")
+	assert.Equal(t, 0, code)
+}
+
+// TestMain_SyncCommand_Scheduled covers the `--schedule` + deprecated
+// `sync` alias path: both branches of the sync dispatch case are
+// exercised via runProcessScheduledFunc swap.
+func TestMain_SyncCommand_Scheduled(t *testing.T) {
+	setMainArgs(t, "--schedule", "@every 1h", "sync")
+	setStdEnv(t)
+
+	oldEnsure := ensureLLMsVerifier
+	defer func() { ensureLLMsVerifier = oldEnsure }()
+	ensureLLMsVerifier = func(cfg *config.Config, logger *slog.Logger) error { return nil }
+
+	oldNewDatabase := newDatabase
+	defer func() { newDatabase = oldNewDatabase }()
+	newDatabase = func(driver, dsn string) database.Database {
+		db := database.NewSQLiteDB(":memory:")
+		_ = db.Connect(context.Background(), "")
+		_ = db.Migrate(context.Background())
+		return db
+	}
+	oldNewOrchestrator := newOrchestrator
+	defer func() { newOrchestrator = oldNewOrchestrator }()
+	newOrchestrator = func(db database.Database, providers []git.RepositoryProvider, patreonClient patreon.Provider, generator *content.Generator, m metrics.MetricsCollector, logger *slog.Logger, tierMapper *content.TierMapper) orchestrator {
+		return &mockOrchestrator{}
+	}
+	cleanup := withMockPrometheusRegistry(t)
+	defer cleanup()
+
+	scheduledCalls := 0
+	oldSched := runProcessScheduledFunc
+	defer func() { runProcessScheduledFunc = oldSched }()
+	runProcessScheduledFunc = func(ctx context.Context, cfg *config.Config, db database.Database, deps processDeps, schedule string, logger *slog.Logger) {
+		scheduledCalls++
+	}
+
+	exited, _ := withMockExit(t, func() {
+		main()
+	})
+	assert.False(t, exited)
+	assert.Equal(t, 1, scheduledCalls, "scheduled sync should route through runProcessScheduledFunc")
+}
+
+// TestMain_VerifyCommand covers the verify dispatch case by pointing
+// LLMSVERIFIER_ENDPOINT at a fake server that responds with models.
+func TestMain_VerifyCommand(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/health":
+			w.WriteHeader(200)
+		case "/api/models":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"data": []map[string]interface{}{
+					{"id": "m1", "name": "M1", "quality_score": 0.9, "latency_p95_ms": 100, "cost_per_1k_tokens": 0.001},
+				},
+			})
+		case "/api/usage":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"total_tokens": 100, "estimated_cost": 0.01})
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	defer srv.Close()
+
+	setMainArgs(t, "verify")
+	setStdEnv(t)
+	os.Setenv("LLMSVERIFIER_ENDPOINT", srv.URL)
+
+	// Auto-start should detect a reachable endpoint and do nothing, but
+	// we still swap in a stub to avoid the real implementation's timeouts.
+	oldEnsure := ensureLLMsVerifier
+	defer func() { ensureLLMsVerifier = oldEnsure }()
+	ensureLLMsVerifier = func(cfg *config.Config, logger *slog.Logger) error { return nil }
+
+	oldNewDatabase := newDatabase
+	defer func() { newDatabase = oldNewDatabase }()
+	newDatabase = func(driver, dsn string) database.Database {
+		return &mockDatabase{}
+	}
+	cleanup := withMockPrometheusRegistry(t)
+	defer cleanup()
+
+	exited, code := withMockExit(t, func() {
+		main()
+	})
+	assert.False(t, exited, "verify command with healthy endpoint should exit 0")
+	assert.Equal(t, 0, code)
+}
+
+// TestMain_EnsureLLMsVerifierError covers the branch in main() where
+// LLMsVerifier auto-start fails for a command that requires it
+// (generate).
+func TestMain_EnsureLLMsVerifierError(t *testing.T) {
+	setMainArgs(t, "generate")
+	setStdEnv(t)
+
+	oldEnsure := ensureLLMsVerifier
+	defer func() { ensureLLMsVerifier = oldEnsure }()
+	ensureLLMsVerifier = func(cfg *config.Config, logger *slog.Logger) error {
+		return fmt.Errorf("verifier unavailable")
+	}
+
+	oldNewDatabase := newDatabase
+	defer func() { newDatabase = oldNewDatabase }()
+	newDatabase = func(driver, dsn string) database.Database {
+		return &mockDatabase{}
+	}
+	cleanup := withMockPrometheusRegistry(t)
+	defer cleanup()
+
+	exited, code := withMockExit(t, func() {
+		main()
+	})
+	assert.True(t, exited, "ensureLLMsVerifier failure should exit")
+	assert.Equal(t, 1, code)
+}
+
+// TestMain_AuditStoreSQLite covers the `cfg.AuditStore == "sqlite"`
+// branch of main() where the orchestrator gets a SQLite-backed audit
+// store wired in.
+func TestMain_AuditStoreSQLite(t *testing.T) {
+	setMainArgs(t, "scan")
+	setStdEnv(t)
+	os.Setenv("AUDIT_STORE", "sqlite")
+
+	oldNewDatabase := newDatabase
+	defer func() { newDatabase = oldNewDatabase }()
+	newDatabase = func(driver, dsn string) database.Database {
+		db := database.NewSQLiteDB(":memory:")
+		_ = db.Connect(context.Background(), "")
+		_ = db.Migrate(context.Background())
+		return db
+	}
+	oldNewOrchestrator := newOrchestrator
+	defer func() { newOrchestrator = oldNewOrchestrator }()
+
+	var auditSet bool
+	newOrchestrator = func(db database.Database, providers []git.RepositoryProvider, patreonClient patreon.Provider, generator *content.Generator, m metrics.MetricsCollector, logger *slog.Logger, tierMapper *content.TierMapper) orchestrator {
+		return &auditMockOrchestrator{
+			onSetAudit: func(s audit.Store) { auditSet = s != nil },
+		}
+	}
+	cleanup := withMockPrometheusRegistry(t)
+	defer cleanup()
+
+	exited, code := withMockExit(t, func() {
+		main()
+	})
+	assert.False(t, exited)
+	assert.Equal(t, 0, code)
+	assert.True(t, auditSet, "SQLite audit store should have been wired")
+}
+
+// auditMockOrchestrator captures the call to SetAuditStore so the
+// sqlite-audit branch can be asserted.
+type auditMockOrchestrator struct {
+	mockOrchestrator
+	onSetAudit func(audit.Store)
+}
+
+func (a *auditMockOrchestrator) SetAuditStore(s audit.Store) {
+	if a.onSetAudit != nil {
+		a.onSetAudit(s)
+	}
+}
+
+// TestMain_IllustrationEnabled covers the `cfg.IllustrationEnabled`
+// branch that wires an illustration generator via
+// SetIllustrationGenerator. We set a single image-provider key so
+// buildImageProviders returns a non-empty slice and the wire-up path
+// fires.
+func TestMain_IllustrationEnabled(t *testing.T) {
+	setMainArgs(t, "scan")
+	setStdEnv(t)
+	os.Setenv("ILLUSTRATION_ENABLED", "true")
+	os.Setenv("OPENAI_API_KEY", "sk-test")
+
+	oldNewDatabase := newDatabase
+	defer func() { newDatabase = oldNewDatabase }()
+	newDatabase = func(driver, dsn string) database.Database {
+		db := database.NewSQLiteDB(":memory:")
+		_ = db.Connect(context.Background(), "")
+		_ = db.Migrate(context.Background())
+		return db
+	}
+
+	var illSet bool
+	oldNewOrchestrator := newOrchestrator
+	defer func() { newOrchestrator = oldNewOrchestrator }()
+	newOrchestrator = func(db database.Database, providers []git.RepositoryProvider, patreonClient patreon.Provider, generator *content.Generator, m metrics.MetricsCollector, logger *slog.Logger, tierMapper *content.TierMapper) orchestrator {
+		return &illMockOrchestrator{onSetIll: func(g any) { illSet = g != nil }}
+	}
+	cleanup := withMockPrometheusRegistry(t)
+	defer cleanup()
+
+	exited, code := withMockExit(t, func() {
+		main()
+	})
+	assert.False(t, exited)
+	assert.Equal(t, 0, code)
+	assert.True(t, illSet, "illustration generator should have been wired")
+}
+
+type illMockOrchestrator struct {
+	mockOrchestrator
+	onSetIll func(any)
+}
+
+func (i *illMockOrchestrator) SetIllustrationGenerator(g any) {
+	if i.onSetIll != nil {
+		i.onSetIll(g)
+	}
+}
+
+// TestMain_ConfigFlag covers the config=<path> flag branch of main().
+// The config loader silently ignores missing files so we just pass a
+// bogus path to exercise the non-empty branch.
+func TestMain_ConfigFlag(t *testing.T) {
+	tmpFile := t.TempDir() + "/does-not-exist.env"
+	setMainArgs(t, "--config", tmpFile, "validate")
+	setStdEnv(t)
+
+	exited, code := withMockExit(t, func() {
+		main()
+	})
+	assert.False(t, exited, "validate with missing config should still succeed (falls back to env)")
+	assert.Equal(t, 0, code)
+}
+
+// TestBuildImageProviders_AllConfigured exercises every branch of
+// buildImageProviders: when all four API keys are populated the result
+// contains four providers in the documented order (DALL-E, Stability,
+// Midjourney, OpenAI-compatible).
+func TestBuildImageProviders_AllConfigured(t *testing.T) {
+	cfg := &config.Config{
+		OpenAIAPIKey:        "sk-openai",
+		StabilityAIAPIKey:   "sk-stability",
+		MidjourneyAPIKey:    "sk-mj",
+		MidjourneyEndpoint:  "https://mj.example",
+		OpenAICompatAPIKey:  "sk-compat",
+		OpenAICompatBaseURL: "https://compat.example",
+		OpenAICompatModel:   "model-x",
+	}
+	providers := buildImageProviders(cfg, nil, slog.Default())
+	assert.Len(t, providers, 4)
+}
+
+// TestBuildImageProviders_None confirms an empty config yields no
+// providers and does not panic.
+func TestBuildImageProviders_None(t *testing.T) {
+	cfg := &config.Config{}
+	providers := buildImageProviders(cfg, nil, slog.Default())
+	assert.Empty(t, providers)
+}
+
+// TestPrintSyncDeprecation asserts the exact warning text produced by the
+// deprecated `sync` alias.
+func TestPrintSyncDeprecation(t *testing.T) {
+	var buf strings.Builder
+	printSyncDeprecation(&buf)
+	out := buf.String()
+	assert.Contains(t, out, "'sync' is deprecated")
+	assert.Contains(t, out, "process")
+}
+
