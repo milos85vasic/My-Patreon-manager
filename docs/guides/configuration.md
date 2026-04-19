@@ -324,6 +324,147 @@ Not every command uses every variable. The following table shows which variables
 
 > **Illustration variables are runtime-optional:** when `ILLUSTRATION_ENABLED=true` and no image-provider key is set, `generate`/`sync` still succeeds -- articles are produced without illustrations and a warning is logged. To guarantee an illustration per article, set at least one provider's keys (DALL-E 3 is the recommended default).
 
+## Required / Optional at a Glance
+
+The tables below show exactly which variables are **mandatory** (❗) and which are **optional** (○) for the three flows operators most commonly configure: multi-organization repo scanning, article generation, and illustration generation. Every token-issuing service links directly to its signup page.
+
+### Tier 1 — hard-required for any operation
+
+| Variable | Required | Obtain from |
+|---|:---:|---|
+| `PATREON_CLIENT_ID` | ❗ | [Patreon Platform Portal](https://www.patreon.com/portal/registration/register-clients) |
+| `PATREON_CLIENT_SECRET` | ❗ | [Patreon Platform Portal](https://www.patreon.com/portal/registration/register-clients) |
+| `PATREON_ACCESS_TOKEN` | ❗ | Patreon OAuth flow or Creator's Access Token in the Portal |
+| `PATREON_REFRESH_TOKEN` | ❗ | Patreon OAuth flow (returned alongside the access token) |
+| `PATREON_CAMPAIGN_ID` | ❗ | `GET /api/oauth2/v2/campaigns` against the Patreon API |
+| `HMAC_SECRET` | ❗ | Self-generated: `openssl rand -hex 32` |
+
+Startup aborts with a validation error if any Tier 1 variable is empty. Details in [Obtaining Credentials § Patreon](obtaining-credentials.md#patreon-oauth-credentials).
+
+### Tier 2 — multi-organization repository scanning
+
+At least one provider block (token + org list) must be configured for `process` to discover any repos beyond the token owner's personal ones.
+
+| Variable | Required | Obtain from |
+|---|:---:|---|
+| `GITHUB_TOKEN` | ❗ (if using GitHub) | [GitHub · Personal access tokens](https://github.com/settings/tokens) — scope `repo` (classic) or `Contents: Read` + `Metadata: Read` (fine-grained) |
+| `GITHUB_TOKEN_SECONDARY` | ○ | Same page — issue a second token for rate-limit failover |
+| `GITHUB_ORGS` | ○ | Comma-separated; leave empty to scan personal repos only; `*` for every accessible org |
+| `GITLAB_TOKEN` | ❗ (if using GitLab) | [GitLab · Personal access tokens](https://gitlab.com/-/user_settings/personal_access_tokens) — scopes `read_api`, `read_repository` |
+| `GITLAB_TOKEN_SECONDARY` | ○ | Same page, second token |
+| `GITLAB_BASE_URL` | ○ | Defaults to `https://gitlab.com`; override for self-hosted instances |
+| `GITLAB_GROUPS` | ○ | Comma-separated group paths; subgroups included automatically |
+| `GITFLIC_TOKEN` | ❗ (if using GitFlic) | [GitFlic](https://gitflic.ru) account settings → API tokens |
+| `GITFLIC_TOKEN_SECONDARY` | ○ | Second token for failover |
+| `GITFLIC_ORGS` | ○ | Comma-separated; leave empty to scan personal repos |
+| `GITVERSE_TOKEN` | ❗ (if using GitVerse) | [GitVerse](https://gitverse.ru) account settings → API tokens |
+| `GITVERSE_TOKEN_SECONDARY` | ○ | Second token for failover |
+| `GITVERSE_ORGS` | ○ | Comma-separated; leave empty to scan personal repos |
+| `PROCESS_PRIVATE_REPOSITORIES` | ○ | `false` default. `true` includes private repos in discovery. |
+| `MIN_MONTHS_COMMIT_ACTIVITY` | ○ | `18` default. Repos dormant longer are skipped. `0` disables. |
+
+Details per provider (including required scopes and rate limits) in [Obtaining Credentials §GitHub](obtaining-credentials.md#github-personal-access-token) / [GitLab](obtaining-credentials.md#gitlab-personal-access-token) / [GitFlic](obtaining-credentials.md#gitflic-api-token) / [GitVerse](obtaining-credentials.md#gitverse-api-token).
+
+### Tier 3 — article generation (LLM pipeline)
+
+| Variable | Required | Obtain from |
+|---|:---:|---|
+| `LLMSVERIFIER_ENDPOINT` | ❗ | Local Docker: `http://localhost:9099` via `bash scripts/llmsverifier.sh`. Remote: [LLMsVerifier repo](https://github.com/vasic-digital/LLMsVerifier). |
+| `LLMSVERIFIER_API_KEY` | ○ (auto-generated) | Auto-populated by `scripts/llmsverifier.sh` on every boot |
+| `CONTENT_QUALITY_THRESHOLD` | ○ | `0.75` default; generated content below this score is discarded |
+| `LLM_DAILY_TOKEN_BUDGET` | ○ | `100000` default daily cap |
+| `LLM_CONCURRENCY` | ○ | `8` default cap on concurrent LLM calls |
+| `CONTENT_TIER_MAPPING_STRATEGY` | ○ | `linear` (one repo per tier) or `weighted` |
+| `GENERATOR_VERSION` | ○ | `v1` default; bump to invalidate the LLM cache after prompt/model changes |
+| `MAX_ARTICLES_PER_REPO` | ○ | `1` default; caps `pending_review` drafts per repo |
+| `MAX_ARTICLES_PER_RUN` | ○ | empty = unlimited; caps drafts produced per `process` invocation |
+| `MAX_REVISIONS` | ○ | `20` default; published and in-flight revisions always pinned |
+| `DRIFT_CHECK_SKIP_MINUTES` | ○ | `30` default; skip drift check if Patreon post was verified within this window |
+| `PROCESS_LOCK_HEARTBEAT_SECONDS` | ○ | `30` default; governs single-runner lock heartbeat |
+
+See [Obtaining Credentials § LLMsVerifier API Key](obtaining-credentials.md#llmsverifier-api-key) for setup.
+
+### Tier 4 — illustration generation (at least one provider required)
+
+Set the keys for **one** of these four blocks. Articles still publish without illustrations when no provider is configured — a warning is logged and the illustration step is skipped.
+
+| Provider | Variable | Required | Obtain from |
+|---|---|:---:|---|
+| DALL-E 3 (recommended) | `OPENAI_API_KEY` | ❗ | [OpenAI Platform · API keys](https://platform.openai.com/api-keys) (requires [paid billing](https://platform.openai.com/account/billing)) |
+| Stability AI | `STABILITY_AI_API_KEY` | ❗ | [Stability Platform · API keys](https://platform.stability.ai/account/keys) |
+| Midjourney proxy | `MIDJOURNEY_API_KEY` | ❗ | From your chosen proxy ([GoAPI](https://goapi.ai/), [UseAPI.net](https://useapi.net/), [self-hosted midjourney-api](https://github.com/erictik/midjourney-api)) |
+| Midjourney proxy | `MIDJOURNEY_ENDPOINT` | ❗ | Same proxy; both URL and key are required |
+| OpenAI-compatible | `OPENAI_COMPAT_API_KEY` | ❗ | [Venice](https://venice.ai/), [Together](https://www.together.ai/), self-hosted [LiteLLM](https://github.com/BerriAI/litellm), etc. |
+| OpenAI-compatible | `OPENAI_COMPAT_BASE_URL` | ❗ | Same service; both URL and key are required |
+| OpenAI-compatible | `OPENAI_COMPAT_MODEL` | ○ | Model name sent in request (e.g. `flux-dev`, `black-forest-labs/FLUX.1-schnell-Free`) |
+| — | `ILLUSTRATION_ENABLED` | ○ | `true` default; master on/off switch |
+| — | `IMAGE_PROVIDER_PRIORITY` | ○ | `dalle,stability,midjourney,openai_compat` default; fallback order |
+| — | `ILLUSTRATION_DEFAULT_STYLE` | ○ | `modern tech illustration, clean lines, professional` default |
+| — | `ILLUSTRATION_DEFAULT_SIZE` | ○ | `1792x1024` default |
+| — | `ILLUSTRATION_DEFAULT_QUALITY` | ○ | `hd` default |
+| — | `ILLUSTRATION_DIR` | ○ | `./data/illustrations` default |
+| — | `OPENAI_BASE_URL` | — *(reserved)* | Currently unused; the DALL-E provider hardcodes the base URL |
+| — | `STABILITY_AI_BASE_URL` | — *(reserved)* | Currently unused; the Stability provider hardcodes the base URL |
+
+Step-by-step signup flows with key-format notes, `curl` verification commands, and rate-limit / cost tables in [Obtaining Credentials § Image / Illustration Providers](obtaining-credentials.md#image--illustration-providers).
+
+### Tier 5 — preview UI approval (required if using the web UI)
+
+| Variable | Required | Obtain from |
+|---|:---:|---|
+| `ADMIN_KEY` | ❗ (if using preview UI) | Self-generated: `openssl rand -hex 32` |
+| `PORT` | ○ | `8080` default |
+| `GIN_MODE` | ○ | `debug` default; set to `release` for production |
+
+Without `ADMIN_KEY`, the `/preview/revision/:id/approve`, `/reject`, `/edit`, and `/preview/:repo_id/resolve-drift` endpoints return 401 and no draft can be promoted to `approved`, meaning `publish` has nothing to push.
+
+### Tier 6 — infrastructure and observability (all optional)
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `DB_DRIVER` | `sqlite` | `sqlite` (bundled) or `postgres` (external) |
+| `DB_PATH` | `user/db/patreon_manager.db` | SQLite file path (relative to `USER_WORKSPACE_DIR`) |
+| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | see per-var defaults | PostgreSQL connection parameters |
+| `LOG_LEVEL` | `info` | `error` · `warn` · `info` · `debug` · `trace` |
+| `USER_WORKSPACE_DIR` | `user` | Root for DB/images/content/templates |
+| `GRACE_PERIOD_HOURS` | `24` | Wait after a repo change before regenerating |
+| `AUDIT_STORE` | `ring` | `ring` (in-memory) or `sqlite` (persisted) |
+| `WEBHOOK_HMAC_SECRET` | *(empty)* | Shared secret for webhook signature validation |
+| `RATE_LIMIT_RPS` | `100` | Per-IP rate limit on `/webhook/*`, `/admin/*`, `/download/:id` |
+| `RATE_LIMIT_BURST` | `200` | Per-IP burst budget |
+| `VIDEO_GENERATION_ENABLED` | `false` | Experimental video script generation |
+| `PDF_RENDERING_ENABLED` | `false` | PDF output (requires Chromium/Chrome on `PATH`) |
+
+### Minimum viable `.env` for the typical flow
+
+The smallest `.env` that delivers **multi-org scanning + article generation + DALL-E illustrations + preview-UI approval**:
+
+```env
+# Tier 1 — Patreon + signing
+PATREON_CLIENT_ID=...
+PATREON_CLIENT_SECRET=...
+PATREON_ACCESS_TOKEN=...
+PATREON_REFRESH_TOKEN=...
+PATREON_CAMPAIGN_ID=...
+HMAC_SECRET=...
+
+# Tier 2 — at least one Git provider
+GITHUB_TOKEN=ghp_...
+GITHUB_ORGS=*                              # or my-org,partner-org
+
+# Tier 3 — LLM pipeline (auto-populated by scripts/llmsverifier.sh)
+LLMSVERIFIER_ENDPOINT=http://localhost:9099
+LLMSVERIFIER_API_KEY=...
+
+# Tier 4 — illustrations via DALL-E 3 (cheapest to set up — one key)
+OPENAI_API_KEY=sk-...
+
+# Tier 5 — preview-UI approval gate
+ADMIN_KEY=...
+```
+
+Everything else uses defaults. Run `bash scripts/llmsverifier.sh` first to boot the LLM quality-gate container and auto-populate the two `LLMSVERIFIER_*` values, then `patreon-manager process --dry-run` to verify the wiring.
+
 ## Common Configuration Patterns
 
 ### Single Organization

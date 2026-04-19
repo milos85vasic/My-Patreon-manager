@@ -13,6 +13,52 @@ My Patreon Manager scans repositories across GitHub, GitLab, GitFlic, and GitVer
 
 ---
 
+## Find What You Need (Landing)
+
+Jump directly to the information you're looking for:
+
+**Setting up for the first time**
+- [Quick Start (below)](#quick-start) — 5 steps from clone to publish
+- [Quickstart Guide (long-form)](docs/guides/quickstart.md) — the full 10-minute walkthrough
+- [Obtaining Credentials](docs/guides/obtaining-credentials.md) — step-by-step signup flows for **every** token-issuing service with direct links (Patreon · [GitHub](https://github.com/settings/tokens) · [GitLab](https://gitlab.com/-/user_settings/personal_access_tokens) · [GitFlic](https://gitflic.ru) · [GitVerse](https://gitverse.ru) · [OpenAI DALL-E](https://platform.openai.com/api-keys) · [Stability AI](https://platform.stability.ai/account/keys) · Midjourney proxies · OpenAI-compatible providers · LLMsVerifier)
+- [Configuration Reference → Required / Optional at a Glance](docs/guides/configuration.md#required--optional-at-a-glance) — every env var grouped by flow with mandatory/optional markers and direct signup links
+- [Minimum viable `.env` recipe](docs/guides/configuration.md#minimum-viable-env-for-the-typical-flow) — the smallest config that delivers multi-org scanning + articles + illustrations
+
+**Running the pipeline**
+- [`process` command design](docs/superpowers/specs/2026-04-18-process-command-design.md) — the versioned, revision-aware pipeline that replaces `sync`
+- [`process` implementation plan](docs/superpowers/plans/2026-04-18-process-command.md) — task-by-task walkthrough of what's built and how
+- [Configuration Reference → Process Pipeline](docs/guides/configuration.md#process-pipeline) — every `MAX_ARTICLES_*`, `GENERATOR_VERSION`, drift-check, and lock knob
+- [CLI: process](docs/manuals/subcommands/sync.md) · [scan](docs/manuals/subcommands/scan.md) · [generate](docs/manuals/subcommands/generate.md) · [publish](docs/manuals/subcommands/publish.md) · [validate](docs/manuals/subcommands/validate.md)
+
+**Migrations and schema**
+- [Migration system refactor spec](docs/superpowers/specs/2026-04-18-migration-system-refactor.md) — why the versioned Migrator exists
+- [`patreon-manager migrate up | status | down`](docs/guides/configuration.md#process-pipeline) — CLI for schema migrations
+- [SQL Schema reference](docs/architecture/sql-schema.md)
+
+**Articles + illustrations**
+- [Content Generation Guide](docs/guides/content-generation.md) — LLM pipeline, quality gates, tier mapping
+- [Illustration Generation](docs/guides/configuration.md#illustration-generation) + [Image Providers](docs/guides/configuration.md#image-providers) — DALL-E 3 · Stability AI · Midjourney · OpenAI-compat
+- [LLMsVerifier Setup](docs/guides/llms-verifier.md) — the quality-gate service all LLM calls route through
+
+**Patreon specifics**
+- [Patreon Tiers Guide](docs/guides/patreon-tiers.md) — tier configuration and access control
+- [Obtaining Credentials § Patreon](docs/guides/obtaining-credentials.md#patreon-oauth-credentials) — OAuth walkthrough + campaign-ID lookup
+
+**Deployment, operations, security**
+- [Deployment Guide](docs/guides/deployment.md) · [Docker](docs/manuals/deployment/docker.md) · [Podman](docs/manuals/deployment/podman.md) · [systemd](docs/manuals/deployment/systemd.md) · [Kubernetes](docs/manuals/deployment/kubernetes.md) · [Bare Binary](docs/manuals/deployment/bare-binary.md)
+- [Admin Manual](docs/manuals/admin.md) — webhooks, monitoring, SLOs, credential rotation
+- [Security docs](docs/security/README.md) · [Runbooks](docs/runbooks/) · [Troubleshooting FAQ](docs/troubleshooting/faq.md)
+- [Local Verification (15-step pre-publish checklist)](docs/guides/local-verification.md)
+
+**Architecture and development**
+- [Architecture Overview](docs/architecture/overview.md) · [ADRs](docs/adr/)
+- [Developer Manual](docs/manuals/developer.md) — adding providers, renderers, migrations, tests
+- [Tutorial — first sync](docs/guides/tutorial-first-sync.md) · [server setup](docs/guides/tutorial-server-setup.md) · [security scanning](docs/guides/tutorial-security-scanning.md) · [testing](docs/guides/tutorial-testing.md) · [content pipeline](docs/guides/tutorial-content-pipeline.md)
+- [OpenAPI spec](docs/api/openapi.yaml) · [CLI reference](docs/api/cli-reference.md)
+- [Main specification](docs/main_specification.md)
+
+Full documentation index with every file: [see "Documentation" section below](#documentation).
+
 ## Features
 
 - **Multi-platform Git scanning** -- GitHub, GitLab, GitFlic, and GitVerse as first-class, interchangeable sources with mirror detection
@@ -59,58 +105,61 @@ go run ./cmd/cli publish
 
 ## Environment Variables Quick Reference
 
-Full reference: [docs/guides/configuration.md](docs/guides/configuration.md)
+Full reference with mandatory/optional tables by flow: [docs/guides/configuration.md § Required / Optional at a Glance](docs/guides/configuration.md#required--optional-at-a-glance)
+Step-by-step signup flows with direct links to every token-issuing service: [docs/guides/obtaining-credentials.md](docs/guides/obtaining-credentials.md)
 
 ### Required
 
-#### Patreon API
+Legend: ❗ mandatory · ○ optional.
 
-| Variable | Description |
-|----------|-------------|
-| `PATREON_CLIENT_ID` | Patreon API client ID |
-| `PATREON_CLIENT_SECRET` | Patreon API client secret |
-| `PATREON_ACCESS_TOKEN` | Patreon access token |
-| `PATREON_REFRESH_TOKEN` | Patreon refresh token |
-| `PATREON_CAMPAIGN_ID` | Patreon campaign ID |
+#### Patreon API (all ❗)
+
+| Variable | Description | Obtain from |
+|----------|-------------|-------------|
+| `PATREON_CLIENT_ID` | OAuth client ID | [Patreon Platform Portal](https://www.patreon.com/portal/registration/register-clients) |
+| `PATREON_CLIENT_SECRET` | OAuth client secret | Same page |
+| `PATREON_ACCESS_TOKEN` | Access token | Patreon OAuth flow or Creator's Access Token |
+| `PATREON_REFRESH_TOKEN` | Refresh token | Returned alongside access token |
+| `PATREON_CAMPAIGN_ID` | Campaign ID | `GET /api/oauth2/v2/campaigns` |
 
 #### Security
 
-| Variable | Description |
-|----------|-------------|
-| `HMAC_SECRET` | Secret for signed download URLs |
-| `ADMIN_KEY` | Key for admin endpoint access |
-| `WEBHOOK_HMAC_SECRET` | Shared secret for webhook signature validation |
+| Variable | Required | Description | Obtain from |
+|----------|:--------:|-------------|-------------|
+| `HMAC_SECRET` | ❗ | Signs download URLs | Self-generated: `openssl rand -hex 32` |
+| `ADMIN_KEY` | ❗ (if using preview UI) | Gates approve/reject/edit/resolve-drift endpoints | Self-generated: `openssl rand -hex 32` |
+| `WEBHOOK_HMAC_SECRET` | ○ | Shared secret for webhook signatures | Self-generated |
 
 ### Recommended
 
-#### Git Provider Tokens
+#### Git Provider Tokens (at least one ❗ for multi-org scanning)
 
-| Variable | Description |
-|----------|-------------|
-| `GITHUB_TOKEN` | GitHub personal access token |
-| `GITLAB_TOKEN` | GitLab personal access token |
-| `GITFLIC_TOKEN` | GitFlic API token |
-| `GITVERSE_TOKEN` | GitVerse API token |
+| Variable | Description | Obtain from |
+|----------|-------------|-------------|
+| `GITHUB_TOKEN` | Scopes: `repo` (classic) or `Contents/Metadata: Read` (fine-grained) | [GitHub · Personal access tokens](https://github.com/settings/tokens) |
+| `GITLAB_TOKEN` | Scopes: `read_api`, `read_repository` | [GitLab · Personal access tokens](https://gitlab.com/-/user_settings/personal_access_tokens) |
+| `GITFLIC_TOKEN` | Repository read scope | [GitFlic](https://gitflic.ru) account settings |
+| `GITVERSE_TOKEN` | Repository read scope | [GitVerse](https://gitverse.ru) account settings |
 
 Each provider also supports a `_SECONDARY` token for failover (e.g., `GITHUB_TOKEN_SECONDARY`).
 
-#### Multi-Organization
+#### Multi-Organization (all ○)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `GITHUB_ORGS` | *personal repos* | Comma-separated GitHub organization logins |
-| `GITLAB_GROUPS` | *personal repos* | Comma-separated GitLab group paths |
+| `GITHUB_ORGS` | *personal repos* | Comma-separated GitHub organization logins; `*` scans every accessible org |
+| `GITLAB_GROUPS` | *personal repos* | Comma-separated GitLab group paths; subgroups auto-included |
 | `GITFLIC_ORGS` | *personal repos* | Comma-separated GitFlic organization names |
 | `GITVERSE_ORGS` | *personal repos* | Comma-separated GitVerse organization names |
 
-#### Illustration Providers (set at least one to generate per-article images)
+#### Illustration Providers (set at least one ❗ to generate per-article images)
 
-| Variable | Description |
-|----------|-------------|
-| `OPENAI_API_KEY` | Enables the DALL-E 3 provider |
-| `STABILITY_AI_API_KEY` | Enables the Stability AI (SDXL) provider |
-| `MIDJOURNEY_API_KEY` + `MIDJOURNEY_ENDPOINT` | Enables the Midjourney proxy provider (both required) |
-| `OPENAI_COMPAT_API_KEY` + `OPENAI_COMPAT_BASE_URL` | Enables an OpenAI-compatible image endpoint (Venice, Together, etc.); `OPENAI_COMPAT_MODEL` optional |
+| Variable | Description | Obtain from |
+|----------|-------------|-------------|
+| `OPENAI_API_KEY` | Enables DALL-E 3 (recommended minimum) | [OpenAI Platform · API keys](https://platform.openai.com/api-keys) (requires paid billing) |
+| `STABILITY_AI_API_KEY` | Enables Stability AI (SDXL) | [Stability Platform · API keys](https://platform.stability.ai/account/keys) |
+| `MIDJOURNEY_API_KEY` + `MIDJOURNEY_ENDPOINT` | Enables Midjourney proxy (both required; no official API) | [GoAPI](https://goapi.ai/), [UseAPI.net](https://useapi.net/), or [self-hosted midjourney-api](https://github.com/erictik/midjourney-api) |
+| `OPENAI_COMPAT_API_KEY` + `OPENAI_COMPAT_BASE_URL` | Enables an OpenAI-compatible endpoint | [Venice](https://venice.ai/), [Together](https://www.together.ai/), self-hosted [LiteLLM](https://github.com/BerriAI/litellm); `OPENAI_COMPAT_MODEL` optional |
 
 Illustration behavior is controlled by `ILLUSTRATION_ENABLED` (default `true`), `IMAGE_PROVIDER_PRIORITY` (default `dalle,stability,midjourney,openai_compat`), `ILLUSTRATION_DEFAULT_STYLE`, `ILLUSTRATION_DEFAULT_SIZE`, `ILLUSTRATION_DEFAULT_QUALITY`, and `ILLUSTRATION_DIR`. See [Illustration Generation](docs/guides/configuration.md#illustration-generation) and [Image Providers](docs/guides/configuration.md#image-providers) for full reference.
 
