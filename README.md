@@ -19,7 +19,7 @@ My Patreon Manager scans repositories across GitHub, GitLab, GitFlic, and GitVer
 - **Multi-organization support** -- scan repositories across multiple organizations and groups in a single sync run
 - **LLM-powered content generation** -- quality-scored model selection with automatic fallback chains and configurable quality thresholds
 - **Tier-gated Patreon publishing** -- maps repository content to Patreon tiers with deduplication via content fingerprinting
-- **CLI subcommands** -- `sync`, `scan`, `generate`, `validate`, `publish` with `--dry-run`, `--schedule`, `--org`, `--repo`, `--pattern`, `--json`, `--log-level`
+- **CLI subcommands** -- `process` (top-level pipeline), `scan`, `generate`, `validate`, `publish` with `--dry-run`, `--schedule`, `--org`, `--repo`, `--pattern`, `--json`, `--log-level`. `sync` is retained as a deprecated alias for `process`.
 - **HTTP server** -- Gin-based server on `:8080` with health checks, Prometheus metrics, admin endpoints, and webhook handlers
 - **Resilience patterns** -- circuit breakers, exponential backoff, per-provider rate limiting
 - **Observability** -- structured JSON logging, Prometheus metrics, Grafana dashboards
@@ -41,12 +41,21 @@ cp .env.example .env
 # 3. Validate configuration
 go run ./cmd/cli validate
 
-# 4. Preview a sync (no changes written)
-go run ./cmd/cli sync --dry-run
+# 4. Preview a run (no changes written)
+go run ./cmd/cli process --dry-run
 
-# 5. Run a full sync
-go run ./cmd/cli sync
+# 5. Run the pipeline: scan, generate, illustrate, land drafts as pending_review
+go run ./cmd/cli process
+
+# 6. Review drafts in the preview UI and approve the ones you want published
+#    Start the server (see below) and open http://localhost:8080/preview
+go run ./cmd/server
+
+# 7. Publish approved revisions to Patreon
+go run ./cmd/cli publish
 ```
+
+> `sync` is still accepted as a deprecated alias for `process` and prints a warning to stderr. Prefer `process` for new automation.
 
 ## Environment Variables Quick Reference
 
