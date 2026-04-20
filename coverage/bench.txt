@@ -1,0 +1,14 @@
+goos: linux
+goarch: amd64
+pkg: github.com/milos85vasic/My-Patreon-Manager/tests/benchmark
+cpu: 11th Gen Intel(R) Core(TM) i7-1165G7 @ 2.80GHz
+BenchmarkPromptAssembly-8      	   10000	     13976 ns/op	    2904 B/op	      20 allocs/op
+BenchmarkLLMCall-8             	 5313692	        24.63 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMarkdownRendering-8   	    7362	     35650 ns/op	   11206 B/op	      88 allocs/op
+BenchmarkQualityEvaluation-8   	257638890	         0.5031 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFilterMatching-8      	     100	   1762446 ns/op	 1179127 B/op	      12 allocs/op
+BenchmarkRepoignoreMatch-8     	 1000000	       104.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkURLNormalization-8    	     100	   2260272 ns/op	  171519 B/op	    4501 allocs/op
+BenchmarkMirrorDetection-8     	       1	 325848470 ns/op	19458952 B/op	 1338032 allocs/op
+PASS
+ok  	github.com/milos85vasic/My-Patreon-Manager/tests/benchmark	1.662s
