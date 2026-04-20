@@ -99,6 +99,7 @@ The project maintains **100% per-package test coverage**.
   - `scripts/coverage.sh` — per-package test matrix under `-race + atomic` with coverage; merges profiles via `scripts/covermerge`; enforces 100% gate via `scripts/coverdiff`.
   - `scripts/covermerge/` — Go helper that merges multiple cover profiles taking MAX per-statement count (correct for atomic mode).
   - `scripts/coverage-legacy.sh` — preserved for one cycle in case operators need to compare against the previous (diluted) combined-mode numbers.
+  - `scripts/test-postgres.sh` — stands up a throwaway postgres container (podman by default; docker via `RUNTIME=docker`), runs `tests/integration/postgres_live_test.go` under the `postgres` build tag, tears down on exit. Requires `POSTGRES_TEST_DSN` if run standalone.
   - `scripts/llmsverifier.sh` — LLMsVerifier service helper.
   - `scripts/register-providers.sh` — provider registration helper.
   - `scripts/security/run_all.sh` — local security scanner runner.

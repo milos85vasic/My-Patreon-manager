@@ -25,8 +25,7 @@ Maintained alongside the code — treat this as the canonical "what's not done a
     - [1.3 Article scheduling (publish-at-future-date)](#13-article-scheduling-publish-at-future-date)
     - [1.4 Separate REVIEWER_KEY role](#14-separate-reviewer_key-role)
 2. [Infrastructure gaps](#2-infrastructure-gaps)
-    - [2.1 Postgres integration test harness](#21-postgres-integration-test-harness)
-    - [2.2 `LLMProvider` / `Models` mirrors on GitFlic & GitVerse](#22-llmprovider--models-mirrors-on-gitflic--gitverse)
+    - [2.1 `LLMProvider` / `Models` mirrors on GitFlic & GitVerse](#21-llmprovider--models-mirrors-on-gitflic--gitverse)
 3. [Deferred code enhancements](#3-deferred-code-enhancements)
     - [3.1 Preview UI frontend](#31-preview-ui-frontend)
     - [3.2 Webhook-driven incremental sync](#32-webhook-driven-incremental-sync)
@@ -114,31 +113,7 @@ Resolved in `docs/superpowers/specs/2026-04-18-process-command-design.md` §Open
 
 ## 2. Infrastructure gaps
 
-### 2.1 Postgres integration test harness
-
-**Category:** Infrastructure
-**Affects:** `internal/database/postgres.go`, every Postgres store implementation
-**Status:** Deferred
-
-The project has no real Postgres integration test harness. All Postgres store code is exercised either:
-- Indirectly via the Migrator's file-loading tests (which verify syntax but not runtime behavior).
-- Via `go-sqlmock` tests that cover error branches (which mock the driver, not a real Postgres).
-
-SQLite stores are covered by `testhelpers.OpenMigratedSQLite(t)` (an in-memory real database). Postgres lacks the equivalent.
-
-**Why it's this way:** Spinning up a Postgres container for tests requires Docker on every developer and CI machine. The project's CI workflows use `workflow_dispatch` only (per the CI policy in `CLAUDE.md`) and aren't wired for that overhead.
-
-**Workaround for operators running Postgres in production:** Manual integration testing. A few options:
-- Run the full test suite in a local Postgres environment by exporting `DB_DRIVER=postgres` + real `DB_*` values, then `go test ./tests/integration/...` against a throwaway database.
-- Use `docker-compose.yml` at the repo root to stand up a real Postgres, then run against it.
-
-**Future work:** Add a `//go:build postgres` build-tag-gated test file (e.g. `internal/database/postgres_live_test.go`) that requires `POSTGRES_TEST_DSN` to be set and runs real-CRUD tests against it. CI adds a `postgres` workflow that starts a container, exports the DSN, and runs `go test -tags postgres ./...`. Estimated work: 1 day + CI pipeline adjustments.
-
-Filed as follow-up in `docs/superpowers/specs/2026-04-18-migration-system-refactor.md`.
-
----
-
-### 2.2 `LLMProvider` / `Models` mirrors on GitFlic & GitVerse
+### 2.1 `LLMProvider` / `Models` mirrors on GitFlic & GitVerse
 
 **Category:** Infrastructure
 **Affects:** Submodule push workflow

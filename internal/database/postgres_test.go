@@ -1100,12 +1100,13 @@ func TestPostgresPostStore_Create(t *testing.T) {
 	now := time.Now()
 	p := &models.Post{
 		ID: "p1", CampaignID: "c1", RepositoryID: "r1", Title: "Post Title",
-		Content: "Body", PostType: "text", TierIDs: []string{"t1"},
+		Content: "Body", URL: "https://www.patreon.com/posts/p1",
+		PostType: "text", TierIDs: []string{"t1"},
 		PublicationStatus: "draft", PublishedAt: now, IsManuallyEdited: false,
 		ContentHash: "hash1", CreatedAt: now, UpdatedAt: now,
 	}
 	mock.ExpectExec("INSERT INTO posts").
-		WithArgs(p.ID, p.CampaignID, p.RepositoryID, p.Title, p.Content, p.PostType, []byte(`["t1"]`), p.PublicationStatus, p.PublishedAt, p.IsManuallyEdited, p.ContentHash, p.CreatedAt, p.UpdatedAt).
+		WithArgs(p.ID, p.CampaignID, p.RepositoryID, p.Title, p.Content, p.URL, p.PostType, []byte(`["t1"]`), p.PublicationStatus, p.PublishedAt, p.IsManuallyEdited, p.ContentHash, p.CreatedAt, p.UpdatedAt).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	err := store.Create(ctx, p)
@@ -1121,8 +1122,8 @@ func TestPostgresPostStore_GetByID(t *testing.T) {
 	now := time.Now()
 	mock.ExpectQuery("SELECT.*FROM posts WHERE id=\\$1").
 		WithArgs("p1").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "campaign_id", "repository_id", "title", "content", "post_type", "tier_ids", "publication_status", "published_at", "is_manually_edited", "content_hash", "created_at", "updated_at"}).
-			AddRow("p1", "c1", "r1", "Title", "Body", "text", `["t1"]`, "draft", now, false, "hash1", now, now))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "campaign_id", "repository_id", "title", "content", "url", "post_type", "tier_ids", "publication_status", "published_at", "is_manually_edited", "content_hash", "created_at", "updated_at"}).
+			AddRow("p1", "c1", "r1", "Title", "Body", "https://www.patreon.com/posts/p1", "text", `["t1"]`, "draft", now, false, "hash1", now, now))
 
 	post, err := store.GetByID(ctx, "p1")
 	assert.NoError(t, err)
@@ -1155,8 +1156,8 @@ func TestPostgresPostStore_GetByRepositoryID(t *testing.T) {
 	now := time.Now()
 	mock.ExpectQuery("SELECT.*FROM posts WHERE repository_id=\\$1").
 		WithArgs("r1").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "campaign_id", "repository_id", "title", "content", "post_type", "tier_ids", "publication_status", "published_at", "is_manually_edited", "content_hash", "created_at", "updated_at"}).
-			AddRow("p1", "c1", "r1", "Title", "Body", "text", `["t1"]`, "draft", now, false, "hash1", now, now))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "campaign_id", "repository_id", "title", "content", "url", "post_type", "tier_ids", "publication_status", "published_at", "is_manually_edited", "content_hash", "created_at", "updated_at"}).
+			AddRow("p1", "c1", "r1", "Title", "Body", "https://www.patreon.com/posts/p1", "text", `["t1"]`, "draft", now, false, "hash1", now, now))
 
 	post, err := store.GetByRepositoryID(ctx, "r1")
 	assert.NoError(t, err)
@@ -1188,12 +1189,13 @@ func TestPostgresPostStore_Update(t *testing.T) {
 	now := time.Now()
 	p := &models.Post{
 		ID: "p1", CampaignID: "c1", RepositoryID: "r1", Title: "Updated",
-		Content: "Updated body", PostType: "text", TierIDs: []string{"t1", "t2"},
+		Content: "Updated body", URL: "https://www.patreon.com/posts/p1",
+		PostType: "text", TierIDs: []string{"t1", "t2"},
 		PublicationStatus: "published", PublishedAt: now, IsManuallyEdited: true,
 		ContentHash: "hash2",
 	}
 	mock.ExpectExec("UPDATE posts SET").
-		WithArgs(p.CampaignID, p.RepositoryID, p.Title, p.Content, p.PostType, []byte(`["t1","t2"]`), p.PublicationStatus, p.PublishedAt, p.IsManuallyEdited, p.ContentHash, p.ID).
+		WithArgs(p.CampaignID, p.RepositoryID, p.Title, p.Content, p.URL, p.PostType, []byte(`["t1","t2"]`), p.PublicationStatus, p.PublishedAt, p.IsManuallyEdited, p.ContentHash, p.ID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	err := store.Update(ctx, p)
@@ -1237,8 +1239,8 @@ func TestPostgresPostStore_ListByStatus(t *testing.T) {
 	now := time.Now()
 	mock.ExpectQuery("SELECT.*FROM posts WHERE publication_status=\\$1").
 		WithArgs("draft").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "campaign_id", "repository_id", "title", "content", "post_type", "tier_ids", "publication_status", "published_at", "is_manually_edited", "content_hash", "created_at", "updated_at"}).
-			AddRow("p1", "c1", "r1", "Title", "Body", "text", `[]`, "draft", now, false, "", now, now))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "campaign_id", "repository_id", "title", "content", "url", "post_type", "tier_ids", "publication_status", "published_at", "is_manually_edited", "content_hash", "created_at", "updated_at"}).
+			AddRow("p1", "c1", "r1", "Title", "Body", "", "text", `[]`, "draft", now, false, "", now, now))
 
 	posts, err := store.ListByStatus(ctx, "draft")
 	assert.NoError(t, err)

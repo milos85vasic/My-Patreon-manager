@@ -597,14 +597,14 @@ func (s *PostgresContentTemplateStore) Delete(ctx context.Context, id string) er
 
 func (s *PostgresPostStore) Create(ctx context.Context, p *models.Post) error {
 	tierIDs, _ := json.Marshal(p.TierIDs)
-	_, err := s.db.ExecContext(ctx, `INSERT INTO posts (id, campaign_id, repository_id, title, content, post_type, tier_ids, publication_status, published_at, is_manually_edited, content_hash, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-		p.ID, p.CampaignID, p.RepositoryID, p.Title, p.Content, p.PostType, tierIDs, p.PublicationStatus, p.PublishedAt, p.IsManuallyEdited, p.ContentHash, p.CreatedAt, p.UpdatedAt)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO posts (id, campaign_id, repository_id, title, content, url, post_type, tier_ids, publication_status, published_at, is_manually_edited, content_hash, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+		p.ID, p.CampaignID, p.RepositoryID, p.Title, p.Content, p.URL, p.PostType, tierIDs, p.PublicationStatus, p.PublishedAt, p.IsManuallyEdited, p.ContentHash, p.CreatedAt, p.UpdatedAt)
 	return err
 }
 func (s *PostgresPostStore) GetByID(ctx context.Context, id string) (*models.Post, error) {
 	p := &models.Post{}
 	var tierIDs []byte
-	err := s.db.QueryRowContext(ctx, "SELECT id, campaign_id, repository_id, title, content, post_type, tier_ids, publication_status, published_at, is_manually_edited, content_hash, created_at, updated_at FROM posts WHERE id=$1", id).Scan(&p.ID, &p.CampaignID, &p.RepositoryID, &p.Title, &p.Content, &p.PostType, &tierIDs, &p.PublicationStatus, &p.PublishedAt, &p.IsManuallyEdited, &p.ContentHash, &p.CreatedAt, &p.UpdatedAt)
+	err := s.db.QueryRowContext(ctx, "SELECT id, campaign_id, repository_id, title, content, url, post_type, tier_ids, publication_status, published_at, is_manually_edited, content_hash, created_at, updated_at FROM posts WHERE id=$1", id).Scan(&p.ID, &p.CampaignID, &p.RepositoryID, &p.Title, &p.Content, &p.URL, &p.PostType, &tierIDs, &p.PublicationStatus, &p.PublishedAt, &p.IsManuallyEdited, &p.ContentHash, &p.CreatedAt, &p.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -617,7 +617,7 @@ func (s *PostgresPostStore) GetByID(ctx context.Context, id string) (*models.Pos
 func (s *PostgresPostStore) GetByRepositoryID(ctx context.Context, repoID string) (*models.Post, error) {
 	p := &models.Post{}
 	var tierIDs []byte
-	err := s.db.QueryRowContext(ctx, "SELECT id, campaign_id, repository_id, title, content, post_type, tier_ids, publication_status, published_at, is_manually_edited, content_hash, created_at, updated_at FROM posts WHERE repository_id=$1", repoID).Scan(&p.ID, &p.CampaignID, &p.RepositoryID, &p.Title, &p.Content, &p.PostType, &tierIDs, &p.PublicationStatus, &p.PublishedAt, &p.IsManuallyEdited, &p.ContentHash, &p.CreatedAt, &p.UpdatedAt)
+	err := s.db.QueryRowContext(ctx, "SELECT id, campaign_id, repository_id, title, content, url, post_type, tier_ids, publication_status, published_at, is_manually_edited, content_hash, created_at, updated_at FROM posts WHERE repository_id=$1", repoID).Scan(&p.ID, &p.CampaignID, &p.RepositoryID, &p.Title, &p.Content, &p.URL, &p.PostType, &tierIDs, &p.PublicationStatus, &p.PublishedAt, &p.IsManuallyEdited, &p.ContentHash, &p.CreatedAt, &p.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -629,8 +629,8 @@ func (s *PostgresPostStore) GetByRepositoryID(ctx context.Context, repoID string
 }
 func (s *PostgresPostStore) Update(ctx context.Context, p *models.Post) error {
 	tierIDs, _ := json.Marshal(p.TierIDs)
-	_, err := s.db.ExecContext(ctx, `UPDATE posts SET campaign_id=$1, repository_id=$2, title=$3, content=$4, post_type=$5, tier_ids=$6, publication_status=$7, published_at=$8, is_manually_edited=$9, content_hash=$10, updated_at=CURRENT_TIMESTAMP WHERE id=$11`,
-		p.CampaignID, p.RepositoryID, p.Title, p.Content, p.PostType, tierIDs, p.PublicationStatus, p.PublishedAt, p.IsManuallyEdited, p.ContentHash, p.ID)
+	_, err := s.db.ExecContext(ctx, `UPDATE posts SET campaign_id=$1, repository_id=$2, title=$3, content=$4, url=$5, post_type=$6, tier_ids=$7, publication_status=$8, published_at=$9, is_manually_edited=$10, content_hash=$11, updated_at=CURRENT_TIMESTAMP WHERE id=$12`,
+		p.CampaignID, p.RepositoryID, p.Title, p.Content, p.URL, p.PostType, tierIDs, p.PublicationStatus, p.PublishedAt, p.IsManuallyEdited, p.ContentHash, p.ID)
 	return err
 }
 func (s *PostgresPostStore) UpdatePublicationStatus(ctx context.Context, id, status string) error {
@@ -642,7 +642,7 @@ func (s *PostgresPostStore) MarkManuallyEdited(ctx context.Context, id string) e
 	return err
 }
 func (s *PostgresPostStore) ListByStatus(ctx context.Context, status string) ([]*models.Post, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, campaign_id, repository_id, title, content, post_type, tier_ids, publication_status, published_at, is_manually_edited, content_hash, created_at, updated_at FROM posts WHERE publication_status=$1", status)
+	rows, err := s.db.QueryContext(ctx, "SELECT id, campaign_id, repository_id, title, content, url, post_type, tier_ids, publication_status, published_at, is_manually_edited, content_hash, created_at, updated_at FROM posts WHERE publication_status=$1", status)
 	if err != nil {
 		return nil, err
 	}
@@ -651,7 +651,7 @@ func (s *PostgresPostStore) ListByStatus(ctx context.Context, status string) ([]
 	for rows.Next() {
 		p := &models.Post{}
 		var tierIDs []byte
-		if err := rows.Scan(&p.ID, &p.CampaignID, &p.RepositoryID, &p.Title, &p.Content, &p.PostType, &tierIDs, &p.PublicationStatus, &p.PublishedAt, &p.IsManuallyEdited, &p.ContentHash, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.CampaignID, &p.RepositoryID, &p.Title, &p.Content, &p.URL, &p.PostType, &tierIDs, &p.PublicationStatus, &p.PublishedAt, &p.IsManuallyEdited, &p.ContentHash, &p.CreatedAt, &p.UpdatedAt); err != nil {
 			return nil, err
 		}
 		json.Unmarshal(tierIDs, &p.TierIDs)

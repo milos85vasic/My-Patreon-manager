@@ -39,6 +39,7 @@ go test ./internal/services/sync/... -run TestOrchestrator_Run -v   # single tes
 go test -race ./...                             # race detector
 go vet ./...                                    # static analysis
 bash scripts/coverage.sh                        # full coverage run — gates commits
+bash scripts/test-postgres.sh                   # live Postgres integration harness (uses podman/docker + postgres:16-alpine)
 ```
 
 The SQLite driver requires `CGO_ENABLED=1` (default on Linux/macOS; off in the server Dockerfile). Tests and CLI runs against the default SQLite backend need CGO — with `CGO_ENABLED=0` the SQLite driver is absent, so either set `DB_DRIVER=postgres` or rebuild with CGO.

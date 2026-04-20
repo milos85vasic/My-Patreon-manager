@@ -506,15 +506,15 @@ type SQLitePostStore struct {
 
 func (s *SQLitePostStore) Create(ctx context.Context, p *models.Post) error {
 	tierIDs, _ := json.Marshal(p.TierIDs)
-	_, err := s.db.ExecContext(ctx, `INSERT INTO posts (id, campaign_id, repository_id, title, content, post_type, tier_ids, publication_status, published_at, is_manually_edited, content_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.ID, p.CampaignID, p.RepositoryID, p.Title, p.Content, p.PostType, string(tierIDs), p.PublicationStatus, p.PublishedAt, p.IsManuallyEdited, p.ContentHash, p.CreatedAt, p.UpdatedAt)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO posts (id, campaign_id, repository_id, title, content, url, post_type, tier_ids, publication_status, published_at, is_manually_edited, content_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.ID, p.CampaignID, p.RepositoryID, p.Title, p.Content, p.URL, p.PostType, string(tierIDs), p.PublicationStatus, p.PublishedAt, p.IsManuallyEdited, p.ContentHash, p.CreatedAt, p.UpdatedAt)
 	return err
 }
 
 func (s *SQLitePostStore) GetByID(ctx context.Context, id string) (*models.Post, error) {
 	p := &models.Post{}
 	var tierIDs []byte
-	err := s.db.QueryRowContext(ctx, "SELECT id, campaign_id, repository_id, title, content, post_type, tier_ids, publication_status, published_at, is_manually_edited, content_hash, created_at, updated_at FROM posts WHERE id=?", id).Scan(&p.ID, &p.CampaignID, &p.RepositoryID, &p.Title, &p.Content, &p.PostType, &tierIDs, &p.PublicationStatus, &p.PublishedAt, &p.IsManuallyEdited, &p.ContentHash, &p.CreatedAt, &p.UpdatedAt)
+	err := s.db.QueryRowContext(ctx, "SELECT id, campaign_id, repository_id, title, content, url, post_type, tier_ids, publication_status, published_at, is_manually_edited, content_hash, created_at, updated_at FROM posts WHERE id=?", id).Scan(&p.ID, &p.CampaignID, &p.RepositoryID, &p.Title, &p.Content, &p.URL, &p.PostType, &tierIDs, &p.PublicationStatus, &p.PublishedAt, &p.IsManuallyEdited, &p.ContentHash, &p.CreatedAt, &p.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -528,7 +528,7 @@ func (s *SQLitePostStore) GetByID(ctx context.Context, id string) (*models.Post,
 func (s *SQLitePostStore) GetByRepositoryID(ctx context.Context, repoID string) (*models.Post, error) {
 	p := &models.Post{}
 	var tierIDs []byte
-	err := s.db.QueryRowContext(ctx, "SELECT id, campaign_id, repository_id, title, content, post_type, tier_ids, publication_status, published_at, is_manually_edited, content_hash, created_at, updated_at FROM posts WHERE repository_id=?", repoID).Scan(&p.ID, &p.CampaignID, &p.RepositoryID, &p.Title, &p.Content, &p.PostType, &tierIDs, &p.PublicationStatus, &p.PublishedAt, &p.IsManuallyEdited, &p.ContentHash, &p.CreatedAt, &p.UpdatedAt)
+	err := s.db.QueryRowContext(ctx, "SELECT id, campaign_id, repository_id, title, content, url, post_type, tier_ids, publication_status, published_at, is_manually_edited, content_hash, created_at, updated_at FROM posts WHERE repository_id=?", repoID).Scan(&p.ID, &p.CampaignID, &p.RepositoryID, &p.Title, &p.Content, &p.URL, &p.PostType, &tierIDs, &p.PublicationStatus, &p.PublishedAt, &p.IsManuallyEdited, &p.ContentHash, &p.CreatedAt, &p.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -541,8 +541,8 @@ func (s *SQLitePostStore) GetByRepositoryID(ctx context.Context, repoID string) 
 
 func (s *SQLitePostStore) Update(ctx context.Context, p *models.Post) error {
 	tierIDs, _ := json.Marshal(p.TierIDs)
-	_, err := s.db.ExecContext(ctx, `UPDATE posts SET campaign_id=?, repository_id=?, title=?, content=?, post_type=?, tier_ids=?, publication_status=?, published_at=?, is_manually_edited=?, content_hash=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-		p.CampaignID, p.RepositoryID, p.Title, p.Content, p.PostType, string(tierIDs), p.PublicationStatus, p.PublishedAt, p.IsManuallyEdited, p.ContentHash, p.ID)
+	_, err := s.db.ExecContext(ctx, `UPDATE posts SET campaign_id=?, repository_id=?, title=?, content=?, url=?, post_type=?, tier_ids=?, publication_status=?, published_at=?, is_manually_edited=?, content_hash=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+		p.CampaignID, p.RepositoryID, p.Title, p.Content, p.URL, p.PostType, string(tierIDs), p.PublicationStatus, p.PublishedAt, p.IsManuallyEdited, p.ContentHash, p.ID)
 	return err
 }
 
@@ -557,7 +557,7 @@ func (s *SQLitePostStore) MarkManuallyEdited(ctx context.Context, id string) err
 }
 
 func (s *SQLitePostStore) ListByStatus(ctx context.Context, status string) ([]*models.Post, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, campaign_id, repository_id, title, content, post_type, tier_ids, publication_status, published_at, is_manually_edited, content_hash, created_at, updated_at FROM posts WHERE publication_status=?", status)
+	rows, err := s.db.QueryContext(ctx, "SELECT id, campaign_id, repository_id, title, content, url, post_type, tier_ids, publication_status, published_at, is_manually_edited, content_hash, created_at, updated_at FROM posts WHERE publication_status=?", status)
 	if err != nil {
 		return nil, err
 	}
@@ -566,7 +566,7 @@ func (s *SQLitePostStore) ListByStatus(ctx context.Context, status string) ([]*m
 	for rows.Next() {
 		p := &models.Post{}
 		var tierIDs []byte
-		if err := rows.Scan(&p.ID, &p.CampaignID, &p.RepositoryID, &p.Title, &p.Content, &p.PostType, &tierIDs, &p.PublicationStatus, &p.PublishedAt, &p.IsManuallyEdited, &p.ContentHash, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.CampaignID, &p.RepositoryID, &p.Title, &p.Content, &p.URL, &p.PostType, &tierIDs, &p.PublicationStatus, &p.PublishedAt, &p.IsManuallyEdited, &p.ContentHash, &p.CreatedAt, &p.UpdatedAt); err != nil {
 			return nil, err
 		}
 		json.Unmarshal(tierIDs, &p.TierIDs)
