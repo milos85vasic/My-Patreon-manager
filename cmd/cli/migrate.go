@@ -39,7 +39,7 @@ func runMigrate(ctx context.Context, db database.Database, args []string, out io
 	case "up":
 		return m.MigrateUp(ctx)
 	case "down":
-		return runMigrateDown(ctx, m, args[1:], out)
+		return runMigrateDown(ctx, db, m, args[1:], out)
 	case "status":
 		return printMigrationStatus(ctx, m, out)
 	default:
@@ -57,7 +57,12 @@ var versionPattern = regexp.MustCompile(`^\d{4}$`)
 // exits 0 so operators can review before executing. With `--force` it
 // invokes Migrator.MigrateDownTo; each rollback runs .down.sql and inserts
 // a direction='down' row in schema_migrations.
-func runMigrateDown(ctx context.Context, m *database.Migrator, args []string, out io.Writer) error {
+//
+// When `--backup-to=<path>` is supplied the command takes a driver-
+// specific snapshot BEFORE invoking MigrateDownTo. A failing backup
+// aborts the rollback (the rollback never runs), guaranteeing the
+// operator always has a restorable copy of the pre-rollback state.
+func runMigrateDown(ctx context.Context, db database.Database, m *database.Migrator, args []string, out io.Writer) error {
 	if len(args) == 0 {
 		return fmt.Errorf("migrate down: target version required (e.g. 'migrate down 0003')")
 	}
@@ -65,11 +70,10 @@ func runMigrateDown(ctx context.Context, m *database.Migrator, args []string, ou
 	if !versionPattern.MatchString(target) {
 		return fmt.Errorf("migrate down: invalid target version %q; expected NNNN (e.g. '0003')", target)
 	}
-	force := false
-	for _, a := range args[1:] {
-		if a == "--force" {
-			force = true
-		}
+
+	force, backupTo, err := parseMigrateDownFlags(args[1:])
+	if err != nil {
+		return err
 	}
 
 	statuses, err := m.MigrationsStatus(ctx)
@@ -106,9 +110,19 @@ func runMigrateDown(ctx context.Context, m *database.Migrator, args []string, ou
 
 	fmt.Fprintf(out, "migrate down: would roll back %d version(s): %s\n",
 		len(toRollBack), strings.Join(toRollBack, ", "))
+	if backupTo != "" {
+		fmt.Fprintf(out, "migrate down: backup target: %s\n", backupTo)
+	}
 	if !force {
 		fmt.Fprintln(out, "re-run with --force to execute")
 		return nil
+	}
+
+	if backupTo != "" {
+		if err := performBackup(ctx, db, backupTo); err != nil {
+			return fmt.Errorf("migrate down: backup failed (rollback aborted): %w", err)
+		}
+		fmt.Fprintf(out, "migrate down: backup written to %s\n", backupTo)
 	}
 
 	if err := m.MigrateDownTo(ctx, target); err != nil {
@@ -116,6 +130,35 @@ func runMigrateDown(ctx context.Context, m *database.Migrator, args []string, ou
 	}
 	fmt.Fprintf(out, "migrate down: rolled back %d version(s)\n", len(toRollBack))
 	return nil
+}
+
+// parseMigrateDownFlags extracts `--force` and `--backup-to` from the
+// flag tail. It accepts both `--backup-to=PATH` and `--backup-to PATH`
+// and rejects an empty or missing value so operators can't silently
+// get a no-op backup.
+func parseMigrateDownFlags(flags []string) (force bool, backupTo string, err error) {
+	for i := 0; i < len(flags); i++ {
+		a := flags[i]
+		switch {
+		case a == "--force":
+			force = true
+		case a == "--backup-to":
+			if i+1 >= len(flags) {
+				return false, "", fmt.Errorf("migrate down: --backup-to requires a path")
+			}
+			i++
+			backupTo = flags[i]
+			if backupTo == "" {
+				return false, "", fmt.Errorf("migrate down: --backup-to requires a non-empty path")
+			}
+		case strings.HasPrefix(a, "--backup-to="):
+			backupTo = strings.TrimPrefix(a, "--backup-to=")
+			if backupTo == "" {
+				return false, "", fmt.Errorf("migrate down: --backup-to requires a non-empty path")
+			}
+		}
+	}
+	return force, backupTo, nil
 }
 
 // migrateMigrator reaches into the concrete driver to obtain a
@@ -137,13 +180,17 @@ func printMigrateHelp(out io.Writer) {
 	fmt.Fprintln(out, "Usage: patreon-manager migrate <subcommand>")
 	fmt.Fprintln(out, "")
 	fmt.Fprintln(out, "Subcommands:")
-	fmt.Fprintln(out, "  up                        Apply every pending migration")
-	fmt.Fprintln(out, "  down <target> [--force]   Roll back every applied migration with version > target")
-	fmt.Fprintln(out, "  status                    Show applied and pending migrations")
-	fmt.Fprintln(out, "  help                      Show this message")
+	fmt.Fprintln(out, "  up                                         Apply every pending migration")
+	fmt.Fprintln(out, "  down <target> [--force] [--backup-to P]    Roll back every applied migration with version > target")
+	fmt.Fprintln(out, "  status                                     Show applied and pending migrations")
+	fmt.Fprintln(out, "  help                                       Show this message")
 	fmt.Fprintln(out, "")
 	fmt.Fprintln(out, "'down' is destructive. Without --force it prints the rollback plan")
 	fmt.Fprintln(out, "and exits. Pass --force to actually roll back.")
+	fmt.Fprintln(out, "")
+	fmt.Fprintln(out, "--backup-to=PATH takes a pre-rollback snapshot before touching the")
+	fmt.Fprintln(out, "schema. SQLite uses VACUUM INTO; Postgres uses pg_dump. If the backup")
+	fmt.Fprintln(out, "fails the rollback does NOT proceed.")
 }
 
 // printMigrationStatus renders a tabular report of every discovered

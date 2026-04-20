@@ -33,7 +33,6 @@ Maintained alongside the code — treat this as the canonical "what's not done a
     - [3.2 Preview UI frontend](#32-preview-ui-frontend)
     - [3.3 Webhook-driven incremental sync](#33-webhook-driven-incremental-sync)
     - [3.4 Multi-node process parallelism](#34-multi-node-process-parallelism)
-    - [3.5 `migrate down` destructive-action guardrails](#35-migrate-down-destructive-action-guardrails)
 4. [Documentation deferrals](#4-documentation-deferrals)
     - [4.1 Video course scripts](#41-video-course-scripts)
     - [4.2 Legacy planning artifacts](#42-legacy-planning-artifacts)
@@ -262,22 +261,6 @@ The `process_runs` single-runner lock is partial-unique-index based and scoped t
 
 ---
 
-### 3.5 `migrate down` destructive-action guardrails
-
-**Category:** Known-quirk
-**Affects:** `patreon-manager migrate down`
-**Status:** `--force` guard exists; no automatic backup
-
-`patreon-manager migrate down <version>` without `--force` prints a plan and exits 0. `--force` executes the rollback. The command does NOT take a DB backup before executing — operators are expected to snapshot the database out-of-band.
-
-**Why it's this way:** The project doesn't dictate a backup strategy (`sqlite3 .dump`, `pg_dump`, filesystem snapshots, etc. are all valid) and baking one into the CLI would force a choice.
-
-**Workaround:** The runbook at `docs/runbooks/` (if present — see §4.2) should document: take a backup, THEN `migrate down --force`. Operators must discipline themselves.
-
-**Future work:** Optional `--backup-to <path>` flag that dumps the pre-migration state to a file before running. Dialect-specific implementation (`sqlite3 .dump` for SQLite; `pg_dump` invocation for Postgres). 1-2 hours of work.
-
----
-
 ## 4. Documentation deferrals
 
 ### 4.1 Video course scripts
@@ -361,6 +344,6 @@ For anyone picking up one of the items above:
 2. Follow the project's TDD policy (`CLAUDE.md` §Feature Workflow).
 3. When the item is fully addressed, **delete the entry from this file in the same commit** that closes it. Don't leave stale entries.
 4. If the fix reveals new subordinate work, add a new entry here for it.
-5. Commit messages for these items should reference the section number, e.g. `feat(cli): add --backup-to to migrate down (closes KNOWN-ISSUES §3.5)`.
+5. Commit messages for these items should reference the section number, e.g. `feat(illustration): sweep orphans after merge-history (closes KNOWN-ISSUES §3.1)`.
 
 This document is the single source of truth for what's intentionally undone. Keep it accurate.

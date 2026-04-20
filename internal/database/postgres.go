@@ -45,6 +45,12 @@ func (db *PostgresDB2) Close() error {
 
 func (db *PostgresDB2) DB() *sql.DB { return db.db }
 
+// DSN returns the connection string the driver is configured to use.
+// Exposed so tooling outside the database package (for example the
+// `migrate down --backup-to` pre-flight snapshot that shells out to
+// pg_dump) can reach the same credentials the driver is using.
+func (db *PostgresDB2) DSN() string { return db.dsn }
+
 // Migrate brings the Postgres schema up to the latest version by
 // running the embedded .postgres.up.sql files through the
 // driver-agnostic Migrator. Pre-existing production databases go

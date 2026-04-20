@@ -3,16 +3,20 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
 
 	"github.com/milos85vasic/My-Patreon-Manager/internal/database"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -352,7 +356,7 @@ func TestMigrateDown_Force_ExecutesRollback(t *testing.T) {
 
 	// Roll back to 0001: versions 0002 and 0003 should flip to unapplied.
 	var buf bytes.Buffer
-	err := runMigrateDown(ctx, m, []string{"0001", "--force"}, &buf)
+	err := runMigrateDown(ctx, db, m, []string{"0001", "--force"}, &buf)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "rolled back 2 version")
 
@@ -386,7 +390,7 @@ func TestMigrateDown_MissingDownFile_Errors(t *testing.T) {
 	m := database.NewMigrator(db.DB(), database.DialectSQLite, fsys, "migrations")
 	require.NoError(t, m.MigrateUp(ctx))
 
-	err := runMigrateDown(ctx, m, []string{"0001", "--force"}, io.Discard)
+	err := runMigrateDown(ctx, db, m, []string{"0001", "--force"}, io.Discard)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, database.ErrMissingDownMigration)
 }
@@ -421,7 +425,7 @@ func TestMigrateDown_Force_BubblesError(t *testing.T) {
 	m := database.NewMigrator(db.DB(), database.DialectSQLite, fsys, "migrations")
 	require.NoError(t, m.MigrateUp(ctx))
 
-	err := runMigrateDown(ctx, m, []string{"0001", "--force"}, io.Discard)
+	err := runMigrateDown(ctx, db, m, []string{"0001", "--force"}, io.Discard)
 	require.Error(t, err)
 }
 
@@ -441,3 +445,314 @@ func TestRunMigrate_Help_MentionsDown(t *testing.T) {
 // accidentally shadow database errors. This keeps the public contract
 // stable in case future refactors introduce typed errors.
 var _ = errors.New
+
+// --- migrate down --backup-to tests ---------------------------------------
+
+// withBackupSQLiteOverride swaps the package-level backupSQLite function
+// for the duration of a test so failure and dispatch paths can be
+// exercised without touching real disk I/O.
+func withBackupSQLiteOverride(t *testing.T, stub func(context.Context, *database.SQLiteDB, string) error) {
+	t.Helper()
+	orig := backupSQLite
+	backupSQLite = stub
+	t.Cleanup(func() { backupSQLite = orig })
+}
+
+// withBackupPostgresOverride mirrors withBackupSQLiteOverride for the
+// Postgres dispatch.
+func withBackupPostgresOverride(t *testing.T, stub func(context.Context, *database.PostgresDB2, string) error) {
+	t.Helper()
+	orig := backupPostgres
+	backupPostgres = stub
+	t.Cleanup(func() { backupPostgres = orig })
+}
+
+// TestMigrateDown_BackupTo_CreatesFile_SQLite asserts `--backup-to` writes
+// a valid SQLite file to the given path before rolling back the migrations.
+// The backup snapshot must contain the pre-rollback schema so an operator
+// can restore from it after a mistaken rollback.
+func TestMigrateDown_BackupTo_CreatesFile_SQLite(t *testing.T) {
+	ctx := context.Background()
+	db := database.NewSQLiteDB(":memory:")
+	require.NoError(t, db.Connect(ctx, ""))
+	t.Cleanup(func() { _ = db.Close() })
+	fsys := buildMigratorFS(map[string]string{
+		"0001_init.sqlite.up.sql":     "CREATE TABLE a (id INTEGER);",
+		"0001_init.sqlite.down.sql":   "DROP TABLE a;",
+		"0002_second.sqlite.up.sql":   "CREATE TABLE b (id INTEGER);",
+		"0002_second.sqlite.down.sql": "DROP TABLE b;",
+	})
+	m := database.NewMigrator(db.DB(), database.DialectSQLite, fsys, "migrations")
+	require.NoError(t, m.MigrateUp(ctx))
+
+	dir := t.TempDir()
+	backupPath := filepath.Join(dir, "pre-rollback.sqlite")
+
+	var buf bytes.Buffer
+	err := runMigrateDown(ctx, db, m, []string{"0001", "--force", "--backup-to=" + backupPath}, &buf)
+	require.NoError(t, err)
+
+	info, err := os.Stat(backupPath)
+	require.NoError(t, err, "backup file must exist")
+	require.Greater(t, info.Size(), int64(0), "backup file should be non-empty")
+
+	bdb, err := sql.Open("sqlite3", backupPath)
+	require.NoError(t, err)
+	defer bdb.Close()
+	var n int
+	require.NoError(t, bdb.QueryRow(
+		"SELECT count(*) FROM sqlite_master WHERE type='table' AND name='b'",
+	).Scan(&n))
+	assert.Equal(t, 1, n, "backup should contain table 'b' that existed pre-rollback")
+}
+
+// TestMigrateDown_BackupTo_FailurePreventsRollback asserts that if the
+// pre-flight backup fails, `MigrateDownTo` is NOT called and the database
+// still reflects every applied migration.
+func TestMigrateDown_BackupTo_FailurePreventsRollback(t *testing.T) {
+	ctx := context.Background()
+	db := newTestSQLiteDB(t)
+	withBackupSQLiteOverride(t, func(context.Context, *database.SQLiteDB, string) error {
+		return fmt.Errorf("disk full")
+	})
+
+	dir := t.TempDir()
+	var buf bytes.Buffer
+	err := runMigrate(ctx, db, []string{
+		"down", "0001", "--force", "--backup-to=" + filepath.Join(dir, "b.sqlite"),
+	}, &buf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "backup")
+
+	statuses, err := db.NewMigrator().MigrationsStatus(ctx)
+	require.NoError(t, err)
+	for _, s := range statuses {
+		assert.True(t, s.Applied,
+			"version %s should remain applied after failed pre-flight backup", s.Version)
+	}
+}
+
+// TestMigrateDown_BackupTo_DryRun_MentionsPath asserts a dry-run (no
+// `--force`) echoes the backup target in its plan and does NOT create
+// the file.
+func TestMigrateDown_BackupTo_DryRun_MentionsPath(t *testing.T) {
+	db := newTestSQLiteDB(t)
+	dir := t.TempDir()
+	backupPath := filepath.Join(dir, "dry.sqlite")
+
+	var buf bytes.Buffer
+	err := runMigrate(context.Background(), db, []string{
+		"down", "0001", "--backup-to=" + backupPath,
+	}, &buf)
+	require.NoError(t, err)
+	out := buf.String()
+	assert.Contains(t, out, "backup target")
+	assert.Contains(t, out, backupPath)
+
+	_, statErr := os.Stat(backupPath)
+	assert.True(t, os.IsNotExist(statErr), "dry-run must not create backup file")
+}
+
+// TestMigrateDown_BackupTo_EmptyValue rejects `--backup-to=` with an empty
+// value so operators don't silently get a no-op backup.
+func TestMigrateDown_BackupTo_EmptyValue(t *testing.T) {
+	db := newTestSQLiteDB(t)
+	var buf bytes.Buffer
+	err := runMigrate(context.Background(), db, []string{
+		"down", "0001", "--backup-to=",
+	}, &buf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--backup-to")
+}
+
+// TestMigrateDown_BackupTo_MissingValue rejects a trailing `--backup-to`
+// with no following argument.
+func TestMigrateDown_BackupTo_MissingValue(t *testing.T) {
+	db := newTestSQLiteDB(t)
+	var buf bytes.Buffer
+	err := runMigrate(context.Background(), db, []string{
+		"down", "0001", "--backup-to",
+	}, &buf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--backup-to")
+}
+
+// TestMigrateDown_BackupTo_TwoArgForm accepts `--backup-to PATH` as
+// separate arguments, matching `--force`-style flag ergonomics.
+func TestMigrateDown_BackupTo_TwoArgForm(t *testing.T) {
+	db := newTestSQLiteDB(t)
+	dir := t.TempDir()
+	backupPath := filepath.Join(dir, "two-arg.sqlite")
+
+	var buf bytes.Buffer
+	err := runMigrate(context.Background(), db, []string{
+		"down", "0001", "--backup-to", backupPath,
+	}, &buf)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), backupPath)
+}
+
+// TestPerformBackup_UnsupportedDriver asserts the dispatch helper returns
+// a clear error when the database is neither SQLite nor Postgres.
+func TestPerformBackup_UnsupportedDriver(t *testing.T) {
+	err := performBackup(context.Background(), &mockDatabase{}, "/tmp/x.sqlite")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported")
+}
+
+// TestPerformBackup_PostgresDispatchesPgDump overrides the Postgres backup
+// entry point and asserts the dispatch routes a `*database.PostgresDB2`
+// through it with the requested path.
+func TestPerformBackup_PostgresDispatchesPgDump(t *testing.T) {
+	var seenPath string
+	withBackupPostgresOverride(t, func(_ context.Context, _ *database.PostgresDB2, path string) error {
+		seenPath = path
+		return nil
+	})
+
+	pg := &database.PostgresDB2{}
+	err := performBackup(context.Background(), pg, "/tmp/pg-backup.dump")
+	require.NoError(t, err)
+	assert.Equal(t, "/tmp/pg-backup.dump", seenPath)
+}
+
+// TestPerformBackup_PostgresBubblesError asserts that an error from the
+// Postgres backup implementation surfaces unchanged.
+func TestPerformBackup_PostgresBubblesError(t *testing.T) {
+	withBackupPostgresOverride(t, func(context.Context, *database.PostgresDB2, string) error {
+		return fmt.Errorf("pg_dump failed: permission denied")
+	})
+
+	pg := &database.PostgresDB2{}
+	err := performBackup(context.Background(), pg, "/tmp/pg-backup.dump")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "permission denied")
+}
+
+// TestRunMigrate_Help_MentionsBackupTo asserts help text surfaces the new
+// flag so operators can discover it without reading the source.
+func TestRunMigrate_Help_MentionsBackupTo(t *testing.T) {
+	db := newTestSQLiteDB(t)
+	var buf bytes.Buffer
+	err := runMigrate(context.Background(), db, []string{"help"}, &buf)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "--backup-to")
+}
+
+// TestDefaultSQLiteBackup_NilDB rejects a nil/closed SQLiteDB so callers
+// receive an actionable error rather than a nil-pointer panic.
+func TestDefaultSQLiteBackup_NilDB(t *testing.T) {
+	err := defaultSQLiteBackup(context.Background(), nil, "/tmp/x.sqlite")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not connected")
+
+	disconnected := database.NewSQLiteDB(":memory:")
+	err = defaultSQLiteBackup(context.Background(), disconnected, "/tmp/x.sqlite")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not connected")
+}
+
+// TestDefaultSQLiteBackup_EmptyPath rejects an empty path so we surface
+// a helpful error instead of letting SQLite reject the statement.
+func TestDefaultSQLiteBackup_EmptyPath(t *testing.T) {
+	db := newTestSQLiteDB(t)
+	err := defaultSQLiteBackup(context.Background(), db, "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "path is required")
+}
+
+// TestDefaultSQLiteBackup_SQLErrorWraps surfaces a clean `sqlite backup:`
+// prefix when the underlying VACUUM INTO fails. Pre-creating the target
+// path guarantees SQLite refuses (VACUUM INTO will not overwrite).
+func TestDefaultSQLiteBackup_SQLErrorWraps(t *testing.T) {
+	db := newTestSQLiteDB(t)
+	dir := t.TempDir()
+	dst := filepath.Join(dir, "preexisting.sqlite")
+	require.NoError(t, os.WriteFile(dst, []byte("not a sqlite db"), 0o600))
+
+	err := defaultSQLiteBackup(context.Background(), db, dst)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "sqlite backup")
+}
+
+// TestDefaultSQLiteBackup_PathWithApostropheEscaped exercises the SQL-
+// literal escaping branch so that SQLite cannot misparse paths that
+// contain a single-quote character.
+func TestDefaultSQLiteBackup_PathWithApostropheEscaped(t *testing.T) {
+	db := newTestSQLiteDB(t)
+	dir := t.TempDir()
+	dst := filepath.Join(dir, "quote's-name.sqlite")
+	err := defaultSQLiteBackup(context.Background(), db, dst)
+	require.NoError(t, err)
+	info, err := os.Stat(dst)
+	require.NoError(t, err)
+	assert.Greater(t, info.Size(), int64(0))
+}
+
+// TestDefaultPostgresBackup_NilDB rejects a nil PostgresDB2.
+func TestDefaultPostgresBackup_NilDB(t *testing.T) {
+	err := defaultPostgresBackup(context.Background(), nil, "/tmp/x.dump")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not connected")
+}
+
+// TestDefaultPostgresBackup_EmptyPath rejects an empty path before the
+// exec.Cmd is constructed.
+func TestDefaultPostgresBackup_EmptyPath(t *testing.T) {
+	pg := database.NewPostgresDB("host=ignored")
+	err := defaultPostgresBackup(context.Background(), pg, "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "path is required")
+}
+
+// TestDefaultPostgresBackup_EmptyDSN rejects a PostgresDB2 with no DSN so
+// operators see a clear error rather than `pg_dump: no database name`.
+func TestDefaultPostgresBackup_EmptyDSN(t *testing.T) {
+	pg := &database.PostgresDB2{}
+	err := defaultPostgresBackup(context.Background(), pg, "/tmp/x.dump")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "DSN is empty")
+}
+
+// TestDefaultPostgresBackup_InvokesPgDumpSuccessfully overrides the
+// exec.Cmd construction seam to assert the default path builds the
+// right invocation and surfaces its success/failure.
+func TestDefaultPostgresBackup_InvokesPgDumpSuccessfully(t *testing.T) {
+	origCmd := pgDumpCommand
+	t.Cleanup(func() { pgDumpCommand = origCmd })
+
+	var seenArgs []string
+	pgDumpCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		seenArgs = append([]string{name}, args...)
+		// `true` is a no-op command guaranteed to exit 0 on POSIX.
+		return exec.CommandContext(ctx, "true")
+	}
+
+	pg := database.NewPostgresDB("host=example.com user=me dbname=prod")
+	err := defaultPostgresBackup(context.Background(), pg, "/tmp/prod.dump")
+	require.NoError(t, err)
+
+	require.Len(t, seenArgs, 4)
+	assert.Equal(t, "pg_dump", seenArgs[0])
+	assert.Contains(t, seenArgs[1], "--dbname=host=example.com user=me dbname=prod")
+	assert.Equal(t, "--format=custom", seenArgs[2])
+	assert.Equal(t, "--file=/tmp/prod.dump", seenArgs[3])
+}
+
+// TestDefaultPostgresBackup_PgDumpFailure surfaces a `pg_dump` process
+// failure with context so operators can see the stderr in the returned
+// error.
+func TestDefaultPostgresBackup_PgDumpFailure(t *testing.T) {
+	origCmd := pgDumpCommand
+	t.Cleanup(func() { pgDumpCommand = origCmd })
+
+	pgDumpCommand = func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
+		// `false` exits non-zero with no output on POSIX.
+		return exec.CommandContext(ctx, "false")
+	}
+
+	pg := database.NewPostgresDB("host=localhost")
+	err := defaultPostgresBackup(context.Background(), pg, "/tmp/x.dump")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "pg_dump")
+}
