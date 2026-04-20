@@ -3,9 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -266,5 +270,205 @@ func TestRunMergeHistory_NilLoggerOK(t *testing.T) {
 	var buf bytes.Buffer
 	if err := runMergeHistory(ctx, db, []string{"old", "new"}, &buf, nil); err != nil {
 		t.Fatalf("runMergeHistory with nil logger: %v", err)
+	}
+}
+
+// --- merge-history --cleanup tests ---------------------------------------
+
+// seedMergeIllustration writes both the DB row and a tiny placeholder
+// image file at the given path so cleanup assertions have something
+// concrete to observe.
+func seedMergeIllustration(t *testing.T, db *database.SQLiteDB, id, repoID, filePath string) {
+	t.Helper()
+	require := func(err error, msg string) {
+		if err != nil {
+			t.Fatalf("%s: %v", msg, err)
+		}
+	}
+	require(os.MkdirAll(filepath.Dir(filePath), 0o755), "mkdir illustration parent")
+	require(os.WriteFile(filePath, []byte("png-bytes"), 0o600), "write placeholder image")
+	ill := &models.Illustration{
+		ID:           id,
+		RepositoryID: repoID,
+		FilePath:     filePath,
+		Prompt:       "test prompt",
+		ProviderUsed: "test-provider",
+		Format:       "png",
+		Size:         "1024x1024",
+		ContentHash:  "hash-" + id,
+		Fingerprint:  "fp-" + id,
+		CreatedAt:    time.Now().UTC(),
+	}
+	require(db.Illustrations().Create(context.Background(), ill), "create illustration row")
+}
+
+// TestRunMergeHistory_CleanupFlag_UnlinksFiles asserts that when --cleanup
+// is passed, illustration files for the old repo are removed from disk.
+// The underlying DB rows are then CASCADE-deleted by the FK when the old
+// repositories row goes away.
+func TestRunMergeHistory_CleanupFlag_UnlinksFiles(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+
+	seedMergeRepo(t, db, "old", "o")
+	seedMergeRepo(t, db, "new", "n")
+
+	dir := t.TempDir()
+	pathA := filepath.Join(dir, "old", "a.png")
+	pathB := filepath.Join(dir, "old", "b.png")
+	seedMergeIllustration(t, db, "ill-a", "old", pathA)
+	seedMergeIllustration(t, db, "ill-b", "old", pathB)
+
+	var buf bytes.Buffer
+	err := runMergeHistory(ctx, db, []string{"old", "new", "--cleanup"}, &buf, discardMergeLogger())
+	if err != nil {
+		t.Fatalf("runMergeHistory: %v", err)
+	}
+
+	for _, p := range []string{pathA, pathB} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Fatalf("file %s should have been unlinked; stat err=%v", p, err)
+		}
+	}
+
+	// Output should mention the count of unlinked files.
+	if !strings.Contains(buf.String(), "unlinked 2 illustration file") {
+		t.Fatalf("output should report unlinked count; got %q", buf.String())
+	}
+}
+
+// TestRunMergeHistory_NoCleanupFlag_KeepsFiles asserts that without the
+// flag the default behavior is unchanged — files persist on disk even
+// though their DB rows are gone via CASCADE.
+func TestRunMergeHistory_NoCleanupFlag_KeepsFiles(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+
+	seedMergeRepo(t, db, "old", "o")
+	seedMergeRepo(t, db, "new", "n")
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "old", "persists.png")
+	seedMergeIllustration(t, db, "ill-keep", "old", path)
+
+	var buf bytes.Buffer
+	if err := runMergeHistory(ctx, db, []string{"old", "new"}, &buf, discardMergeLogger()); err != nil {
+		t.Fatalf("runMergeHistory: %v", err)
+	}
+
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("file %s should persist without --cleanup; stat err=%v", path, err)
+	}
+	if strings.Contains(buf.String(), "unlinked") {
+		t.Fatalf("output must not mention unlink when --cleanup is absent; got %q", buf.String())
+	}
+}
+
+// TestRunMergeHistory_CleanupFlag_UnlinkError_NotFatal asserts that a
+// filesystem error during unlink does NOT cause the merge itself to fail
+// — the tx has already committed and the operator's data move is
+// durable. The error is surfaced in the output for visibility.
+func TestRunMergeHistory_CleanupFlag_UnlinkError_NotFatal(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+
+	seedMergeRepo(t, db, "old", "o")
+	seedMergeRepo(t, db, "new", "n")
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "old", "boom.png")
+	seedMergeIllustration(t, db, "ill-boom", "old", path)
+
+	// Swap unlink with a function that always errors so the post-commit
+	// cleanup path surfaces the error without blocking the merge.
+	orig := unlinkIllustrationFile
+	var mu sync.Mutex
+	var attempts int
+	unlinkIllustrationFile = func(p string) error {
+		mu.Lock()
+		attempts++
+		mu.Unlock()
+		return fmt.Errorf("simulated unlink failure for %s", p)
+	}
+	t.Cleanup(func() { unlinkIllustrationFile = orig })
+
+	var buf bytes.Buffer
+	if err := runMergeHistory(ctx, db, []string{"old", "new", "--cleanup"}, &buf, discardMergeLogger()); err != nil {
+		t.Fatalf("runMergeHistory should not fail on unlink error: %v", err)
+	}
+
+	if attempts == 0 {
+		t.Fatal("expected unlink to be attempted at least once")
+	}
+	if !strings.Contains(buf.String(), "1 cleanup error") && !strings.Contains(buf.String(), "cleanup errors") {
+		t.Fatalf("output should report cleanup errors; got %q", buf.String())
+	}
+}
+
+// TestRunMergeHistory_CleanupFlag_EmptyList_NoOp asserts that --cleanup
+// without any illustrations for the old repo is a silent, successful
+// no-op.
+func TestRunMergeHistory_CleanupFlag_EmptyList_NoOp(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+
+	seedMergeRepo(t, db, "old", "o")
+	seedMergeRepo(t, db, "new", "n")
+
+	var buf bytes.Buffer
+	if err := runMergeHistory(ctx, db, []string{"old", "new", "--cleanup"}, &buf, discardMergeLogger()); err != nil {
+		t.Fatalf("runMergeHistory: %v", err)
+	}
+	if strings.Contains(buf.String(), "unlinked") {
+		t.Fatalf("empty cleanup path should not print unlink summary; got %q", buf.String())
+	}
+}
+
+// TestRunMergeHistory_CleanupFlag_MissingFileIsIdempotent asserts that a
+// file already absent from disk (e.g. a repeat run after prior cleanup)
+// counts as success rather than a reported error.
+func TestRunMergeHistory_CleanupFlag_MissingFileIsIdempotent(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+
+	seedMergeRepo(t, db, "old", "o")
+	seedMergeRepo(t, db, "new", "n")
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "old", "ghost.png")
+	seedMergeIllustration(t, db, "ill-ghost", "old", path)
+	// Remove the file between seeding and merge so the unlink sees IsNotExist.
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("pre-remove ghost file: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := runMergeHistory(ctx, db, []string{"old", "new", "--cleanup"}, &buf, discardMergeLogger()); err != nil {
+		t.Fatalf("runMergeHistory: %v", err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "cleanup error") {
+		t.Fatalf("missing-file unlink should NOT report a cleanup error; got %q", out)
+	}
+	if !strings.Contains(out, "unlinked 0 illustration file") {
+		t.Fatalf("expected a zero-unlinked summary on idempotent run; got %q", out)
+	}
+}
+
+// TestRunMergeHistory_UnknownFlag rejects unexpected trailing arguments
+// so typos like `--cleanupp` do not silently misbehave.
+func TestRunMergeHistory_UnknownFlag(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	seedMergeRepo(t, db, "old", "o")
+	seedMergeRepo(t, db, "new", "n")
+
+	var buf bytes.Buffer
+	err := runMergeHistory(ctx, db, []string{"old", "new", "--cleanupp"}, &buf, discardMergeLogger())
+	if err == nil {
+		t.Fatal("want error on unknown flag")
+	}
+	if !strings.Contains(err.Error(), "unknown") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

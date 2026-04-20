@@ -8,12 +8,18 @@ import (
 	"os"
 
 	"github.com/milos85vasic/My-Patreon-Manager/internal/database"
+	"github.com/milos85vasic/My-Patreon-Manager/internal/models"
 )
 
 // mergeHistoryOutWriter is overridden in tests to capture output. Keeping
 // it as a package variable matches the dependency-injection pattern used
 // by migrateOutWriter.
 var mergeHistoryOutWriter io.Writer = os.Stdout
+
+// unlinkIllustrationFile is the filesystem seam the `--cleanup` path uses
+// to remove on-disk illustration files after merge-history commits. Tests
+// swap it to simulate permission errors without touching real storage.
+var unlinkIllustrationFile = os.Remove
 
 // runMergeHistory implements the `merge-history <old-repo-id> <new-repo-id>`
 // subcommand. Operators hit this after a repository is renamed or moved
@@ -34,7 +40,7 @@ var mergeHistoryOutWriter io.Writer = os.Stdout
 // into <new>" to the out writer.
 func runMergeHistory(ctx context.Context, db database.Database, args []string, out io.Writer, logger *slog.Logger) error {
 	if len(args) < 2 {
-		return fmt.Errorf("merge-history: usage: patreon-manager merge-history <old-repo-id> <new-repo-id>")
+		return fmt.Errorf("merge-history: usage: patreon-manager merge-history <old-repo-id> <new-repo-id> [--cleanup]")
 	}
 	oldID, newID := args[0], args[1]
 	if oldID == "" || newID == "" {
@@ -42,6 +48,11 @@ func runMergeHistory(ctx context.Context, db database.Database, args []string, o
 	}
 	if oldID == newID {
 		return fmt.Errorf("merge-history: old and new repo IDs must differ")
+	}
+
+	cleanup, err := parseMergeHistoryFlags(args[2:])
+	if err != nil {
+		return err
 	}
 
 	oldRepo, err := db.Repositories().GetByID(ctx, oldID)
@@ -82,6 +93,19 @@ func runMergeHistory(ctx context.Context, db database.Database, args []string, o
 	oldRevs, err := db.ContentRevisions().ListAll(ctx, oldID)
 	if err != nil {
 		return fmt.Errorf("merge-history: list old revisions: %w", err)
+	}
+
+	// Snapshot illustration file paths BEFORE the tx, because the CASCADE
+	// on repositories → illustrations will vaporize the rows when the old
+	// repository row goes away.  We only collect when --cleanup is set so
+	// the default path stays identical.
+	var illustrationFiles []string
+	if cleanup {
+		ills, err := db.Illustrations().ListByRepository(ctx, oldID)
+		if err != nil {
+			return fmt.Errorf("merge-history: list old illustrations: %w", err)
+		}
+		illustrationFiles = collectIllustrationPaths(ills)
 	}
 
 	// All the work runs inside a single tx so a crash midway leaves the
@@ -157,5 +181,71 @@ func runMergeHistory(ctx context.Context, db database.Database, args []string, o
 			slog.Int("revisions", n),
 		)
 	}
+
+	if cleanup && len(illustrationFiles) > 0 {
+		unlinked, errs := unlinkIllustrationFiles(illustrationFiles)
+		fmt.Fprintf(out, "unlinked %d illustration file(s) for %s\n", unlinked, oldID)
+		if len(errs) > 0 {
+			plural := "error"
+			if len(errs) != 1 {
+				plural = "errors"
+			}
+			fmt.Fprintf(out, "%d cleanup %s: %s\n", len(errs), plural, errs[0])
+			if logger != nil {
+				logger.Warn("merge-history: cleanup errors",
+					slog.String("old_repo_id", oldID),
+					slog.Int("errors", len(errs)),
+					slog.String("first_error", errs[0].Error()),
+				)
+			}
+		}
+	}
 	return nil
+}
+
+// parseMergeHistoryFlags inspects the trailing flags (everything after
+// the two required repo IDs) and returns whether `--cleanup` was set.
+// Unknown flags are rejected so a typo like `--cleanupp` fails loudly
+// instead of silently behaving as the default.
+func parseMergeHistoryFlags(flags []string) (cleanup bool, err error) {
+	for _, a := range flags {
+		switch a {
+		case "--cleanup":
+			cleanup = true
+		default:
+			return false, fmt.Errorf("merge-history: unknown flag %q", a)
+		}
+	}
+	return cleanup, nil
+}
+
+// collectIllustrationPaths extracts non-empty FilePath values from an
+// illustration slice. Extracted so the pre-tx snapshot and the post-commit
+// unlink share the same truth source.
+func collectIllustrationPaths(ills []*models.Illustration) []string {
+	paths := make([]string, 0, len(ills))
+	for _, ill := range ills {
+		if ill != nil && ill.FilePath != "" {
+			paths = append(paths, ill.FilePath)
+		}
+	}
+	return paths
+}
+
+// unlinkIllustrationFiles removes each path via the unlinkIllustrationFile
+// seam. Missing files (IsNotExist) are treated as success so repeat runs
+// are idempotent — operators who cleaned up earlier don't get spurious
+// errors. All other errors are collected and returned for reporting.
+func unlinkIllustrationFiles(paths []string) (unlinked int, errs []error) {
+	for _, p := range paths {
+		if err := unlinkIllustrationFile(p); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			errs = append(errs, err)
+			continue
+		}
+		unlinked++
+	}
+	return unlinked, errs
 }

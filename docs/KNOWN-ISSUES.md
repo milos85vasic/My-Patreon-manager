@@ -29,10 +29,9 @@ Maintained alongside the code — treat this as the canonical "what's not done a
     - [2.2 `scripts/coverage.sh` 100% total gate](#22-scriptscoveragesh-100-total-gate)
     - [2.3 `LLMProvider` / `Models` mirrors on GitFlic & GitVerse](#23-llmprovider--models-mirrors-on-gitflic--gitverse)
 3. [Deferred code enhancements](#3-deferred-code-enhancements)
-    - [3.1 Illustration cleanup when `repo` is deleted](#31-illustration-cleanup-when-repo-is-deleted)
-    - [3.2 Preview UI frontend](#32-preview-ui-frontend)
-    - [3.3 Webhook-driven incremental sync](#33-webhook-driven-incremental-sync)
-    - [3.4 Multi-node process parallelism](#34-multi-node-process-parallelism)
+    - [3.1 Preview UI frontend](#31-preview-ui-frontend)
+    - [3.2 Webhook-driven incremental sync](#32-webhook-driven-incremental-sync)
+    - [3.3 Multi-node process parallelism](#33-multi-node-process-parallelism)
 4. [Documentation deferrals](#4-documentation-deferrals)
     - [4.1 Video course scripts](#41-video-course-scripts)
     - [4.2 Legacy planning artifacts](#42-legacy-planning-artifacts)
@@ -189,25 +188,7 @@ The `LLMProvider` and `Models` submodules previously had `GitFlic` and `GitVerse
 
 ## 3. Deferred code enhancements
 
-### 3.1 Illustration cleanup when `repo` is deleted
-
-**Category:** Deferred
-**Affects:** `merge-history` CLI command, future `delete-repo` workflows
-**Status:** Partial (pruner cleanup covers retention but not manual delete)
-
-`process.Prune` deletes orphaned illustrations (DB row + file) when retention pruning removes their parent revision (commit `314eacb`). However, if an operator runs `patreon-manager merge-history <old> <new>`, the old repo's `content_revisions` are reparented onto `<new>` and the old `repositories` row is deleted. Any illustrations referencing that old repo via the nullable `generated_content_id` FK remain — not orphaned (they're still reachable via `repository_id` or `fingerprint`), but unpruned image files persist on disk.
-
-**Why it's this way:** `merge-history` was added as a focused data-rewiring command, not a disk-cleanup one. Scope discipline.
-
-**Impact today:** Very low — each illustration is ~200KB; a typical merge-history invocation affects a handful of repos. Disk impact is negligible.
-
-**Workaround:** Periodic manual cleanup: `find $ILLUSTRATION_DIR -type f -mtime +90 -delete` for sites with tight disk budgets.
-
-**Future work:** Add a `--cleanup` flag to `merge-history` that unlinks illustration files for revisions that are being re-parented, OR add a separate `patreon-manager illustrations prune` subcommand that sweeps orphans via fingerprint/file-system reconciliation.
-
----
-
-### 3.2 Preview UI frontend
+### 3.1 Preview UI frontend
 
 **Category:** Deferred
 **Affects:** Preview UX
@@ -225,7 +206,7 @@ The preview UI (`/preview` dashboard, `/preview/repo/:repo_id` history, revision
 
 ---
 
-### 3.3 Webhook-driven incremental sync
+### 3.2 Webhook-driven incremental sync
 
 **Category:** Deferred
 **Affects:** `process` runs on a cron; no real-time trigger
@@ -243,7 +224,7 @@ The `process` command runs on demand or on a cron schedule. GitHub/GitLab/GitFli
 
 ---
 
-### 3.4 Multi-node `process` parallelism
+### 3.3 Multi-node `process` parallelism
 
 **Category:** Non-goal (v1)
 **Affects:** `process` scalability
@@ -344,6 +325,6 @@ For anyone picking up one of the items above:
 2. Follow the project's TDD policy (`CLAUDE.md` §Feature Workflow).
 3. When the item is fully addressed, **delete the entry from this file in the same commit** that closes it. Don't leave stale entries.
 4. If the fix reveals new subordinate work, add a new entry here for it.
-5. Commit messages for these items should reference the section number, e.g. `feat(illustration): sweep orphans after merge-history (closes KNOWN-ISSUES §3.1)`.
+5. Commit messages for these items should reference the section number, e.g. `feat(area): short description (closes KNOWN-ISSUES §<n>.<m>)`.
 
 This document is the single source of truth for what's intentionally undone. Keep it accurate.
