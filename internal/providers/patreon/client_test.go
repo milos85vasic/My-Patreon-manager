@@ -529,10 +529,44 @@ func TestClient_ListCampaignPosts_SinglePage(t *testing.T) {
 	assert.Equal(t, "p-1", posts[0].ID)
 	assert.Equal(t, "One", posts[0].Title)
 	assert.Equal(t, "c1", posts[0].Content)
+	assert.Equal(t, "u1", posts[0].URL)
 	assert.Equal(t, 2024, posts[0].PublishedAt.Year())
 	assert.Equal(t, "p-2", posts[1].ID)
 	assert.Equal(t, "Two", posts[1].Title)
+	assert.Equal(t, "", posts[1].URL)
 	assert.True(t, posts[1].PublishedAt.IsZero())
+}
+
+// TestClient_ToModel_URL_Populated verifies the provider-boundary mapper
+// carries the Patreon `url` attribute onto models.Post.URL. Before this
+// test landed, toModel() decoded the URL but dropped it — KNOWN-ISSUES §3.1.
+func TestClient_ToModel_URL_Populated(t *testing.T) {
+	var d postData
+	d.ID = "p-x"
+	d.Attributes.Title = "T"
+	d.Attributes.Content = "C"
+	d.Attributes.URL = "https://www.patreon.com/posts/p-x"
+	d.Attributes.PublishedAt = "2025-03-04T00:00:00Z"
+
+	got := d.toModel()
+	require.NotNil(t, got)
+	assert.Equal(t, "p-x", got.ID)
+	assert.Equal(t, "T", got.Title)
+	assert.Equal(t, "C", got.Content)
+	assert.Equal(t, "https://www.patreon.com/posts/p-x", got.URL)
+	assert.Equal(t, 2025, got.PublishedAt.Year())
+}
+
+// TestClient_ToModel_URL_EmptyPreserved verifies the mapper leaves URL as
+// the empty string when the upstream attribute is absent. Guards against
+// an accidental default/sentinel being injected.
+func TestClient_ToModel_URL_EmptyPreserved(t *testing.T) {
+	var d postData
+	d.ID = "p-y"
+	d.Attributes.Title = "T"
+	got := d.toModel()
+	require.NotNil(t, got)
+	assert.Equal(t, "", got.URL)
 }
 
 func TestClient_ListCampaignPosts_MultiPage(t *testing.T) {

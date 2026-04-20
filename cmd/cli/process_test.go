@@ -542,8 +542,9 @@ func newFakePatreonCampaignServer(t *testing.T) *httptest.Server {
 // TestPatreonCampaignAdapter_ListCampaignPosts_RealClient exercises the
 // wired-up adapter against a real *patreon.Client pointed at a stub
 // httptest server. Asserts three posts come back with correct field
-// mapping, URL blank (dropped at provider boundary), and PublishedAt
-// populated only when the upstream value parsed as RFC3339.
+// mapping — including URL propagated end-to-end from the Patreon
+// attributes through models.Post into process.PatreonPost — and
+// PublishedAt populated only when the upstream value parsed as RFC3339.
 func TestPatreonCampaignAdapter_ListCampaignPosts_RealClient(t *testing.T) {
 	srv := newFakePatreonCampaignServer(t)
 	defer srv.Close()
@@ -563,9 +564,15 @@ func TestPatreonCampaignAdapter_ListCampaignPosts_RealClient(t *testing.T) {
 	if posts[0].ID != "p1" || posts[0].Title != "First" || posts[0].Content != "body-1" {
 		t.Fatalf("post[0] bad: %+v", posts[0])
 	}
-	// URL is always blank — models.Post doesn't expose it.
-	if posts[0].URL != "" {
-		t.Fatalf("post[0] URL should be blank, got %q", posts[0].URL)
+	// URL propagates from the Patreon attribute through toModel() into
+	// the adapter output (KNOWN-ISSUES §3.1 closed).
+	if posts[0].URL != "https://patreon.com/posts/p1" {
+		t.Fatalf("post[0] URL want %q, got %q", "https://patreon.com/posts/p1", posts[0].URL)
+	}
+	// post[1] has no url attribute upstream; the adapter must preserve
+	// the empty string rather than substituting a default.
+	if posts[1].URL != "" {
+		t.Fatalf("post[1] URL should be empty, got %q", posts[1].URL)
 	}
 	if posts[0].PublishedAt == nil || posts[0].PublishedAt.IsZero() {
 		t.Fatalf("post[0] PublishedAt should be parsed: %+v", posts[0].PublishedAt)

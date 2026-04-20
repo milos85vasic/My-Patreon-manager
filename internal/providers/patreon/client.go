@@ -391,15 +391,16 @@ type postData struct {
 }
 
 // toModel converts the JSON:API post payload into the internal
-// models.Post. models.Post has no URL field, so the URL from Patreon
-// is dropped here — callers that need the URL (e.g. the first-run
-// importer) read it via the ListCampaignPosts process-side wrapper
-// that exposes it on process.PatreonPost.
+// models.Post, preserving the canonical Patreon post URL so
+// downstream consumers (first-run importer, drift detection,
+// unmatched-post bookkeeping) can reference the post without a
+// second fetch.
 func (d postData) toModel() *models.Post {
 	p := &models.Post{
 		ID:      d.ID,
 		Title:   d.Attributes.Title,
 		Content: d.Attributes.Content,
+		URL:     d.Attributes.URL,
 	}
 	if d.Attributes.PublishedAt != "" {
 		if t, err := time.Parse(time.RFC3339, d.Attributes.PublishedAt); err == nil {

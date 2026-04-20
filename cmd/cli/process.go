@@ -184,13 +184,10 @@ func (a *patreonCampaignAdapter) ListCampaignPosts(ctx context.Context, campaign
 			publishedAt = &ts
 		}
 		out = append(out, process.PatreonPost{
-			ID:      p.ID,
-			Title:   p.Title,
-			Content: p.Content,
-			// TODO: models.Post does not expose the post URL (the provider
-			// drops it at the model boundary). Extend models.Post with URL
-			// when drift detection or unmatched-post bookkeeping needs it.
-			URL:         "",
+			ID:          p.ID,
+			Title:       p.Title,
+			Content:     p.Content,
+			URL:         p.URL,
 			PublishedAt: publishedAt,
 		})
 	}

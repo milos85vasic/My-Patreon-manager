@@ -21,6 +21,7 @@ type Post struct {
 	RepositoryID      string    `json:"repository_id" db:"repository_id"`
 	Title             string    `json:"title" db:"title"`
 	Content           string    `json:"content" db:"content"`
+	URL               string    `json:"url" db:"url"`
 	PostType          string    `json:"post_type" db:"post_type"`
 	TierIDs           []string  `json:"tier_ids" db:"tier_ids"`
 	PublicationStatus string    `json:"publication_status" db:"publication_status"`

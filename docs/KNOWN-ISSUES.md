@@ -29,12 +29,11 @@ Maintained alongside the code — treat this as the canonical "what's not done a
     - [2.2 `scripts/coverage.sh` 100% total gate](#22-scriptscoveragesh-100-total-gate)
     - [2.3 `LLMProvider` / `Models` mirrors on GitFlic & GitVerse](#23-llmprovider--models-mirrors-on-gitflic--gitverse)
 3. [Deferred code enhancements](#3-deferred-code-enhancements)
-    - [3.1 `models.Post.URL` missing](#31-modelsposturl-missing)
-    - [3.2 Illustration cleanup when `repo` is deleted](#32-illustration-cleanup-when-repo-is-deleted)
-    - [3.3 Preview UI frontend](#33-preview-ui-frontend)
-    - [3.4 Webhook-driven incremental sync](#34-webhook-driven-incremental-sync)
-    - [3.5 Multi-node process parallelism](#35-multi-node-process-parallelism)
-    - [3.6 `migrate down` destructive-action guardrails](#36-migrate-down-destructive-action-guardrails)
+    - [3.1 Illustration cleanup when `repo` is deleted](#31-illustration-cleanup-when-repo-is-deleted)
+    - [3.2 Preview UI frontend](#32-preview-ui-frontend)
+    - [3.3 Webhook-driven incremental sync](#33-webhook-driven-incremental-sync)
+    - [3.4 Multi-node process parallelism](#34-multi-node-process-parallelism)
+    - [3.5 `migrate down` destructive-action guardrails](#35-migrate-down-destructive-action-guardrails)
 4. [Documentation deferrals](#4-documentation-deferrals)
     - [4.1 Video course scripts](#41-video-course-scripts)
     - [4.2 Legacy planning artifacts](#42-legacy-planning-artifacts)
@@ -191,31 +190,7 @@ The `LLMProvider` and `Models` submodules previously had `GitFlic` and `GitVerse
 
 ## 3. Deferred code enhancements
 
-### 3.1 `models.Post.URL` missing
-
-**Category:** Deferred
-**Affects:** `internal/providers/patreon/client.go`, `cmd/cli/process.go` (patreonCampaignAdapter)
-**Status:** Known placeholder
-
-The `patreon.Client.ListCampaignPosts` method fetches Patreon posts with every useful attribute (ID, title, content, published_at) but the `models.Post` struct does not expose a `URL` field. When the `patreonCampaignAdapter` in `cmd/cli/process.go` maps `*models.Post` into `process.PatreonPost`, the `URL` field is set to empty string with a TODO comment.
-
-**Why it's this way:** The initial `models.Post` shape was designed for publish-side use (where URL is output, not input). Adding a `URL` field requires updating every construction site.
-
-**Impact today:** The `process.Importer.matchByURL` layer (Layer 2 of the layered matcher) can still work against the stored URL of local repos, but cannot match a Patreon post by embedded URL because the URL never gets into `process.PatreonPost`. Import falls back to later layers (slug / substring / unmatched), which is a correctness reduction on first-run.
-
-**Workaround:** Operators adding a `repo:<repo-id>` tag to Patreon post bodies still get Layer 1 matching, which is strongest.
-
-**Future work:**
-1. Add `URL string` to `models.Post`.
-2. Populate in `patreon.Client.toModel()` from the response's `url` attribute (already decoded, just dropped).
-3. Propagate in `patreonCampaignAdapter.ListCampaignPosts`.
-4. Add a test case to `TestImporter_MatchByURL_*` that exercises this path end-to-end.
-
-Estimated work: 1 hour.
-
----
-
-### 3.2 Illustration cleanup when `repo` is deleted
+### 3.1 Illustration cleanup when `repo` is deleted
 
 **Category:** Deferred
 **Affects:** `merge-history` CLI command, future `delete-repo` workflows
@@ -233,7 +208,7 @@ Estimated work: 1 hour.
 
 ---
 
-### 3.3 Preview UI frontend
+### 3.2 Preview UI frontend
 
 **Category:** Deferred
 **Affects:** Preview UX
@@ -251,7 +226,7 @@ The preview UI (`/preview` dashboard, `/preview/repo/:repo_id` history, revision
 
 ---
 
-### 3.4 Webhook-driven incremental sync
+### 3.3 Webhook-driven incremental sync
 
 **Category:** Deferred
 **Affects:** `process` runs on a cron; no real-time trigger
@@ -269,7 +244,7 @@ The `process` command runs on demand or on a cron schedule. GitHub/GitLab/GitFli
 
 ---
 
-### 3.5 Multi-node `process` parallelism
+### 3.4 Multi-node `process` parallelism
 
 **Category:** Non-goal (v1)
 **Affects:** `process` scalability
@@ -287,7 +262,7 @@ The `process_runs` single-runner lock is partial-unique-index based and scoped t
 
 ---
 
-### 3.6 `migrate down` destructive-action guardrails
+### 3.5 `migrate down` destructive-action guardrails
 
 **Category:** Known-quirk
 **Affects:** `patreon-manager migrate down`
@@ -386,6 +361,6 @@ For anyone picking up one of the items above:
 2. Follow the project's TDD policy (`CLAUDE.md` §Feature Workflow).
 3. When the item is fully addressed, **delete the entry from this file in the same commit** that closes it. Don't leave stale entries.
 4. If the fix reveals new subordinate work, add a new entry here for it.
-5. Commit messages for these items should reference the section number, e.g. `feat(patreon): add URL to models.Post (closes KNOWN-ISSUES §3.1)`.
+5. Commit messages for these items should reference the section number, e.g. `feat(cli): add --backup-to to migrate down (closes KNOWN-ISSUES §3.5)`.
 
 This document is the single source of truth for what's intentionally undone. Keep it accurate.
