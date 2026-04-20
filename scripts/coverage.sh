@@ -14,12 +14,16 @@
 #   COVERAGE_SKIP_TESTS  Space-separated glob patterns; packages whose
 #                        import path matches any of these are skipped
 #                        (e.g. for long-running e2e suites).
+#   COVERAGE_WITH_POSTGRES  Set to "1" to force the Postgres live-harness
+#                            run. Set to "0" to force-skip. Unset =
+#                            auto-detect: run if podman/docker is on PATH.
 #
 # On success the script writes:
 #   coverage/coverage.out         merged profile
 #   coverage/coverage.func.txt    per-function coverage report
 #   coverage/coverage.html        visual report
 #   coverage/profiles/*.out       per-package raw profiles (kept for debugging)
+#   coverage/postgres.log         Postgres harness output (when run)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -28,6 +32,7 @@ cd "$ROOT"
 MIN="${COVERAGE_MIN:-100.0}"
 TIMEOUT="${COVERAGE_TIMEOUT:-10m}"
 SKIP_PATTERNS="${COVERAGE_SKIP_TESTS:-}"
+WITH_POSTGRES="${COVERAGE_WITH_POSTGRES:-auto}"
 
 mkdir -p coverage/profiles
 # Clear only the per-run artifacts; keep the coverdiff binary if it
@@ -87,6 +92,38 @@ if [ "${#NONEMPTY[@]}" -eq 0 ]; then
 fi
 
 ./coverage/covermerge "${NONEMPTY[@]}" > coverage/coverage.out
+
+# Postgres live-harness integration. The default-on behavior closed the
+# "build-tag gated, never actually runs" gap for KNOWN-ISSUES §2.1: the
+# harness fires automatically when podman or docker is on PATH, so
+# operators get real Postgres coverage on every `bash scripts/coverage.sh`
+# run without remembering to invoke test-postgres.sh separately.
+run_postgres=0
+case "$WITH_POSTGRES" in
+    1|true|yes|on)  run_postgres=1 ;;
+    0|false|no|off) run_postgres=0 ;;
+    auto)
+        if command -v podman >/dev/null 2>&1 || command -v docker >/dev/null 2>&1; then
+            run_postgres=1
+        fi
+        ;;
+    *)
+        echo "coverage: invalid COVERAGE_WITH_POSTGRES=$WITH_POSTGRES; valid: 1/0/auto" >&2
+        exit 2
+        ;;
+esac
+
+if [ "$run_postgres" -eq 1 ]; then
+    echo "coverage: running Postgres live harness"
+    if bash scripts/test-postgres.sh 2>&1 | tee coverage/postgres.log; then
+        echo "coverage: Postgres harness green"
+    else
+        echo "coverage: Postgres harness FAILED — see coverage/postgres.log" >&2
+        exit 1
+    fi
+else
+    echo "coverage: Postgres harness skipped (COVERAGE_WITH_POSTGRES=$WITH_POSTGRES, or runtime not found)"
+fi
 
 # Produce both renders for operator convenience.
 go tool cover -html=coverage/coverage.out -o coverage/coverage.html

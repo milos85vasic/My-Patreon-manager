@@ -75,7 +75,39 @@ func redactWithPattern(s string, pattern *regexp.Regexp) string {
 	return buf.String()
 }
 
+// RedactURL replaces the two parts of a URL that commonly carry
+// secrets: the `user:password@` userinfo block in the authority and
+// any query string. The scheme, host, path, and fragment are left
+// intact so logs stay useful for debugging.
+//
+// Inputs without a scheme (e.g. `github.com/owner/repo`) are returned
+// unchanged; inputs without userinfo or a query string fall through
+// the no-op path. The function is intentionally tolerant of malformed
+// input — it never returns an error — because it sits on the logging
+// path where a panic would lose the caller's context.
+//
+// This function was surfaced by the FuzzRedactURL target as a
+// historical security gap: the previous implementation only stripped
+// the query string, so a URL like
+// `https://user:password@github.com/owner/repo` was logged verbatim.
 func RedactURL(url string) string {
+	// 1. Redact the userinfo (`user:password@` / `:password@` /
+	// `token@`) between the scheme separator and the host. `scheme://`
+	// is required — we leave schemeless strings alone because they
+	// are ambiguous between URLs and log messages.
+	if schemeEnd := strings.Index(url, "://"); schemeEnd >= 0 {
+		rest := url[schemeEnd+3:]
+		if at := strings.Index(rest, "@"); at >= 0 {
+			// Only treat rest[:at] as userinfo if it does not contain
+			// a `/` — otherwise the `@` belongs to the path.
+			userinfo := rest[:at]
+			if !strings.ContainsAny(userinfo, "/?#") {
+				url = url[:schemeEnd+3] + "***:***@" + rest[at+1:]
+			}
+		}
+	}
+
+	// 2. Redact the query string.
 	if strings.Contains(url, "?") {
 		parts := strings.SplitN(url, "?", 2)
 		return parts[0] + "?***"
