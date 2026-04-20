@@ -26,8 +26,7 @@ Maintained alongside the code — treat this as the canonical "what's not done a
     - [1.4 Separate REVIEWER_KEY role](#14-separate-reviewer_key-role)
 2. [Infrastructure gaps](#2-infrastructure-gaps)
     - [2.1 Postgres integration test harness](#21-postgres-integration-test-harness)
-    - [2.2 `scripts/coverage.sh` 100% total gate](#22-scriptscoveragesh-100-total-gate)
-    - [2.3 `LLMProvider` / `Models` mirrors on GitFlic & GitVerse](#23-llmprovider--models-mirrors-on-gitflic--gitverse)
+    - [2.2 `LLMProvider` / `Models` mirrors on GitFlic & GitVerse](#22-llmprovider--models-mirrors-on-gitflic--gitverse)
 3. [Deferred code enhancements](#3-deferred-code-enhancements)
     - [3.1 Preview UI frontend](#31-preview-ui-frontend)
     - [3.2 Webhook-driven incremental sync](#32-webhook-driven-incremental-sync)
@@ -139,38 +138,7 @@ Filed as follow-up in `docs/superpowers/specs/2026-04-18-migration-system-refact
 
 ---
 
-### 2.2 `scripts/coverage.sh` 100% total gate
-
-**Category:** Tooling (Go toolchain + project gate)
-**Affects:** CI coverage enforcement
-**Status:** Open — known measurement semantics issue
-
-`scripts/coverage.sh` runs `go test -coverpkg=./internal/...,./cmd/...` across every test binary with a combined `-coverprofile`. Its default `COVERAGE_MIN=100.0` hard-fails below that threshold. Direct per-package `go test -cover` on the same packages reports much higher numbers:
-
-| Package | Direct `-cover` | `-coverpkg` via coverage.sh |
-|---|---|---|
-| `internal/database` | 99.7% | 73.93% |
-| `cmd/cli` | 97.8% | 72.16% |
-| `internal/services/process` | 99.83% | ~90% |
-
-The delta isn't missing tests — it's how Go's coverage tool merges profiles across test binaries when each binary instruments a superset of its imports. A statement covered in the `internal/database` package's own tests may not register as covered when the `tests/integration` test binary also instruments `internal/database` but doesn't exercise that statement; the resulting profile-line weights can dilute.
-
-**Why it's this way:** The project's own gate was designed during phased ramp-up (noted in `CLAUDE.md`) and the precise measurement semantics weren't re-examined after significant code growth.
-
-**Workaround:**
-- Run the script with `COVERAGE_MIN=<realistic-threshold>` override (CI already does this).
-- Rely on per-package direct `go test -cover` for real coverage signals — the numbers are accurate.
-
-**Future work:** Three viable paths, pick one:
-1. Fix the measurement: replace `-coverpkg` combined mode with per-package runs merged via `go tool cover` + custom dedup script. ~1 day of scripting work.
-2. Switch to `gocov` or `go-acc` which handle multi-binary merges better.
-3. Lower the global gate to a realistic number (e.g. 92%) and enforce 100% per-file via file-level diff checks.
-
-Neither CI correctness nor developer productivity is blocked by this today — `COVERAGE_MIN` overrides work fine.
-
----
-
-### 2.3 `LLMProvider` / `Models` mirrors on GitFlic & GitVerse
+### 2.2 `LLMProvider` / `Models` mirrors on GitFlic & GitVerse
 
 **Category:** Infrastructure
 **Affects:** Submodule push workflow
@@ -307,13 +275,13 @@ Documented in `CLAUDE.md` § Developer Environment.
 **Affects:** Local coverage runs
 **Status:** Documented
 
-Running `bash scripts/coverage.sh` locally without overriding `COVERAGE_MIN` will hard-fail because the combined-mode measurement reports lower than 100% even when direct per-package runs show ≥99% (see §2.2 above).
+`scripts/coverage.sh` now measures coverage accurately (per-package runs merged via `scripts/covermerge`), but some packages sit below 100% — `cmd/server` and a few provider packages in particular. The script's default `COVERAGE_MIN=100.0` therefore still hard-fails locally unless overridden.
 
-**Why it's this way:** The aspirational 100% default was set at project creation. CI passes the correct override; local developers often don't.
+**Why it's this way:** The aspirational 100% target is preserved as a long-term goal. CI runs with the appropriate override for today's reality; local developers often run without one.
 
 **Workaround:** Run `COVERAGE_MIN=90 bash scripts/coverage.sh` locally. Or add to your shell profile: `export COVERAGE_MIN=90`.
 
-Noted in `CLAUDE.md` and this document's §2.2.
+Noted in `CLAUDE.md` § Common Commands.
 
 ---
 

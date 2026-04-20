@@ -96,7 +96,9 @@ The project maintains **100% per-package test coverage**.
 
 ### Operations
 - `scripts/` — build and automation scripts.
-  - `scripts/coverage.sh` — full test matrix under `-race` with coverage; enforces 100% gate via `scripts/coverdiff`.
+  - `scripts/coverage.sh` — per-package test matrix under `-race + atomic` with coverage; merges profiles via `scripts/covermerge`; enforces 100% gate via `scripts/coverdiff`.
+  - `scripts/covermerge/` — Go helper that merges multiple cover profiles taking MAX per-statement count (correct for atomic mode).
+  - `scripts/coverage-legacy.sh` — preserved for one cycle in case operators need to compare against the previous (diluted) combined-mode numbers.
   - `scripts/llmsverifier.sh` — LLMsVerifier service helper.
   - `scripts/register-providers.sh` — provider registration helper.
   - `scripts/security/run_all.sh` — local security scanner runner.
@@ -149,7 +151,7 @@ Configured in `.goreleaser.yaml`:
 
 ## Testing Strategy
 
-**Coverage is load-bearing:** `scripts/coverage.sh` runs `CGO_ENABLED=1 go test -race -timeout 10m` across `./internal/... ./cmd/... ./tests/...` with `-coverpkg=./internal/...,./cmd/...`. It generates HTML and func reports in `coverage/` and hard-fails if any package or the total drops below `COVERAGE_MIN` (default `100.0`).
+**Coverage is load-bearing:** `scripts/coverage.sh` runs `CGO_ENABLED=1 go test -race -timeout 10m -covermode=atomic -coverpkg=./internal/...,./cmd/...` **per package** and merges the resulting profiles via `scripts/covermerge` (MAX count per statement for atomic mode). The merged profile feeds `scripts/coverdiff`, which hard-fails if any package or the total drops below `COVERAGE_MIN` (default `100.0`). Per-package runs avoid the combined-mode dilution previously tracked as KNOWN-ISSUES §2.2. Per-package profiles remain on disk at `coverage/profiles/` for debugging; the legacy combined script is preserved as `scripts/coverage-legacy.sh`.
 
 ### Test Tags
 - `.golangci.yml` recognizes build tags `integration` and `e2e`.

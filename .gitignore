@@ -34,6 +34,8 @@ coverage.txt
 /coverage/coverage.func.txt
 /coverage/coverage.out
 /coverage/coverdiff
+/coverage/covermerge
+/coverage/profiles/
 /coverage/golangci-lint.out
 /coverage/golangci-lint.err
 /coverage/semgrep.txt

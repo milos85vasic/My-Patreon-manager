@@ -50,7 +50,7 @@ The SQLite driver requires `CGO_ENABLED=1` (default on Linux/macOS; off in the s
 - Task 28's contract test (`tests/contract/`) enforces this invariant — do not weaken or skip it.
 - The `process` run holds a single-runner lock (`process_runs`) with a heartbeat (`PROCESS_LOCK_HEARTBEAT_SECONDS`). Stale rows are reclaimable as `crashed`; do not remove this reclaim path when refactoring.
 
-`scripts/coverage.sh` runs `go test -race` with `-coverpkg=./internal/...,./cmd/...` across `./internal/... ./cmd/... ./tests/...`, writes HTML + func coverage reports to `coverage/`, and hard-fails via `scripts/coverdiff` if any package or the total drops below `COVERAGE_MIN` (default **100.0**, lowerable during phased ramp-up with `COVERAGE_MIN=<n>`). Run it before committing.
+`scripts/coverage.sh` runs every Go package in its own `go test -race -covermode=atomic -coverpkg=./internal/...,./cmd/... -coverprofile=coverage/profiles/<pkg>.out` invocation, then merges the per-package profiles via `scripts/covermerge` (takes MAX count per statement — the correct reduction for atomic-mode overlapping test binaries). The merged profile drives `scripts/coverdiff`, which hard-fails if any package or the total falls below `COVERAGE_MIN` (default **100.0**, lowerable with `COVERAGE_MIN=<n>`). Per-package profiles stay on disk at `coverage/profiles/` for debugging. Run it before committing. The legacy combined-mode script is preserved as `scripts/coverage-legacy.sh` for one cycle in case operators need to compare numbers.
 
 ## Architecture
 
