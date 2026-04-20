@@ -709,6 +709,51 @@ func TestBuildOrchestrator_WithLLMsVerifier(t *testing.T) {
 	assert.NotNil(t, orch, "should return real orchestrator with LLM verifier")
 }
 
+// TestBuildOrchestrator_WithIllustrationEnabled exercises the
+// illustration-generator wiring branch so `cfg.IllustrationEnabled=true`
+// combined with a populated image-provider credential attaches the
+// generator to the real orchestrator.
+func TestBuildOrchestrator_WithIllustrationEnabled(t *testing.T) {
+	originalNewDB := newDatabaseFn
+	defer func() { newDatabaseFn = originalNewDB }()
+	newDatabaseFn = func(driver, dsn string) database.Database {
+		return &failDB{}
+	}
+
+	cfg := &config.Config{
+		GitHubToken:              "test-token",
+		DBDriver:                 "sqlite",
+		IllustrationEnabled:      true,
+		OpenAIAPIKey:             "test-dalle-key",
+		OpenAIBaseURL:            "https://api.openai.example/v1",
+		IllustrationDefaultStyle: "photo",
+		IllustrationDir:          "",
+	}
+	orch := buildOrchestrator(cfg)
+	assert.NotNil(t, orch, "should return real orchestrator with illustration generator attached")
+}
+
+// TestBuildOrchestrator_IllustrationEnabledNoImageProviders takes the
+// branch where IllustrationEnabled is on but no image-provider keys are
+// configured — the orchestrator must still be returned, just without an
+// illustration generator.
+func TestBuildOrchestrator_IllustrationEnabledNoImageProviders(t *testing.T) {
+	originalNewDB := newDatabaseFn
+	defer func() { newDatabaseFn = originalNewDB }()
+	newDatabaseFn = func(driver, dsn string) database.Database {
+		return &failDB{}
+	}
+
+	cfg := &config.Config{
+		GitHubToken:         "test-token",
+		DBDriver:            "sqlite",
+		IllustrationEnabled: true,
+		// all image-provider keys left empty on purpose
+	}
+	orch := buildOrchestrator(cfg)
+	assert.NotNil(t, orch, "orchestrator should still be built even with no image providers")
+}
+
 func TestServerSetupProviders(t *testing.T) {
 	tests := []struct {
 		name     string

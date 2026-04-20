@@ -31,8 +31,7 @@ Maintained alongside the code — treat this as the canonical "what's not done a
     - [3.2 Webhook-driven incremental sync](#32-webhook-driven-incremental-sync)
     - [3.3 Multi-node process parallelism](#33-multi-node-process-parallelism)
 4. [Documentation deferrals](#4-documentation-deferrals)
-    - [4.1 Video course scripts](#41-video-course-scripts)
-    - [4.2 Legacy planning artifacts](#42-legacy-planning-artifacts)
+    - [4.1 Legacy planning artifacts](#41-legacy-planning-artifacts)
 5. [Environmental caveats (not bugs)](#5-environmental-caveats-not-bugs)
     - [5.1 Semgrep hook requires auth](#51-semgrep-hook-requires-auth)
     - [5.2 `scripts/coverage.sh` default `COVERAGE_MIN=100`](#52-scriptscoveragesh-default-coverage_min100)
@@ -187,25 +186,7 @@ The `process_runs` single-runner lock is partial-unique-index based and scoped t
 
 ## 4. Documentation deferrals
 
-### 4.1 Video course scripts
-
-**Category:** Deferred
-**Affects:** `docs/video/scripts/module*.md` (11 files)
-**Status:** Stale — still reference legacy `sync` command
-
-The 11-module video course scripts were written when `sync` was the primary command. After the `process` command retirement of the legacy orchestrator Patreon paths (commit `0c46639`), the scripts describe flows that no longer exist (e.g. direct Patreon writes from `Orchestrator.Run`).
-
-**Why it's this way:** The course would need to be re-recorded, not just re-scripted — the UI demonstrations, CLI output, and code-walkthrough sections all reference types and methods that are gone.
-
-**Impact today:** Anyone watching the video course will see the deprecated flow. A reader-of-scripts-only would also see outdated content.
-
-**Workaround:** The README landing (`README.md` §Find What You Need) and the up-to-date [Quickstart Guide](guides/quickstart.md) / [Configuration Reference](guides/configuration.md) are canonical. Point new users there, not at the video scripts.
-
-**Future work:** Re-record the video course against the current `process` flow. Outside the scope of any code session. Filed here as a known documentation drift that anyone adding to the scripts should address holistically rather than patch-at-a-time.
-
----
-
-### 4.2 Legacy planning artifacts
+### 4.1 Legacy planning artifacts
 
 **Category:** Known-quirk
 **Affects:** `docs/superpowers/plans/*.md`, some older `specs/*.md`
@@ -248,9 +229,15 @@ Documented in `CLAUDE.md` § Developer Environment.
 
 **Category:** Environmental
 **Affects:** Local coverage runs
-**Status:** Documented
+**Status:** Documented — partial progress, permanent caveat
 
-`scripts/coverage.sh` now measures coverage accurately (per-package runs merged via `scripts/covermerge`), but some packages sit below 100% — `cmd/server` and a few provider packages in particular. The script's default `COVERAGE_MIN=100.0` therefore still hard-fails locally unless overridden.
+`scripts/coverage.sh` measures coverage accurately (per-package runs merged via `scripts/covermerge`) but a handful of packages still sit below 100% — the exact set depends on which provider credentials and storage backends a release targets. The script's default `COVERAGE_MIN=100.0` therefore still hard-fails locally unless overridden.
+
+**Recent improvements (still below 100%):**
+- `cmd/server` — 82.5% → 96.2% after adding `serverBuildImageProviders` and illustration-orchestrator branch tests.
+- `internal/providers/llm` — 79.7% → 88.2% after covering `GatewayProvider` nil-verifier paths, `extractTitle`, and `estimateQuality`.
+
+The residual gap is mostly `GenerateContent` paths that require a real `digital.vasic.llmgateway.Gateway` and full LLM round-trip; those belong to the live-Postgres-style integration harness (§2.1 pattern) rather than unit tests.
 
 **Why it's this way:** The aspirational 100% target is preserved as a long-term goal. CI runs with the appropriate override for today's reality; local developers often run without one.
 

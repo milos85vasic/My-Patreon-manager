@@ -16,7 +16,7 @@ Narration: "Key metrics: patreon_sync_repos_total, patreon_sync_duration_seconds
 
 ### 04:00 — Grafana dashboard (3m)
 [SCENE: browser showing Grafana]
-Narration: "Import ops/grafana/dashboard.json. Six panels: HTTP RPS, error rate, P99 latency, sync throughput, LLM calls, DB queries."
+Narration: "Import ops/grafana/dashboard.json. Six panels: HTTP RPS, error rate, P99 latency, process/sync throughput, LLM calls, DB queries."
 
 ### 07:00 — Structured logging (2m)
 Narration: "Every request gets a request-id. Log entries are JSON with slog. LOG_LEVEL controls verbosity."
@@ -34,7 +34,7 @@ Commands:
 
 ## Exercise
 1. Start the server and Grafana (via podman-compose).
-2. Trigger a sync and observe the dashboard updating.
+2. Trigger a `./patreon-manager process` run and observe the dashboard updating.
 3. Query the audit endpoint and correlate with Prometheus counters.
 
 ## Resources

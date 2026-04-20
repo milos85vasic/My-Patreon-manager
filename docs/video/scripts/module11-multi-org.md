@@ -6,7 +6,7 @@ Audience: operators, advanced users
 ## Scene list
 
 ### 00:00 — What multi-org support is (60s)
-Narration: "When you manage repositories across several GitHub organizations or GitLab groups, scanning them one at a time is tedious. Multi-org support lets the orchestrator discover and deduplicate repositories across all organizations in a single sync run."
+Narration: "When you manage repositories across several GitHub organizations or GitLab groups, scanning them one at a time is tedious. Multi-org support lets the orchestrator discover and deduplicate repositories across all organizations in a single `process` run."
 
 ### 01:00 — New environment variables (2m)
 [SCENE: IDE showing .env.example]
@@ -19,11 +19,11 @@ Commands:
 Commands:
     # Single org — same as before
     export GITHUB_ORGS=my-company
-    ./patreon-manager sync --dry-run
+    ./patreon-manager process --dry-run
 
     # Multiple orgs
     export GITHUB_ORGS=my-company,open-source-team,partner-org
-    ./patreon-manager sync --dry-run
+    ./patreon-manager process --dry-run
 Narration: "A single value works identically to the previous behavior. Multiple values are split on commas, trimmed of whitespace, and iterated sequentially with per-request rate limiting."
 
 ### 05:00 — How the orchestrator discovers repos (2m)
@@ -42,14 +42,14 @@ Narration: "If you do not set any of the new variables, behavior is unchanged. T
 Commands:
     export GITHUB_ORGS=org-alpha,org-beta
     export GITLAB_GROUPS=backend-team,infra
-    ./patreon-manager sync --dry-run --json | jq '.summary'
+    ./patreon-manager process --dry-run --json | jq '.summary'
 
 ### 12:00 — Exercise
 
 ## Exercise
 1. Set `GITHUB_ORGS` to two organizations you have read access to.
-2. Run `sync --dry-run` and confirm both organizations appear in the report.
-3. Create a fork of a repo from one org into the other, re-run `sync --dry-run`, and verify the deduplication log shows the mirror entry.
+2. Run `process --dry-run` and confirm both organizations appear in the report.
+3. Create a fork of a repo from one org into the other, re-run `process --dry-run`, and verify the deduplication log shows the mirror entry.
 
 ## Resources
 - docs/website/content/docs/multi-org-support.md

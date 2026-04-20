@@ -8,7 +8,7 @@ Audience: operators, admins
 ### 00:00 — Admin endpoints (2m)
 [SCENE: terminal]
 Commands:
-    curl -H "X-Admin-Key: $ADMIN_KEY" http://localhost:8080/admin/sync-status
+    curl -H "X-Admin-Key: $ADMIN_KEY" http://localhost:8080/admin/sync/status
     curl -H "X-Admin-Key: $ADMIN_KEY" http://localhost:8080/admin/audit
     curl -H "X-Admin-Key: $ADMIN_KEY" -X POST http://localhost:8080/admin/reload
 
@@ -33,8 +33,8 @@ Narration: "Rotate tokens in .env, restart the server. SIGHUP reloads .repoignor
 ### 12:00 — Exercise
 
 ## Exercise
-1. Start the server and hit /admin/sync-status.
-2. Import the Grafana dashboard and trigger a sync.
+1. Start the server and hit /admin/sync/status.
+2. Import the Grafana dashboard and trigger a `./patreon-manager process` run.
 3. Rotate a Git provider token and verify the failover.
 
 ## Resources
