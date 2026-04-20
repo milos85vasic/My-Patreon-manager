@@ -79,16 +79,19 @@ The codebase follows a provider/service layering where the CLI and server are th
 ## Authoritative References
 
 - `.specify/memory/constitution.md` — architectural principles (I–VII). Read before non-trivial changes; these are enforced, not aspirational.
-- `specs/001-patreon-manager-app/tasks.md` — active implementation tasks and user stories
+- `docs/superpowers/specs/` — per-feature design docs for active and recent work. Start here when picking up a feature.
+- `docs/superpowers/plans/` — per-feature implementation plans that accompany the specs. Historical; frozen after a feature lands.
+- `specs/001-patreon-manager-app/tasks.md` — **historical** v1 task tracker (all 173 tasks complete). Preserved as the shipping record; not a backlog.
 - `docs/KNOWN-ISSUES.md` — canonical "what's not done and why" document. Check before proposing features that look missing; many are deliberate non-goals.
 - `AGENTS.md` — companion reference kept in sync with CLAUDE.md; cross-check when in doubt
 
 ## Feature Workflow
 
-1. Find the relevant user story in `specs/001-patreon-manager-app/tasks.md`
-2. Check constitution principles that constrain the area
-3. TDD: write tests first, keep package at 100% coverage
-4. Run `bash scripts/coverage.sh` before committing
+1. Locate the relevant design under `docs/superpowers/specs/` (e.g., `2026-04-18-process-command-design.md`); if none exists for the area, brainstorm one and add it before touching code.
+2. Check constitution principles that constrain the area.
+3. TDD: write tests first, keep package at 100% coverage.
+4. Run `bash scripts/coverage.sh` before committing.
+5. If the change closes a `docs/KNOWN-ISSUES.md` entry, delete that entry in the same commit.
 
 ## Git Mirrors
 

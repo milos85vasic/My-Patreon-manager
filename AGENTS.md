@@ -89,7 +89,9 @@ The project maintains **100% per-package test coverage**.
 - `docs/` — guides, architecture docs, API reference (OpenAPI), ADRs, runbooks, troubleshooting, and video course materials.
 - `docs/main_specification.md` — full system specification.
 - `.specify/memory/constitution.md` — architectural principles (I–VII). Authoritative and enforced.
-- `specs/001-patreon-manager-app/tasks.md` — active implementation tasks and user stories.
+- `docs/superpowers/specs/` — per-feature design docs for active and recent work. Start here when picking up a feature.
+- `docs/superpowers/plans/` — per-feature implementation plans. Historical; frozen once the feature lands.
+- `specs/001-patreon-manager-app/tasks.md` — **historical** v1 task tracker (all 173 tasks complete). Preserved as the shipping record; not a backlog.
 - `CLAUDE.md` — companion reference for Claude Code.
 
 ### Operations
@@ -213,10 +215,11 @@ Copy `.env.example` to `.env` and fill in values. Required groups:
 When making non-trivial changes, read these in order:
 
 1. `.specify/memory/constitution.md` — architectural principles I–VII (modularity, CLI-first idempotency, multi-platform Git abstraction, LLM quality gates, Patreon lifecycle integrity, resilience/observability, security-first credentials).
-2. `specs/001-patreon-manager-app/tasks.md` — active implementation tasks and user stories.
+2. `docs/superpowers/specs/` — per-feature design docs for active and recent work; start here when picking up a feature.
 3. `CLAUDE.md` — build commands and architecture overview.
 4. `docs/main_specification.md` — full system specification.
 5. `docs/KNOWN-ISSUES.md` — canonical "what's not done and why" (deliberate non-goals, deferred enhancements, environmental caveats). Check before proposing features that appear missing.
+6. `specs/001-patreon-manager-app/tasks.md` — **historical** v1 task tracker (all 173 tasks complete). Preserved as the shipping record; not a backlog.
 
 ## Mirrors
 
