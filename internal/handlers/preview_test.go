@@ -1456,3 +1456,214 @@ func TestPreview_RepoHistory_ListAllErr_500(t *testing.T) {
 		t.Fatalf("want 500, got %d body: %s", w.Code, w.Body.String())
 	}
 }
+
+// --- Legacy ViewArticle/EditArticle/ToggleArticle handlers ---
+// These are the pre-revisions-pipeline endpoints marked for retirement
+// (see preview.go comment before ViewArticle). They remain wired in
+// RegisterRoutes, so we keep smoke tests for them until they're actually
+// deleted — otherwise regressions can slip in under the "legacy
+// surface, who tests that" blanket.
+
+// seedGeneratedContent inserts a GeneratedContent row so the legacy
+// handlers have something to fetch via db.GeneratedContents().GetByID.
+func seedGeneratedContent(t *testing.T, db *database.SQLiteDB, id string) *models.GeneratedContent {
+	t.Helper()
+	// Ensure a repository row exists (FK dependency).
+	_, _ = db.DB().ExecContext(context.Background(),
+		`INSERT INTO repositories (id, service, owner, name, url, https_url) VALUES ('r','github','o','n','u','h')`)
+	gc := &models.GeneratedContent{
+		ID:             id,
+		RepositoryID:   "r",
+		ContentType:    "promotional",
+		Format:         "markdown",
+		Title:          "legacy article " + id,
+		Body:           "legacy body",
+		QualityScore:   0.9,
+		ModelUsed:      "test-model",
+		PromptTemplate: "default",
+		Status:         "pending",
+		CreatedAt:      time.Now().UTC(),
+		UpdatedAt:      time.Now().UTC(),
+	}
+	if err := db.GeneratedContents().Create(context.Background(), gc); err != nil {
+		t.Fatalf("seed generated_content %s: %v", id, err)
+	}
+	return gc
+}
+
+// stubViewArticleTemplate installs a minimal HTML template so the
+// render step doesn't 500 just because templates/preview/*.html isn't
+// loaded in this test binary.
+func stubPreviewTemplates(r *gin.Engine) {
+	tmpl := template.Must(template.New("preview_article.html").Parse(`{{ .Article.Title }}`))
+	tmpl = template.Must(tmpl.New("preview_edit.html").Parse(`edit-{{ .Article.ID }}`))
+	tmpl = template.Must(tmpl.New("error.html").Parse(`err:{{ .Error }}`))
+	r.SetHTMLTemplate(tmpl)
+}
+
+func TestPreview_ViewArticle_OK(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := testhelpers.OpenMigratedSQLite(t)
+	seedGeneratedContent(t, db, "gc-1")
+	h := handlers.NewPreviewHandler(db, &config.Config{})
+	r := gin.New()
+	stubPreviewTemplates(r)
+	r.GET("/preview/article/:id", h.ViewArticle)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/preview/article/gc-1", nil)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "legacy article gc-1") {
+		t.Fatalf("body missing article title: %s", w.Body.String())
+	}
+}
+
+func TestPreview_ViewArticle_NotFound(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := testhelpers.OpenMigratedSQLite(t)
+	h := handlers.NewPreviewHandler(db, &config.Config{})
+	r := gin.New()
+	stubPreviewTemplates(r)
+	r.GET("/preview/article/:id", h.ViewArticle)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/preview/article/missing", nil)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("want 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestPreview_EditArticle_GET(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := testhelpers.OpenMigratedSQLite(t)
+	seedGeneratedContent(t, db, "gc-ed")
+	h := handlers.NewPreviewHandler(db, &config.Config{})
+	r := gin.New()
+	stubPreviewTemplates(r)
+	r.GET("/preview/edit/:id", h.EditArticle)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/preview/edit/gc-ed", nil)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "edit-gc-ed") {
+		t.Fatalf("body missing edit marker: %s", w.Body.String())
+	}
+}
+
+func TestPreview_EditArticle_POST(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := testhelpers.OpenMigratedSQLite(t)
+	seedGeneratedContent(t, db, "gc-ep")
+	h := handlers.NewPreviewHandler(db, &config.Config{})
+	r := gin.New()
+	stubPreviewTemplates(r)
+	r.POST("/preview/edit/:id", h.EditArticle)
+
+	form := strings.NewReader("title=updated&body=new-body&status=approved")
+	req := httptest.NewRequest(http.MethodPost, "/preview/edit/gc-ep", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusFound {
+		t.Fatalf("want 302 redirect, got %d", w.Code)
+	}
+
+	got, err := db.GeneratedContents().GetByID(context.Background(), "gc-ep")
+	if err != nil || got == nil {
+		t.Fatalf("lookup after POST edit: err=%v got=%v", err, got)
+	}
+	if got.Title != "updated" || got.Body != "new-body" || got.Status != "approved" {
+		t.Fatalf("POST edit did not persist updates: %+v", got)
+	}
+}
+
+func TestPreview_EditArticle_NotFound(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := testhelpers.OpenMigratedSQLite(t)
+	h := handlers.NewPreviewHandler(db, &config.Config{})
+	r := gin.New()
+	stubPreviewTemplates(r)
+	r.GET("/preview/edit/:id", h.EditArticle)
+	r.POST("/preview/edit/:id", h.EditArticle)
+
+	wg := httptest.NewRecorder()
+	r.ServeHTTP(wg, httptest.NewRequest(http.MethodGet, "/preview/edit/missing", nil))
+	if wg.Code != http.StatusNotFound {
+		t.Fatalf("GET missing: want 404, got %d", wg.Code)
+	}
+
+	wp := httptest.NewRecorder()
+	form := strings.NewReader("title=anything")
+	req := httptest.NewRequest(http.MethodPost, "/preview/edit/missing", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(wp, req)
+	if wp.Code != http.StatusNotFound {
+		t.Fatalf("POST missing: want 404, got %d", wp.Code)
+	}
+}
+
+func TestPreview_ToggleArticle(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := testhelpers.OpenMigratedSQLite(t)
+	seedGeneratedContent(t, db, "gc-tog")
+	h := handlers.NewPreviewHandler(db, &config.Config{})
+	r := gin.New()
+	r.POST("/preview/toggle/:id/:action", h.ToggleArticle)
+
+	for _, tc := range []struct {
+		action string
+		want   string
+	}{
+		{"enable", "published"},
+		{"disable", "draft"},
+	} {
+		t.Run(tc.action, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/preview/toggle/gc-tog/"+tc.action, nil)
+			r.ServeHTTP(w, req)
+			if w.Code != http.StatusOK {
+				t.Fatalf("want 200, got %d: %s", w.Code, w.Body.String())
+			}
+			got, _ := db.GeneratedContents().GetByID(context.Background(), "gc-tog")
+			if got == nil || got.Status != tc.want {
+				t.Fatalf("toggle %s: want Status=%s got=%+v", tc.action, tc.want, got)
+			}
+		})
+	}
+}
+
+func TestPreview_ToggleArticle_NotFound(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := testhelpers.OpenMigratedSQLite(t)
+	h := handlers.NewPreviewHandler(db, &config.Config{})
+	r := gin.New()
+	r.POST("/preview/toggle/:id/:action", h.ToggleArticle)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/preview/toggle/missing/enable", nil))
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("want 404, got %d", w.Code)
+	}
+}
+
+func TestPreview_ToggleArticle_InvalidAction(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := testhelpers.OpenMigratedSQLite(t)
+	seedGeneratedContent(t, db, "gc-bad")
+	h := handlers.NewPreviewHandler(db, &config.Config{})
+	r := gin.New()
+	r.POST("/preview/toggle/:id/:action", h.ToggleArticle)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/preview/toggle/gc-bad/flip", nil))
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("want 400, got %d", w.Code)
+	}
+}

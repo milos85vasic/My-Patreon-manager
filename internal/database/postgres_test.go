@@ -809,10 +809,10 @@ func TestPostgresGeneratedContentStore_Create(t *testing.T) {
 		ID: "gc1", RepositoryID: "r1", ContentType: "summary", Format: "markdown",
 		Title: "Title", Body: "Body", QualityScore: 0.9, ModelUsed: "gpt-4",
 		PromptTemplate: "tmpl", TokenCount: 100, GenerationAttempts: 1,
-		PassedQualityGate: true, CreatedAt: now,
+		PassedQualityGate: true, Status: "draft", CreatedAt: now,
 	}
 	mock.ExpectExec("INSERT INTO generated_contents").
-		WithArgs(c.ID, c.RepositoryID, c.ContentType, c.Format, c.Title, c.Body, c.QualityScore, c.ModelUsed, c.PromptTemplate, c.TokenCount, c.GenerationAttempts, c.PassedQualityGate, c.CreatedAt).
+		WithArgs(c.ID, c.RepositoryID, c.ContentType, c.Format, c.Title, c.Body, c.QualityScore, c.ModelUsed, c.PromptTemplate, c.TokenCount, c.GenerationAttempts, c.PassedQualityGate, "draft", c.CreatedAt).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	err := store.Create(ctx, c)
@@ -828,8 +828,8 @@ func TestPostgresGeneratedContentStore_GetByID(t *testing.T) {
 	now := time.Now()
 	mock.ExpectQuery("SELECT.*FROM generated_contents WHERE id=\\$1").
 		WithArgs("gc1").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "repository_id", "content_type", "format", "title", "body", "quality_score", "model_used", "prompt_template", "token_count", "generation_attempts", "passed_quality_gate", "created_at"}).
-			AddRow("gc1", "r1", "summary", "markdown", "Title", "Body", 0.9, "gpt-4", "tmpl", 100, 1, true, now))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "repository_id", "content_type", "format", "title", "body", "quality_score", "model_used", "prompt_template", "token_count", "generation_attempts", "passed_quality_gate", "status", "created_at"}).
+			AddRow("gc1", "r1", "summary", "markdown", "Title", "Body", 0.9, "gpt-4", "tmpl", 100, 1, true, "draft", now))
 
 	content, err := store.GetByID(ctx, "gc1")
 	assert.NoError(t, err)
@@ -862,8 +862,8 @@ func TestPostgresGeneratedContentStore_GetLatestByRepo(t *testing.T) {
 	now := time.Now()
 	mock.ExpectQuery("SELECT.*FROM generated_contents WHERE repository_id=\\$1 ORDER BY created_at DESC LIMIT 1").
 		WithArgs("r1").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "repository_id", "content_type", "format", "title", "body", "quality_score", "model_used", "prompt_template", "token_count", "generation_attempts", "passed_quality_gate", "created_at"}).
-			AddRow("gc1", "r1", "summary", "markdown", "Title", "Body", 0.9, "gpt-4", "tmpl", 100, 1, true, now))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "repository_id", "content_type", "format", "title", "body", "quality_score", "model_used", "prompt_template", "token_count", "generation_attempts", "passed_quality_gate", "status", "created_at"}).
+			AddRow("gc1", "r1", "summary", "markdown", "Title", "Body", 0.9, "gpt-4", "tmpl", 100, 1, true, "draft", now))
 
 	content, err := store.GetLatestByRepo(ctx, "r1")
 	assert.NoError(t, err)
@@ -895,8 +895,8 @@ func TestPostgresGeneratedContentStore_GetByQualityRange(t *testing.T) {
 	now := time.Now()
 	mock.ExpectQuery("SELECT.*FROM generated_contents WHERE quality_score >= \\$1 AND quality_score <= \\$2").
 		WithArgs(0.5, 1.0).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "repository_id", "content_type", "format", "title", "body", "quality_score", "model_used", "prompt_template", "token_count", "generation_attempts", "passed_quality_gate", "created_at"}).
-			AddRow("gc1", "r1", "summary", "markdown", "Title", "Body", 0.9, "gpt-4", "tmpl", 100, 1, true, now))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "repository_id", "content_type", "format", "title", "body", "quality_score", "model_used", "prompt_template", "token_count", "generation_attempts", "passed_quality_gate", "status", "created_at"}).
+			AddRow("gc1", "r1", "summary", "markdown", "Title", "Body", 0.9, "gpt-4", "tmpl", 100, 1, true, "draft", now))
 
 	contents, err := store.GetByQualityRange(ctx, 0.5, 1.0)
 	assert.NoError(t, err)
@@ -927,8 +927,8 @@ func TestPostgresGeneratedContentStore_ListByRepository(t *testing.T) {
 	now := time.Now()
 	mock.ExpectQuery("SELECT.*FROM generated_contents WHERE repository_id=\\$1 ORDER BY created_at DESC").
 		WithArgs("r1").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "repository_id", "content_type", "format", "title", "body", "quality_score", "model_used", "prompt_template", "token_count", "generation_attempts", "passed_quality_gate", "created_at"}).
-			AddRow("gc1", "r1", "summary", "markdown", "Title", "Body", 0.9, "gpt-4", "tmpl", 100, 1, true, now))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "repository_id", "content_type", "format", "title", "body", "quality_score", "model_used", "prompt_template", "token_count", "generation_attempts", "passed_quality_gate", "status", "created_at"}).
+			AddRow("gc1", "r1", "summary", "markdown", "Title", "Body", 0.9, "gpt-4", "tmpl", 100, 1, true, "draft", now))
 
 	contents, err := store.ListByRepository(ctx, "r1")
 	assert.NoError(t, err)
@@ -961,10 +961,10 @@ func TestPostgresGeneratedContentStore_Update(t *testing.T) {
 		ID: "gc1", RepositoryID: "r1", ContentType: "summary", Format: "markdown",
 		Title: "Updated", Body: "Updated body", QualityScore: 0.95, ModelUsed: "gpt-4",
 		PromptTemplate: "tmpl", TokenCount: 120, GenerationAttempts: 2,
-		PassedQualityGate: true, CreatedAt: now,
+		PassedQualityGate: true, Status: "approved", CreatedAt: now,
 	}
 	mock.ExpectExec("UPDATE generated_contents SET").
-		WithArgs(c.RepositoryID, c.ContentType, c.Format, c.Title, c.Body, c.QualityScore, c.ModelUsed, c.PromptTemplate, c.TokenCount, c.GenerationAttempts, c.PassedQualityGate, c.CreatedAt, c.ID).
+		WithArgs(c.RepositoryID, c.ContentType, c.Format, c.Title, c.Body, c.QualityScore, c.ModelUsed, c.PromptTemplate, c.TokenCount, c.GenerationAttempts, c.PassedQualityGate, c.Status, c.CreatedAt, c.ID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	err := store.Update(ctx, c)

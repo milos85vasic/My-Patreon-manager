@@ -234,10 +234,12 @@ Documented in `CLAUDE.md` § Developer Environment.
 `scripts/coverage.sh` measures coverage accurately (per-package runs merged via `scripts/covermerge`) but a handful of packages still sit below 100% — the exact set depends on which provider credentials and storage backends a release targets. The script's default `COVERAGE_MIN=100.0` therefore still hard-fails locally unless overridden.
 
 **Recent improvements (still below 100%):**
+- Merged total: 96.30% → 97.00% across 26 packages.
 - `cmd/server` — 82.5% → 96.2% after adding `serverBuildImageProviders` and illustration-orchestrator branch tests.
 - `internal/providers/llm` — 79.7% → 88.2% after covering `GatewayProvider` nil-verifier paths, `extractTitle`, and `estimateQuality`.
+- `internal/handlers` — the legacy `ViewArticle`/`EditArticle`/`ToggleArticle` handlers that had 0% coverage are now exercised (GET, POST, NotFound, InvalidAction).
 
-The residual gap is mostly `GenerateContent` paths that require a real `digital.vasic.llmgateway.Gateway` and full LLM round-trip; those belong to the live-Postgres-style integration harness (§2.1 pattern) rather than unit tests.
+The residual gap is mostly `GenerateContent` paths that require a real `digital.vasic.llmgateway.Gateway` and full LLM round-trip; those belong to the live-Postgres-style integration harness (§2.1 pattern) rather than unit tests. Remaining sub-100% packages: `internal/services/sync` (92.65% — supervisor/dedup timing branches), `internal/services/process` (99.87%), `internal/database` (99.81%).
 
 **Why it's this way:** The aspirational 100% target is preserved as a long-term goal. CI runs with the appropriate override for today's reality; local developers often run without one.
 

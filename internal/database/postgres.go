@@ -488,13 +488,17 @@ func (s *PostgresMirrorMapStore) DeleteAll(ctx context.Context) error {
 }
 
 func (s *PostgresGeneratedContentStore) Create(ctx context.Context, c *models.GeneratedContent) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO generated_contents (id, repository_id, content_type, format, title, body, quality_score, model_used, prompt_template, token_count, generation_attempts, passed_quality_gate, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-		c.ID, c.RepositoryID, c.ContentType, c.Format, c.Title, c.Body, c.QualityScore, c.ModelUsed, c.PromptTemplate, c.TokenCount, c.GenerationAttempts, c.PassedQualityGate, c.CreatedAt)
+	status := c.Status
+	if status == "" {
+		status = "draft"
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO generated_contents (id, repository_id, content_type, format, title, body, quality_score, model_used, prompt_template, token_count, generation_attempts, passed_quality_gate, status, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+		c.ID, c.RepositoryID, c.ContentType, c.Format, c.Title, c.Body, c.QualityScore, c.ModelUsed, c.PromptTemplate, c.TokenCount, c.GenerationAttempts, c.PassedQualityGate, status, c.CreatedAt)
 	return err
 }
 func (s *PostgresGeneratedContentStore) GetByID(ctx context.Context, id string) (*models.GeneratedContent, error) {
 	c := &models.GeneratedContent{}
-	err := s.db.QueryRowContext(ctx, "SELECT id, repository_id, content_type, format, title, body, quality_score, model_used, prompt_template, token_count, generation_attempts, passed_quality_gate, created_at FROM generated_contents WHERE id=$1", id).Scan(&c.ID, &c.RepositoryID, &c.ContentType, &c.Format, &c.Title, &c.Body, &c.QualityScore, &c.ModelUsed, &c.PromptTemplate, &c.TokenCount, &c.GenerationAttempts, &c.PassedQualityGate, &c.CreatedAt)
+	err := s.db.QueryRowContext(ctx, "SELECT id, repository_id, content_type, format, title, body, quality_score, model_used, prompt_template, token_count, generation_attempts, passed_quality_gate, status, created_at FROM generated_contents WHERE id=$1", id).Scan(&c.ID, &c.RepositoryID, &c.ContentType, &c.Format, &c.Title, &c.Body, &c.QualityScore, &c.ModelUsed, &c.PromptTemplate, &c.TokenCount, &c.GenerationAttempts, &c.PassedQualityGate, &c.Status, &c.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -502,14 +506,14 @@ func (s *PostgresGeneratedContentStore) GetByID(ctx context.Context, id string) 
 }
 func (s *PostgresGeneratedContentStore) GetLatestByRepo(ctx context.Context, repoID string) (*models.GeneratedContent, error) {
 	c := &models.GeneratedContent{}
-	err := s.db.QueryRowContext(ctx, "SELECT id, repository_id, content_type, format, title, body, quality_score, model_used, prompt_template, token_count, generation_attempts, passed_quality_gate, created_at FROM generated_contents WHERE repository_id=$1 ORDER BY created_at DESC LIMIT 1", repoID).Scan(&c.ID, &c.RepositoryID, &c.ContentType, &c.Format, &c.Title, &c.Body, &c.QualityScore, &c.ModelUsed, &c.PromptTemplate, &c.TokenCount, &c.GenerationAttempts, &c.PassedQualityGate, &c.CreatedAt)
+	err := s.db.QueryRowContext(ctx, "SELECT id, repository_id, content_type, format, title, body, quality_score, model_used, prompt_template, token_count, generation_attempts, passed_quality_gate, status, created_at FROM generated_contents WHERE repository_id=$1 ORDER BY created_at DESC LIMIT 1", repoID).Scan(&c.ID, &c.RepositoryID, &c.ContentType, &c.Format, &c.Title, &c.Body, &c.QualityScore, &c.ModelUsed, &c.PromptTemplate, &c.TokenCount, &c.GenerationAttempts, &c.PassedQualityGate, &c.Status, &c.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	return c, err
 }
 func (s *PostgresGeneratedContentStore) GetByQualityRange(ctx context.Context, min, max float64) ([]*models.GeneratedContent, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, repository_id, content_type, format, title, body, quality_score, model_used, prompt_template, token_count, generation_attempts, passed_quality_gate, created_at FROM generated_contents WHERE quality_score >= $1 AND quality_score <= $2", min, max)
+	rows, err := s.db.QueryContext(ctx, "SELECT id, repository_id, content_type, format, title, body, quality_score, model_used, prompt_template, token_count, generation_attempts, passed_quality_gate, status, created_at FROM generated_contents WHERE quality_score >= $1 AND quality_score <= $2", min, max)
 	if err != nil {
 		return nil, err
 	}
@@ -517,7 +521,7 @@ func (s *PostgresGeneratedContentStore) GetByQualityRange(ctx context.Context, m
 	var contents []*models.GeneratedContent
 	for rows.Next() {
 		c := &models.GeneratedContent{}
-		if err := rows.Scan(&c.ID, &c.RepositoryID, &c.ContentType, &c.Format, &c.Title, &c.Body, &c.QualityScore, &c.ModelUsed, &c.PromptTemplate, &c.TokenCount, &c.GenerationAttempts, &c.PassedQualityGate, &c.CreatedAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.RepositoryID, &c.ContentType, &c.Format, &c.Title, &c.Body, &c.QualityScore, &c.ModelUsed, &c.PromptTemplate, &c.TokenCount, &c.GenerationAttempts, &c.PassedQualityGate, &c.Status, &c.CreatedAt); err != nil {
 			return nil, err
 		}
 		contents = append(contents, c)
@@ -525,7 +529,7 @@ func (s *PostgresGeneratedContentStore) GetByQualityRange(ctx context.Context, m
 	return contents, nil
 }
 func (s *PostgresGeneratedContentStore) ListByRepository(ctx context.Context, repoID string) ([]*models.GeneratedContent, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, repository_id, content_type, format, title, body, quality_score, model_used, prompt_template, token_count, generation_attempts, passed_quality_gate, created_at FROM generated_contents WHERE repository_id=$1 ORDER BY created_at DESC", repoID)
+	rows, err := s.db.QueryContext(ctx, "SELECT id, repository_id, content_type, format, title, body, quality_score, model_used, prompt_template, token_count, generation_attempts, passed_quality_gate, status, created_at FROM generated_contents WHERE repository_id=$1 ORDER BY created_at DESC", repoID)
 	if err != nil {
 		return nil, err
 	}
@@ -533,7 +537,7 @@ func (s *PostgresGeneratedContentStore) ListByRepository(ctx context.Context, re
 	var contents []*models.GeneratedContent
 	for rows.Next() {
 		c := &models.GeneratedContent{}
-		if err := rows.Scan(&c.ID, &c.RepositoryID, &c.ContentType, &c.Format, &c.Title, &c.Body, &c.QualityScore, &c.ModelUsed, &c.PromptTemplate, &c.TokenCount, &c.GenerationAttempts, &c.PassedQualityGate, &c.CreatedAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.RepositoryID, &c.ContentType, &c.Format, &c.Title, &c.Body, &c.QualityScore, &c.ModelUsed, &c.PromptTemplate, &c.TokenCount, &c.GenerationAttempts, &c.PassedQualityGate, &c.Status, &c.CreatedAt); err != nil {
 			return nil, err
 		}
 		contents = append(contents, c)
@@ -542,8 +546,8 @@ func (s *PostgresGeneratedContentStore) ListByRepository(ctx context.Context, re
 }
 
 func (s *PostgresGeneratedContentStore) Update(ctx context.Context, c *models.GeneratedContent) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE generated_contents SET repository_id=$1, content_type=$2, format=$3, title=$4, body=$5, quality_score=$6, model_used=$7, prompt_template=$8, token_count=$9, generation_attempts=$10, passed_quality_gate=$11, created_at=$12 WHERE id=$13`,
-		c.RepositoryID, c.ContentType, c.Format, c.Title, c.Body, c.QualityScore, c.ModelUsed, c.PromptTemplate, c.TokenCount, c.GenerationAttempts, c.PassedQualityGate, c.CreatedAt, c.ID)
+	_, err := s.db.ExecContext(ctx, `UPDATE generated_contents SET repository_id=$1, content_type=$2, format=$3, title=$4, body=$5, quality_score=$6, model_used=$7, prompt_template=$8, token_count=$9, generation_attempts=$10, passed_quality_gate=$11, status=$12, created_at=$13 WHERE id=$14`,
+		c.RepositoryID, c.ContentType, c.Format, c.Title, c.Body, c.QualityScore, c.ModelUsed, c.PromptTemplate, c.TokenCount, c.GenerationAttempts, c.PassedQualityGate, c.Status, c.CreatedAt, c.ID)
 	return err
 }
 
