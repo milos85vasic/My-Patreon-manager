@@ -25,6 +25,7 @@ import (
 	syncsvc "github.com/milos85vasic/My-Patreon-Manager/internal/services/sync"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseLogLevel(t *testing.T) {
@@ -1117,5 +1118,63 @@ func TestPrintSyncDeprecation(t *testing.T) {
 	out := buf.String()
 	assert.Contains(t, out, "'sync' is deprecated")
 	assert.Contains(t, out, "process")
+}
+
+func TestMain_ProcessCommand_ProcessError(t *testing.T) {
+	setMainArgs(t, "process")
+	setStdEnv(t)
+
+	db := database.NewSQLiteDB(":memory:")
+	ctx := context.Background()
+	require.NoError(t, db.Connect(ctx, ""))
+	require.NoError(t, db.Migrate(ctx))
+	_ = db.Close()
+
+	wrapped := &noReconnectSQLite{SQLiteDB: db}
+	t.Cleanup(func() { _ = wrapped.Close() })
+
+	oldNewDatabase := newDatabase
+	defer func() { newDatabase = oldNewDatabase }()
+	newDatabase = func(driver, dsn string) database.Database { return wrapped }
+
+	cleanup := withMockPrometheusRegistry(t)
+	defer cleanup()
+
+	exited, code := withMockExit(t, func() {
+		main()
+	})
+	assert.True(t, exited, "process error should cause exit")
+	assert.Equal(t, 1, code)
+}
+
+func TestMain_SyncCommand_ProcessError(t *testing.T) {
+	setMainArgs(t, "sync")
+	setStdEnv(t)
+
+	oldEnsure := ensureLLMsVerifier
+	defer func() { ensureLLMsVerifier = oldEnsure }()
+	ensureLLMsVerifier = func(cfg *config.Config, logger *slog.Logger) error { return nil }
+
+	db := database.NewSQLiteDB(":memory:")
+	ctx := context.Background()
+	require.NoError(t, db.Connect(ctx, ""))
+	require.NoError(t, db.Migrate(ctx))
+	_ = db.Close()
+
+	wrapped := &noReconnectSQLite{SQLiteDB: db}
+	t.Cleanup(func() { _ = wrapped.Close() })
+
+	oldNewDatabase := newDatabase
+	defer func() { newDatabase = oldNewDatabase }()
+	newDatabase = func(driver, dsn string) database.Database { return wrapped }
+
+	cleanup := withMockPrometheusRegistry(t)
+	defer cleanup()
+
+	exited, code := withMockExit(t, func() {
+		main()
+	})
+	assert.True(t, exited, "sync error should cause exit")
+	assert.Equal(t, 1, code)
 }
 
