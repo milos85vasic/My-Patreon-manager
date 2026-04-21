@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EnvWizard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; }
+        .container { max-width: 800px; margin: 0 auto; padding: 2rem; }
+        h1 { text-align: center; margin-bottom: 1rem; color: #e94560; }
+        .progress { background: #16213e; border-radius: 8px; height: 24px; margin-bottom: 2rem; overflow: hidden; }
+        .progress-bar { background: linear-gradient(90deg, #e94560, #0f3460); height: 100%; transition: width 0.3s; }
+        .var-card { background: #16213e; border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; border: 1px solid #0f3460; }
+        .var-card.required { border-left: 4px solid #e94560; }
+        .var-card.secret { border-left: 4px solid #533483; }
+        .var-name { font-weight: bold; font-size: 1.1rem; margin-bottom: 0.5rem; }
+        .var-desc { color: #aaa; margin-bottom: 0.5rem; }
+        .var-badges { margin-bottom: 0.5rem; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; margin-right: 4px; }
+        .badge-required { background: #e94560; }
+        .badge-secret { background: #533483; }
+        .badge-default { background: #0f3460; }
+        .badge-generate { background: #1a8f3c; }
+        .var-input { width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid #0f3460; background: #1a1a2e; color: #eee; font-size: 1rem; }
+        .var-input:focus { outline: none; border-color: #e94560; }
+        .actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 4px; border: none; cursor: pointer; font-size: 0.9rem; }
+        .btn-primary { background: #e94560; color: white; }
+        .btn-secondary { background: #0f3460; color: white; }
+        .btn-skip { background: #333; color: #aaa; }
+        .categories { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 2rem; }
+        .cat-btn { padding: 0.4rem 0.8rem; border-radius: 4px; background: #16213e; border: 1px solid #0f3460; color: #eee; cursor: pointer; }
+        .cat-btn.active { background: #0f3460; border-color: #e94560; }
+        .nav { display: flex; justify-content: space-between; margin-top: 2rem; }
+        .error { color: #e94560; font-size: 0.85rem; margin-top: 0.25rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>EnvWizard</h1>
+        <div class="progress"><div class="progress-bar" id="progressBar" style="width: 0%"></div></div>
+        <div class="categories" id="categories"></div>
+        <div id="vars"></div>
+        <div class="nav">
+            <button class="btn btn-secondary" onclick="save()">Save .env</button>
+            <button class="btn btn-primary" onclick="saveProfile()">Save Profile</button>
+        </div>
+    </div>
+    <script>
+        const API = '/api';
+        let categories = [];
+        let vars = [];
+        let wizardState = {};
+
+        async function init() {
+            const [catRes, varRes, stateRes] = await Promise.all([
+                fetch(API + '/categories'), fetch(API + '/vars'), fetch(API + '/wizard/state')
+            ]);
+            categories = await catRes.json();
+            vars = await varRes.json();
+            wizardState = await stateRes.json();
+            renderCategories();
+            renderVars();
+            updateProgress();
+        }
+
+        function renderCategories() {
+            const el = document.getElementById('categories');
+            el.innerHTML = categories.map(c =>
+                `<button class="cat-btn" onclick="filterCategory('${c.ID}')">${c.Name}</button>`
+            ).join('');
+            el.innerHTML = `<button class="cat-btn active" onclick="filterCategory(null)">All</button>` + el.innerHTML;
+        }
+
+        function renderVars(filterCat) {
+            const el = document.getElementById('vars');
+            let filtered = vars;
+            if (filterCat) filtered = vars.filter(v => v.Category && v.Category.ID === filterCat);
+            el.innerHTML = filtered.map(v => `
+                <div class="var-card ${v.Required ? 'required' : ''} ${v.Secret ? 'secret' : ''}">
+                    <div class="var-name">${v.Name}</div>
+                    <div class="var-desc">${v.Description}</div>
+                    <div class="var-badges">
+                        ${v.Required ? '<span class="badge badge-required">Required</span>' : ''}
+                        ${v.Secret ? '<span class="badge badge-secret">Secret</span>' : ''}
+                        ${v.Default ? '<span class="badge badge-default">Default: ' + v.Default + '</span>' : ''}
+                        ${v.CanGenerate ? '<span class="badge badge-generate">Auto-generate</span>' : ''}
+                    </div>
+                    ${v.URL ? '<div class="var-desc">Get value: <a href="' + v.URL + '" target="_blank">' + v.URL + '</a></div>' : ''}
+                    <input class="var-input" id="input-${v.Name}" placeholder="Enter value..."
+                        type="${v.Secret ? 'password' : 'text'}" onchange="setValue('${v.Name}', this.value)">
+                    <div class="actions">
+                        <button class="btn btn-primary" onclick="setValue('${v.Name}', document.getElementById('input-${v.Name}').value)">Set</button>
+                        ${v.CanGenerate ? '<button class="btn btn-secondary" onclick="generateValue(\'' + v.Name + '\')">Generate</button>' : ''}
+                        <button class="btn btn-skip" onclick="skipVar('${v.Name}')">Skip</button>
+                    </div>
+                    <div id="error-${v.Name}" class="error"></div>
+                </div>
+            `).join('');
+        }
+
+        function filterCategory(cat) {
+            document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            renderVars(cat);
+        }
+
+        async function setValue(name, value) {
+            const res = await fetch(API + '/vars/' + name, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({value})
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                document.getElementById('error-' + name).textContent = data.error;
+            } else {
+                document.getElementById('error-' + name).textContent = '';
+                updateProgress();
+            }
+        }
+
+        async function skipVar(name) {
+            await fetch(API + '/skip/' + name, {method: 'POST'});
+            updateProgress();
+        }
+
+        async function generateValue(name) {
+            // For now, just set a random hex string
+            const arr = new Uint8Array(32);
+            crypto.getRandomValues(arr);
+            const hex = Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
+            document.getElementById('input-' + name).value = hex;
+            await setValue(name, hex);
+        }
+
+        async function updateProgress() {
+            const res = await fetch(API + '/wizard/state');
+            wizardState = await res.json();
+            const pct = wizardState.totalSteps > 0 ? (wizardState.completed / wizardState.totalSteps * 100) : 0;
+            document.getElementById('progressBar').style.width = pct + '%';
+        }
+
+        async function save() {
+            const res = await fetch(API + '/save', {method: 'POST'});
+            const data = await res.json();
+            const blob = new Blob([data.content], {type: 'text/plain'});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = '.env';
+            a.click();
+        }
+
+        async function saveProfile() {
+            const name = prompt('Profile name:');
+            if (!name) return;
+            await fetch(API + '/profiles', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name})
+            });
+        }
+
+        init();
+    </script>
+</body>
+</html>
