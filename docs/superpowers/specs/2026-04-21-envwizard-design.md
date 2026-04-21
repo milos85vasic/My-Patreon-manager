@@ -229,9 +229,17 @@ Auto-detected if terminal supports (or `--tui` flag)
 # POST /api/save              # Save to .env
 # GET  /api/profiles          # List profiles
 ```
+### Platform Summary
 
-### Mobile
-Same REST API + additional `/mobile/*` endpoints optimized for mobile apps
+| Platform | Implementation | Port |
+|----------|---------------|------|
+| CLI | terminal menu | stdin/stdout |
+| TUI | bubbles/tview | PTY |
+| Web | embedded HTTP + SPA | :8080 default |
+| REST API | chi/gorilla | :8081 default |
+| Mobile | Flutter app | connects to REST API |
+
+Note: Mobile (Flutter) will be a separate repository following the LLMProvider/Models mirror pattern - see `docs/KNOWN-ISSUES.md` for mirror setup.
 
 ## Security Considerations
 
@@ -248,6 +256,22 @@ Same REST API + additional `/mobile/*` endpoints optimized for mobile apps
 3. Use same state machine for all interfaces
 4. Profile storage in `~/.config/patreon-manager/profiles/`
 5. Embedded web assets in `cmd/envwizard/web/static/`
+
+## Critical Features
+
+### .env File Loading (Any Time)
+
+EnvWizard must support loading and continuing to edit an existing `.env` file at any time:
+
+- **Load on startup:** `./envwizard --env .env` or `./envwizard --env /path/to/custom.env`
+- **Load during session:** "Open existing .env" option in any UI (CLI/TUI/Web/API)
+- **Merge behavior:** 
+  - Existing values populate the wizard state
+  - Mark variables as "already defined" (Category: "existing")
+  - Allow editing any loaded value
+  - Detect missing required variables
+- **Validation on load:** Validate all loaded values against their definitions
+- **Output:** Save back to same file or new file with `--output`
 
 ## Open Questions
 
