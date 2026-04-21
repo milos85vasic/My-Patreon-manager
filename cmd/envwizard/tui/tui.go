@@ -145,7 +145,7 @@ func (t *TUI) updateStatus() {
 	case ScreenProfileSave:
 		screenName = "Profile Save"
 	}
-	fmt.Fprintf(t.statusBar, " [green]%s[-] | Progress: [yellow]%d/%d[-]", screenName, completed, total)
+	t.statusBar.SetText(fmt.Sprintf(" [green]%s[-] | Progress: [yellow]%d/%d[-]", screenName, completed, total))
 }
 
 func (t *TUI) updateHelp() {
@@ -161,16 +161,20 @@ func (t *TUI) buildWelcome() {
 
 	profileDropdown := tview.NewDropDown().SetLabel("Profile: ").SetFieldWidth(30)
 	profiles, err := core.ListProfiles()
-	if err == nil && len(profiles) > 0 {
+	if err != nil {
+		fmt.Fprintf(title, "[red]Warning: could not list profiles: %s[-]\n\n", err.Error())
+	} else if len(profiles) > 0 {
 		options := append([]string{"(none)"}, profiles...)
 		profileDropdown.SetOptions(options, func(text string, index int) {
 			if text != "(none)" {
-				p, err := core.LoadProfile(text)
-				if err == nil {
-					t.profileName = p.Name
-					for k, v := range p.Values {
-						t.wizard.SetValue(k, v)
-					}
+				p, loadErr := core.LoadProfile(text)
+				if loadErr != nil {
+					t.statusBar.SetText(fmt.Sprintf(" [red]Failed to load profile: %s[-]", loadErr.Error()))
+					return
+				}
+				t.profileName = p.Name
+				for k, v := range p.Values {
+					t.wizard.SetValue(k, v)
 				}
 			}
 		})
@@ -326,16 +330,7 @@ func (t *TUI) refreshVariable() {
 			}
 		}
 		t.wizard.SetValue(v.Name, val)
-		if !t.wizard.Next() {
-			t.switchScreen(ScreenCategories)
-			return
-		}
-		cv := t.wizard.CurrentVar()
-		if cv != nil && cv.Category != nil && cv.Category.ID != t.currentCatID {
-			t.switchScreen(ScreenCategories)
-			return
-		}
-		t.refreshVariable()
+		t.advanceVariable()
 	})
 
 	t.variableForm.AddButton("Skip", func() {
@@ -344,16 +339,7 @@ func (t *TUI) refreshVariable() {
 			return
 		}
 		t.wizard.Skip(v.Name)
-		if !t.wizard.Next() {
-			t.switchScreen(ScreenCategories)
-			return
-		}
-		cv := t.wizard.CurrentVar()
-		if cv != nil && cv.Category != nil && cv.Category.ID != t.currentCatID {
-			t.switchScreen(ScreenCategories)
-			return
-		}
-		t.refreshVariable()
+		t.advanceVariable()
 	})
 
 	t.variableForm.AddButton("Previous", func() {
@@ -364,6 +350,19 @@ func (t *TUI) refreshVariable() {
 	t.variableForm.AddButton("Back to Categories", func() {
 		t.switchScreen(ScreenCategories)
 	})
+}
+
+func (t *TUI) advanceVariable() {
+	if !t.wizard.Next() {
+		t.switchScreen(ScreenCategories)
+		return
+	}
+	cv := t.wizard.CurrentVar()
+	if cv != nil && cv.Category != nil && cv.Category.ID != t.currentCatID {
+		t.switchScreen(ScreenCategories)
+		return
+	}
+	t.refreshVariable()
 }
 
 func (t *TUI) buildSummary() {

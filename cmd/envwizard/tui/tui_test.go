@@ -105,3 +105,50 @@ func TestTUI_WizardProgress(t *testing.T) {
 		t.Fatalf("expected %d total, got %d", len(tuiTestVars), total)
 	}
 }
+
+func TestTUI_RefreshCategories_PopulatesTable(t *testing.T) {
+	vars := []*core.EnvVar{
+		{Name: "PORT", Description: "HTTP port", Category: &core.Category{ID: "server", Name: "Server", Order: 1}, Required: true, Default: "8080", Validation: core.ValidationPort},
+		{Name: "DEBUG", Description: "Debug mode", Category: &core.Category{ID: "server", Name: "Server", Order: 1}, Required: false, Default: "false", Validation: core.ValidationBoolean},
+		{Name: "ADMIN_KEY", Description: "Admin key", Category: &core.Category{ID: "security", Name: "Security", Order: 2}, Required: true, Secret: true},
+	}
+	w := core.NewWizard(vars)
+	tui := New(w)
+
+	tui.wizard.SetValue("PORT", "3000")
+	tui.SwitchScreenForTest(ScreenCategories)
+
+	rowCount := tui.categoriesTable.GetRowCount()
+	if rowCount < 2 {
+		t.Fatalf("expected at least header + 1 data row, got %d rows", rowCount)
+	}
+
+	cell := tui.categoriesTable.GetCell(1, 0)
+	if cell == nil {
+		t.Fatal("expected non-nil cell at row 1, col 0")
+	}
+	text := cell.Text
+	if text == "" {
+		t.Fatal("expected category name in cell, got empty string")
+	}
+
+	found := false
+	for r := 1; r < rowCount; r++ {
+		c := tui.categoriesTable.GetCell(r, 0)
+		if c != nil && c.Text == "Server" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("expected to find 'Server' category in table")
+	}
+
+	progressCell := tui.categoriesTable.GetCell(1, 2)
+	if progressCell == nil {
+		t.Fatal("expected non-nil progress cell")
+	}
+	if progressCell.Text != "1/2" {
+		t.Fatalf("expected progress '1/2' for Server (only PORT set), got '%s'", progressCell.Text)
+	}
+}
