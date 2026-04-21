@@ -3,6 +3,7 @@ package image
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -80,4 +81,17 @@ func TestMidjourneyProvider_GenerateImage_NotConfigured(t *testing.T) {
 	assert.Nil(t, result)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "API key or endpoint not configured")
+}
+
+func TestMidjourneyProvider_SetLogger(t *testing.T) {
+	p := NewMidjourneyProvider("test-key", "http://localhost", nil)
+	customLogger := slog.Default()
+	p.SetLogger(customLogger)
+	assert.Equal(t, customLogger, p.logger)
+}
+
+func TestMidjourneyProvider_SetLogger_Nil(t *testing.T) {
+	p := NewMidjourneyProvider("test-key", "http://localhost", nil)
+	p.SetLogger(nil)
+	assert.NotNil(t, p.logger)
 }

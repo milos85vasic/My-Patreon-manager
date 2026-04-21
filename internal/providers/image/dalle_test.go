@@ -3,6 +3,7 @@ package image
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -128,4 +129,17 @@ func TestDALLEProvider_CustomBaseURL(t *testing.T) {
 func TestDALLEProvider_EmptyBaseURLFallsBack(t *testing.T) {
 	p := NewDALLEProvider("test-key", "", nil)
 	assert.Equal(t, "https://api.openai.com/v1", p.baseURL)
+}
+
+func TestDALLEProvider_SetLogger(t *testing.T) {
+	p := NewDALLEProvider("test-key", "", nil)
+	customLogger := slog.Default()
+	p.SetLogger(customLogger)
+	assert.Equal(t, customLogger, p.logger)
+}
+
+func TestDALLEProvider_SetLogger_Nil(t *testing.T) {
+	p := NewDALLEProvider("test-key", "", nil)
+	p.SetLogger(nil)
+	assert.NotNil(t, p.logger)
 }

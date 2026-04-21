@@ -3,6 +3,7 @@ package image
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -98,4 +99,17 @@ func TestOpenAICompatProvider_DefaultModel(t *testing.T) {
 	result, err := p.GenerateImage(context.Background(), ImageRequest{Prompt: "test"})
 	require.NoError(t, err)
 	assert.NotNil(t, result)
+}
+
+func TestOpenAICompatProvider_SetLogger(t *testing.T) {
+	p := NewOpenAICompatProvider("test-key", "http://localhost:8080", "model", nil)
+	customLogger := slog.Default()
+	p.SetLogger(customLogger)
+	assert.Equal(t, customLogger, p.logger)
+}
+
+func TestOpenAICompatProvider_SetLogger_Nil(t *testing.T) {
+	p := NewOpenAICompatProvider("test-key", "http://localhost:8080", "model", nil)
+	p.SetLogger(nil)
+	assert.NotNil(t, p.logger)
 }

@@ -3,6 +3,7 @@ package image
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -101,4 +102,17 @@ func TestStabilityProvider_CustomBaseURL(t *testing.T) {
 func TestStabilityProvider_EmptyBaseURLFallsBack(t *testing.T) {
 	p := NewStabilityProvider("test-key", "", nil)
 	assert.Equal(t, "https://api.stability.ai/v2beta", p.baseURL)
+}
+
+func TestStabilityProvider_SetLogger(t *testing.T) {
+	p := NewStabilityProvider("test-key", "", nil)
+	customLogger := slog.Default()
+	p.SetLogger(customLogger)
+	assert.Equal(t, customLogger, p.logger)
+}
+
+func TestStabilityProvider_SetLogger_Nil(t *testing.T) {
+	p := NewStabilityProvider("test-key", "", nil)
+	p.SetLogger(nil)
+	assert.NotNil(t, p.logger)
 }
