@@ -211,3 +211,46 @@ func TestVerifierClient_DoRequest_RateLimit(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "rate limited")
 }
+
+func TestVerifierClient_GetProviders(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"count": 2,
+			"providers": []map[string]interface{}{
+				{"name": "openai", "status": "healthy"},
+				{"name": "anthropic", "status": "degraded"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewVerifierClient(server.URL, "key", nil)
+	providers, err := client.GetProviders(context.Background())
+	require.NoError(t, err)
+	assert.Len(t, providers, 2)
+	assert.Equal(t, "openai", providers[0].Name)
+}
+
+func TestVerifierClient_GetProviders_DecodeError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("not json"))
+	}))
+	defer server.Close()
+
+	client := NewVerifierClient(server.URL, "key", nil)
+	_, err := client.GetProviders(context.Background())
+	assert.Error(t, err)
+}
+
+func TestVerifierClient_GetProviders_Error(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	client := NewVerifierClient(server.URL, "key", nil)
+	_, err := client.GetProviders(context.Background())
+	assert.Error(t, err)
+}

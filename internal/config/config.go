@@ -55,6 +55,11 @@ type Config struct {
 	// Empty disables the check at startup time (the Auth middleware then
 	// falls back to the ADMIN_KEY environment variable).
 	AdminKey string
+	// ReviewerKey is an optional lower-privilege key for the preview UI
+	// approve/reject/edit endpoints. When set, requests can use either
+	// X-Admin-Key (full access) or X-Reviewer-Key (read-only review access).
+	// Empty means only AdminKey is accepted.
+	ReviewerKey string
 	// WebhookHMACSecret is the shared secret used to validate incoming
 	// webhook signatures. The exact validation scheme is provider-specific
 	// (GitHub uses sha256 HMAC; others use a bearer token).
@@ -299,6 +304,7 @@ func (c *Config) LoadFromEnv() {
 	c.GracePeriodHours = getEnvInt("GRACE_PERIOD_HOURS", c.GracePeriodHours)
 	c.AuditStore = getEnv("AUDIT_STORE", c.AuditStore)
 	c.AdminKey = getEnv("ADMIN_KEY", c.AdminKey)
+	c.ReviewerKey = getEnv("REVIEWER_KEY", c.ReviewerKey)
 	c.WebhookHMACSecret = getEnv("WEBHOOK_HMAC_SECRET", c.WebhookHMACSecret)
 	c.RateLimitRPS = getEnvFloat("RATE_LIMIT_RPS", c.RateLimitRPS)
 	c.RateLimitBurst = getEnvInt("RATE_LIMIT_BURST", c.RateLimitBurst)

@@ -8,6 +8,37 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// RequireReviewerKey returns a Gin middleware that accepts either X-Admin-Key
+// or X-Reviewer-Key. The reviewer key provides lower-privilege access scoped
+// to preview UI operations (approve/reject/edit revisions). The admin key
+// provides full access. When both keys are empty, falls back to ADMIN_KEY
+// env var; if that's also empty, rejects all requests (fail closed).
+func RequireReviewerKey(adminKey, reviewerKey string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if adminKey == "" {
+			adminKey = os.Getenv("ADMIN_KEY")
+		}
+		// reviewerKey intentionally has no env fallback - only config
+		allKeys := []string{adminKey, reviewerKey}
+
+		key := c.GetHeader("X-Admin-Key")
+		if key == "" {
+			key = c.GetHeader("X-Reviewer-Key")
+		}
+		if key == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "X-Admin-Key or X-Reviewer-Key required"})
+			return
+		}
+		for _, valid := range allKeys {
+			if valid != "" && subtle.ConstantTimeCompare([]byte(key), []byte(valid)) == 1 {
+				c.Next()
+				return
+			}
+		}
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "invalid key"})
+	}
+}
+
 // Auth returns a Gin middleware that guards /admin/* paths with an
 // X-Admin-Key bearer check. Preserved for backwards compatibility with the
 // original package-level Auth middleware — non-admin paths pass through

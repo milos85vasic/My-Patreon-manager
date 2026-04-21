@@ -409,3 +409,74 @@ func (e *errorReader) Read(p []byte) (n int, err error) {
 func (e *errorReader) Close() error {
 	return nil
 }
+
+func TestRequireReviewerKey(t *testing.T) {
+	t.Run("admin key works", func(t *testing.T) {
+		engine := gin.New()
+		engine.Use(RequireReviewerKey("admin-secret", "reviewer-secret"))
+		engine.GET("/preview/revision/123/approve", func(c *gin.Context) {
+			c.String(http.StatusOK, "approved")
+		})
+
+		req := httptest.NewRequest("GET", "/preview/revision/123/approve", nil)
+		req.Header.Set("X-Admin-Key", "admin-secret")
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("reviewer key works", func(t *testing.T) {
+		engine := gin.New()
+		engine.Use(RequireReviewerKey("admin-secret", "reviewer-secret"))
+		engine.GET("/preview/revision/123/reject", func(c *gin.Context) {
+			c.String(http.StatusOK, "rejected")
+		})
+
+		req := httptest.NewRequest("GET", "/preview/revision/123/reject", nil)
+		req.Header.Set("X-Reviewer-Key", "reviewer-secret")
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("missing key returns 401", func(t *testing.T) {
+		engine := gin.New()
+		engine.Use(RequireReviewerKey("admin-secret", "reviewer-secret"))
+		engine.GET("/preview/revision/123/approve", func(c *gin.Context) {
+			c.String(http.StatusOK, "ok")
+		})
+
+		req := httptest.NewRequest("GET", "/preview/revision/123/approve", nil)
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+
+	t.Run("wrong key returns 403", func(t *testing.T) {
+		engine := gin.New()
+		engine.Use(RequireReviewerKey("admin-secret", "reviewer-secret"))
+		engine.GET("/preview/revision/123/approve", func(c *gin.Context) {
+			c.String(http.StatusOK, "ok")
+		})
+
+		req := httptest.NewRequest("GET", "/preview/revision/123/approve", nil)
+		req.Header.Set("X-Admin-Key", "wrong-key")
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
+
+	t.Run("reviewer key only", func(t *testing.T) {
+		engine := gin.New()
+		engine.Use(RequireReviewerKey("admin-secret", ""))
+		engine.GET("/preview/revision/123/edit", func(c *gin.Context) {
+			c.String(http.StatusOK, "edited")
+		})
+
+		req := httptest.NewRequest("GET", "/preview/revision/123/edit", nil)
+		req.Header.Set("X-Reviewer-Key", "reviewer-secret")
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
+}

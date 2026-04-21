@@ -22,6 +22,19 @@ func NewPreviewHandler(db database.Database, cfg *config.Config) *PreviewHandler
 	return &PreviewHandler{db: db, config: cfg}
 }
 
+func (h *PreviewHandler) checkAuth(c *gin.Context) bool {
+	key := c.GetHeader("X-Admin-Key")
+	if key == "" {
+		key = c.GetHeader("X-Reviewer-Key")
+	}
+	if key == "" {
+		return false
+	}
+	adminMatch := key == h.config.AdminKey
+	reviewerMatch := h.config.ReviewerKey != "" && key == h.config.ReviewerKey
+	return adminMatch || reviewerMatch
+}
+
 // repoDashboardRow is the per-row data shape rendered on the preview
 // dashboard (GET /preview). It captures just the handful of fields the
 // operator needs to triage a repo: current process_state, counts of
@@ -276,7 +289,7 @@ type editRevisionRequest struct {
 //   - 404 when :id does not exist,
 //   - 500 on any other store error.
 func (h *PreviewHandler) EditRevision(c *gin.Context) {
-	if c.GetHeader("X-Admin-Key") != h.config.AdminKey {
+	if !h.checkAuth(c) {
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
@@ -355,7 +368,7 @@ func (h *PreviewHandler) RejectRevision(c *gin.Context) {
 // status but is kept as a separate argument so the caller controls the
 // wire shape explicitly.
 func (h *PreviewHandler) transitionRevision(c *gin.Context, newStatus, responseStatus string) {
-	if c.GetHeader("X-Admin-Key") != h.config.AdminKey {
+	if !h.checkAuth(c) {
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
@@ -417,7 +430,7 @@ type resolveDriftRequest struct {
 //         "resolve" a non-drifted repo),
 //   - 500 on any store error.
 func (h *PreviewHandler) ResolveDrift(c *gin.Context) {
-	if c.GetHeader("X-Admin-Key") != h.config.AdminKey {
+	if !h.checkAuth(c) {
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}

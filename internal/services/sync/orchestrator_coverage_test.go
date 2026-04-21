@@ -110,3 +110,23 @@ func TestGenerateOnly_ContextCancelled(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0, res.Processed)
 }
+
+func TestOrchestrator_SetIllustrationGenerator(t *testing.T) {
+	prov := &mocks.MockRepositoryProvider{
+		NameFunc: func() string { return "github" },
+	}
+	gen := content.NewGenerator(nil, nil, nil, nil, nil, nil)
+	orc := NewOrchestrator(&mocks.MockDatabase{}, []git.RepositoryProvider{prov}, nil, gen, &mockMetricsCollector{}, slog.Default(), nil)
+
+	orc.SetIllustrationGenerator(nil)
+	assert.Nil(t, orc.illustrationGen)
+
+	orc.SetIllustrationGenerator("mock-generator")
+	assert.Equal(t, "mock-generator", orc.illustrationGen)
+}
+
+func TestCheckpointManager_SaveCheckpointError(t *testing.T) {
+	cm := NewCheckpointManagerWithFile("/dev/null/does/not/exist")
+	err := cm.SaveCheckpoint(Checkpoint{CompletedRepoIDs: []string{"r1"}})
+	assert.Error(t, err)
+}
