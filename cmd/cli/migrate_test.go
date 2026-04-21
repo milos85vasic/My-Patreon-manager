@@ -756,3 +756,72 @@ func TestDefaultPostgresBackup_PgDumpFailure(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "pg_dump")
 }
+
+func TestParseMigrateDownFlags_BackupToWithoutValue(t *testing.T) {
+	_, _, err := parseMigrateDownFlags([]string{"--backup-to"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--backup-to requires a path")
+}
+
+func TestParseMigrateDownFlags_BackupToEqualsEmpty(t *testing.T) {
+	_, _, err := parseMigrateDownFlags([]string{"--backup-to="})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "non-empty path")
+}
+
+func TestParseMigrateDownFlags_BackupToSpaceSyntax(t *testing.T) {
+	force, backupTo, err := parseMigrateDownFlags([]string{"--backup-to", "/tmp/backup.sql"})
+	require.NoError(t, err)
+	assert.False(t, force)
+	assert.Equal(t, "/tmp/backup.sql", backupTo)
+}
+
+func TestParseMigrateDownFlags_ForceAndBackup(t *testing.T) {
+	force, backupTo, err := parseMigrateDownFlags([]string{"--force", "--backup-to=/tmp/b.sql"})
+	require.NoError(t, err)
+	assert.True(t, force)
+	assert.Equal(t, "/tmp/b.sql", backupTo)
+}
+
+func TestPrintMigrationStatus_EmptyList(t *testing.T) {
+	db := newTestSQLiteDB(t)
+	m := db.NewMigrator()
+	var buf bytes.Buffer
+	err := printMigrationStatus(context.Background(), m, &buf)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "VERSION")
+}
+
+func TestPrintMigrationStatus_WithAppliedMigrations(t *testing.T) {
+	db := newTestSQLiteDB(t)
+	m := db.NewMigrator()
+	require.NoError(t, m.MigrateUp(context.Background()))
+	var buf bytes.Buffer
+	err := printMigrationStatus(context.Background(), m, &buf)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "VERSION")
+}
+
+func TestFirstN_Short(t *testing.T) {
+	assert.Equal(t, "abc", firstN("abc", 10))
+}
+
+func TestFirstN_Truncate(t *testing.T) {
+	assert.Equal(t, "abcdefghij", firstN("abcdefghijklmnop", 10))
+}
+
+func TestRunMigrate_HelpSubcommand(t *testing.T) {
+	db := newTestSQLiteDB(t)
+	var buf bytes.Buffer
+	err := runMigrate(context.Background(), db, []string{"help"}, &buf)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "Usage: patreon-manager migrate")
+}
+
+func TestRunMigrate_BadSubcommand(t *testing.T) {
+	db := newTestSQLiteDB(t)
+	var buf bytes.Buffer
+	err := runMigrate(context.Background(), db, []string{"badcmd"}, &buf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown subcommand")
+}
