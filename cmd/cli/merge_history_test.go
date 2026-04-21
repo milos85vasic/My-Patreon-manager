@@ -16,6 +16,8 @@ import (
 	"github.com/milos85vasic/My-Patreon-Manager/internal/database"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/models"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/testhelpers"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func discardMergeLogger() *slog.Logger {
@@ -453,6 +455,103 @@ func TestRunMergeHistory_CleanupFlag_MissingFileIsIdempotent(t *testing.T) {
 	if !strings.Contains(out, "unlinked 0 illustration file") {
 		t.Fatalf("expected a zero-unlinked summary on idempotent run; got %q", out)
 	}
+}
+
+func TestRunMergeHistory_OldRepoProcessing(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	seedMergeRepo(t, db, "old", "processing-repo")
+	seedMergeRepo(t, db, "new", "new-repo")
+	_, err := db.DB().ExecContext(ctx, `UPDATE repositories SET process_state = 'processing' WHERE id = ?`, "old")
+	require.NoError(t, err)
+	var buf bytes.Buffer
+	err = runMergeHistory(ctx, db, []string{"old", "new"}, &buf, discardMergeLogger())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "currently processing")
+}
+
+func TestRunMergeHistory_NewRepoHasRevisions(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	seedMergeRepo(t, db, "old", "old-repo")
+	seedMergeRepo(t, db, "new", "new-repo")
+	seedMergeRev(t, db, "rx", "new", 1)
+	var buf bytes.Buffer
+	err := runMergeHistory(ctx, db, []string{"old", "new"}, &buf, discardMergeLogger())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "already has")
+}
+
+func TestRunMergeHistory_EmptyOldRevisions(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	seedMergeRepo(t, db, "old", "old-repo")
+	seedMergeRepo(t, db, "new", "new-repo")
+	var buf bytes.Buffer
+	err := runMergeHistory(ctx, db, []string{"old", "new"}, &buf, discardMergeLogger())
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "merged 0 revisions")
+}
+
+func TestRunMergeHistory_CleanupWithFiles(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	seedMergeRepo(t, db, "old", "old-repo")
+	seedMergeRepo(t, db, "new", "new-repo")
+	seedMergeRev(t, db, "r1", "old", 1)
+	tmpFile := filepath.Join(t.TempDir(), "illustration.png")
+	require.NoError(t, os.MkdirAll(filepath.Dir(tmpFile), 0755))
+	require.NoError(t, os.WriteFile(tmpFile, []byte("img"), 0644))
+	seedMergeIllustration(t, db, "ill1", "old", tmpFile)
+	var unlinked int
+	origUnlink := unlinkIllustrationFile
+	unlinkIllustrationFile = func(p string) error {
+		unlinked++
+		return origUnlink(p)
+	}
+	defer func() { unlinkIllustrationFile = origUnlink }()
+	var buf bytes.Buffer
+	err := runMergeHistory(ctx, db, []string{"old", "new", "--cleanup"}, &buf, discardMergeLogger())
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "merged 1 revisions")
+	assert.Contains(t, buf.String(), "unlinked 1 illustration")
+	assert.Equal(t, 1, unlinked)
+}
+
+func TestRunMergeHistory_CleanupWithUnlinkErrors(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	seedMergeRepo(t, db, "old", "old-repo")
+	seedMergeRepo(t, db, "new", "new-repo")
+	seedMergeRev(t, db, "r1", "old", 1)
+	seedMergeIllustration(t, db, "ill1", "old", filepath.Join(t.TempDir(), "path.png"))
+	origUnlink := unlinkIllustrationFile
+	unlinkIllustrationFile = func(p string) error { return fmt.Errorf("permission denied") }
+	defer func() { unlinkIllustrationFile = origUnlink }()
+	var buf bytes.Buffer
+	err := runMergeHistory(ctx, db, []string{"old", "new", "--cleanup"}, &buf, discardMergeLogger())
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "cleanup error")
+}
+
+func TestRunMergeHistory_NilLogger(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	ctx := context.Background()
+	seedMergeRepo(t, db, "old", "old-repo")
+	seedMergeRepo(t, db, "new", "new-repo")
+	seedMergeRev(t, db, "r1", "old", 1)
+	var buf bytes.Buffer
+	err := runMergeHistory(ctx, db, []string{"old", "new"}, &buf, nil)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "merged 1 revisions")
+}
+
+func TestRunMergeHistory_SameRepoIDs(t *testing.T) {
+	db := testhelpers.OpenMigratedSQLite(t)
+	var buf bytes.Buffer
+	err := runMergeHistory(context.Background(), db, []string{"same", "same"}, &buf, discardMergeLogger())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must differ")
 }
 
 // TestRunMergeHistory_UnknownFlag rejects unexpected trailing arguments
