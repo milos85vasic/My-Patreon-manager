@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/milos85vasic/My-Patreon-Manager/internal/config"
@@ -236,4 +237,35 @@ func TestEnsureLLMsVerifier_EmptyEndpointTriggersBootstrap(t *testing.T) {
 	cfg := &config.Config{LLMsVerifierEndpoint: ""}
 	err := ensureLLMsVerifierImpl(cfg, testLogger())
 	assert.NoError(t, err)
+}
+
+func TestFindBootstrapScript_FoundInCurrentDir(t *testing.T) {
+	dir := t.TempDir()
+	scriptDir := filepath.Join(dir, "scripts")
+	require.NoError(t, os.Mkdir(scriptDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(scriptDir, "llmsverifier.sh"), []byte("#!/bin/bash"), 0644))
+
+	origWd, _ := os.Getwd()
+	require.NoError(t, os.Chdir(dir))
+	defer os.Chdir(origWd)
+
+	result := findBootstrapScript()
+	assert.Contains(t, result, "llmsverifier.sh")
+}
+
+func TestFindBootstrapScript_FoundInParentDir(t *testing.T) {
+	dir := t.TempDir()
+	scriptDir := filepath.Join(dir, "scripts")
+	require.NoError(t, os.Mkdir(scriptDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(scriptDir, "llmsverifier.sh"), []byte("#!/bin/bash"), 0644))
+
+	subDir := filepath.Join(dir, "subdir")
+	require.NoError(t, os.Mkdir(subDir, 0755))
+
+	origWd, _ := os.Getwd()
+	require.NoError(t, os.Chdir(subDir))
+	defer os.Chdir(origWd)
+
+	result := findBootstrapScript()
+	assert.Contains(t, result, "llmsverifier.sh")
 }
