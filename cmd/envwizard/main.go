@@ -8,6 +8,7 @@ import (
 
 	"github.com/milos85vasic/My-Patreon-Manager/cmd/envwizard/cli"
 	envapi "github.com/milos85vasic/My-Patreon-Manager/cmd/envwizard/api"
+	"github.com/milos85vasic/My-Patreon-Manager/cmd/envwizard/tui"
 	"github.com/milos85vasic/My-Patreon-Manager/cmd/envwizard/web"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/envwizard/core"
 	"github.com/milos85vasic/My-Patreon-Manager/internal/envwizard/definitions"
@@ -16,6 +17,7 @@ import (
 func main() {
 	var (
 		cliMode bool
+		tuiMode bool
 		webMode bool
 		apiMode bool
 		webAddr string
@@ -25,6 +27,7 @@ func main() {
 	)
 
 	flag.BoolVar(&cliMode, "cli", false, "Force CLI mode")
+	flag.BoolVar(&tuiMode, "tui", false, "Start TUI mode")
 	flag.BoolVar(&webMode, "web", false, "Start web UI")
 	flag.BoolVar(&apiMode, "api", false, "Start REST API only")
 	flag.StringVar(&webAddr, "web-addr", ":8080", "Web UI address")
@@ -72,6 +75,12 @@ func main() {
 		fmt.Printf("EnvWizard REST API on %s\n", apiAddr)
 		if listenErr := http.ListenAndServe(apiAddr, srv); listenErr != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", listenErr)
+			os.Exit(1)
+		}
+	case tuiMode:
+		t := tui.New(wizard)
+		if runErr := t.Run(); runErr != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", runErr)
 			os.Exit(1)
 		}
 	default:
